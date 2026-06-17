@@ -10,12 +10,16 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -97,6 +101,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -105,6 +110,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -122,6 +128,8 @@ import com.luisangel.calculadoramedicamentos.growth.GrowthIndicator
 import com.luisangel.calculadoramedicamentos.growth.GrowthResult
 import com.luisangel.calculadoramedicamentos.growth.GrowthSex
 import com.luisangel.calculadoramedicamentos.growth.MeasurementMode
+import com.luisangel.calculadoramedicamentos.growth.NutritionStatus
+import com.luisangel.calculadoramedicamentos.growth.NutritionSummary
 import com.luisangel.calculadoramedicamentos.model.FilterState
 import com.luisangel.calculadoramedicamentos.model.MedicationDraft
 import com.luisangel.calculadoramedicamentos.model.MedicationRecord
@@ -137,15 +145,21 @@ import com.luisangel.calculadoramedicamentos.ui.theme.CalculatorTheme
 import kotlinx.coroutines.flow.collectLatest
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
 private enum class MainSection(val label: String) {
     MEDICATIONS("Medicamentos"),
-    PERCENTILES("Percentiles")
+    PERCENTILES("Percentiles"),
+    OBSTETRICS("Gineco-OB")
 }
 
 @Composable
@@ -218,6 +232,9 @@ private fun ApplicationShell(viewModel: MainViewModel, darkTheme: Boolean) {
                 modifier = Modifier.fillMaxSize().padding(padding)
             )
             MainSection.PERCENTILES -> PercentilesScreen(
+                modifier = Modifier.fillMaxSize().padding(padding)
+            )
+            MainSection.OBSTETRICS -> ObstetricsScreen(
                 modifier = Modifier.fillMaxSize().padding(padding)
             )
         }
@@ -772,6 +789,443 @@ private fun TableTextCell(
     }
 }
 
+
+private enum class ObstetricCalculator(
+    val label: String,
+    val shortLabel: String,
+    val description: String
+) {
+    GESTATIONAL_AGE(
+        "Edad gestacional y FPP",
+        "EG/FPP",
+        "Calcula edad gestacional por FUM y fecha probable de parto."
+    ),
+    HADLOCK_EFW(
+        "Peso fetal estimado",
+        "Hadlock",
+        "Estimación por biometría fetal con fórmula Hadlock de cuatro parámetros."
+    ),
+    TWIN_DISCORDANCE(
+        "Discordancia gemelar",
+        "Gemelos",
+        "Calcula la diferencia porcentual de peso entre dos fetos."
+    ),
+    CPR(
+        "Relación cerebroplacentaria",
+        "CPR",
+        "Calcula CPR con IP de arteria cerebral media e IP umbilical."
+    ),
+    DOPPLER_QUICK(
+        "Doppler rápido",
+        "Doppler",
+        "Promedios e índices básicos: arterias uterinas, TEI y ductus."
+    ),
+    CDH_LHR(
+        "Hernia diafragmática",
+        "LHR",
+        "Calcula LHR por método de diámetros pulmonares."
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ObstetricsScreen(modifier: Modifier = Modifier) {
+    var selected by rememberSaveable { mutableStateOf(ObstetricCalculator.GESTATIONAL_AGE) }
+
+    BoxWithConstraints(modifier) {
+        val expanded = maxWidth >= 840.dp
+
+        if (expanded) {
+            Row(
+                Modifier.fillMaxSize().padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                ObstetricCalculatorMenu(
+                    selected = selected,
+                    onSelected = { selected = it },
+                    modifier = Modifier.widthIn(min = 260.dp, max = 330.dp).fillMaxHeight()
+                )
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp)
+                ) {
+                    item { ObstetricHeaderCard() }
+                    item { ObstetricCalculatorContent(selected) }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(12.dp, 12.dp, 12.dp, 40.dp)
+            ) {
+                item { ObstetricHeaderCard() }
+                item {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ObstetricCalculator.entries.forEach { calculator ->
+                            FilterChip(
+                                selected = selected == calculator,
+                                onClick = { selected = calculator },
+                                label = { Text(calculator.shortLabel) }
+                            )
+                        }
+                    }
+                }
+                item { ObstetricCalculatorContent(selected) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ObstetricHeaderCard() {
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(
+                "Calculadoras gineco-obstétricas",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "Módulo nativo inspirado en la estructura de calculadoras de Medicina Fetal Barcelona: edad gestacional, biometría, gemelos, Doppler y LHR. No abre páginas externas y no guarda datos capturados.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Algunos algoritmos clínicos propietarios o dependientes de tablas específicas, como riesgo 1T de preeclampsia o clasificación completa de RCIU, no se reproducen como cálculo diagnóstico automático.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ObstetricCalculatorMenu(
+    selected: ObstetricCalculator,
+    onSelected: (ObstetricCalculator) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(modifier) {
+        Column(
+            Modifier.fillMaxSize().padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Menú",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+            )
+            ObstetricCalculator.entries.forEach { calculator ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (selected == calculator) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (selected == calculator) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant
+                        }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelected(calculator) }
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            calculator.label,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selected == calculator) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                        Text(
+                            calculator.description,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ObstetricCalculatorContent(calculator: ObstetricCalculator) {
+    when (calculator) {
+        ObstetricCalculator.GESTATIONAL_AGE -> GestationalAgeCalculator()
+        ObstetricCalculator.HADLOCK_EFW -> HadlockCalculator()
+        ObstetricCalculator.TWIN_DISCORDANCE -> TwinDiscordanceCalculator()
+        ObstetricCalculator.CPR -> CprCalculator()
+        ObstetricCalculator.DOPPLER_QUICK -> DopplerQuickCalculator()
+        ObstetricCalculator.CDH_LHR -> LhrCalculator()
+    }
+}
+
+@Composable
+private fun GestationalAgeCalculator() {
+    var lmp by rememberSaveable { mutableStateOf(LocalDate.now().minusWeeks(20).toString()) }
+    var reference by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+
+    val lmpDate = remember(lmp) { runCatching { LocalDate.parse(lmp) }.getOrElse { LocalDate.now().minusWeeks(20) } }
+    val referenceDate = remember(reference) { runCatching { LocalDate.parse(reference) }.getOrElse { LocalDate.now() } }
+    val totalDays = ChronoUnit.DAYS.between(lmpDate, referenceDate).coerceAtLeast(0)
+    val weeks = totalDays / 7
+    val days = totalDays % 7
+    val dueDate = lmpDate.plusDays(280)
+
+    CalculatorCard(
+        title = "Edad gestacional por FUM",
+        note = "Basada en FUM y regla obstétrica de 280 días. Verifica con ultrasonido cuando corresponda."
+    ) {
+        DateField("Fecha de última menstruación", lmpDate, { lmp = it.toString() }, maxDate = referenceDate)
+        DateField("Fecha de evaluación", referenceDate, { reference = it.toString() }, minDate = lmpDate, maxDate = LocalDate.now().plusDays(1))
+        ResultBlock(
+            title = "Resultado",
+            rows = listOf(
+                "Edad gestacional" to "${weeks} semanas + ${days} días",
+                "Días de gestación" to "$totalDays días",
+                "Fecha probable de parto" to dueDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            )
+        )
+    }
+}
+
+@Composable
+private fun HadlockCalculator() {
+    var bpdText by rememberSaveable { mutableStateOf("") }
+    var hcText by rememberSaveable { mutableStateOf("") }
+    var acText by rememberSaveable { mutableStateOf("") }
+    var flText by rememberSaveable { mutableStateOf("") }
+
+    val bpd = bpdText.replace(',', '.').toDoubleOrNull()
+    val hc = hcText.replace(',', '.').toDoubleOrNull()
+    val ac = acText.replace(',', '.').toDoubleOrNull()
+    val fl = flText.replace(',', '.').toDoubleOrNull()
+
+    val efw = if (bpd != null && hc != null && ac != null && fl != null) {
+        val log10Weight = 1.3596 - (0.00386 * ac * fl) + (0.0064 * hc) + (0.00061 * bpd * ac) + (0.0424 * ac) + (0.174 * fl)
+        10.0.pow(log10Weight)
+    } else null
+
+    CalculatorCard(
+        title = "Peso fetal estimado · Hadlock",
+        note = "Introduce biometría en milímetros. La app calcula EFW, no percentil fetal automático."
+    ) {
+        FormTextField("DBP / BPD", bpdText, { bpdText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+        FormTextField("CC / HC", hcText, { hcText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+        FormTextField("CA / AC", acText, { acText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+        FormTextField("LF / FL", flText, { flText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+        ResultBlock(
+            title = "Resultado",
+            rows = listOf(
+                "Peso fetal estimado" to (efw?.let { "${formatDecimal(it, 0)} g" } ?: "Pendiente"),
+                "Fórmula" to "Hadlock 4 parámetros"
+            )
+        )
+    }
+}
+
+@Composable
+private fun TwinDiscordanceCalculator() {
+    var twinA by rememberSaveable { mutableStateOf("") }
+    var twinB by rememberSaveable { mutableStateOf("") }
+
+    val a = twinA.replace(',', '.').toDoubleOrNull()
+    val b = twinB.replace(',', '.').toDoubleOrNull()
+    val discordance = if (a != null && b != null && max(a, b) > 0.0) {
+        abs(a - b) / max(a, b) * 100.0
+    } else null
+
+    CalculatorCard(
+        title = "Discordancia de peso gemelar",
+        note = "Cálculo porcentual entre el feto mayor y el menor. No sustituye evaluación corionicidad/Doppler."
+    ) {
+        FormTextField("Peso feto A", twinA, { twinA = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "g")
+        FormTextField("Peso feto B", twinB, { twinB = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "g")
+        ResultBlock(
+            title = "Resultado",
+            rows = listOf(
+                "Discordancia" to (discordance?.let { "${formatDecimal(it, 1)} %" } ?: "Pendiente"),
+                "Interpretación orientativa" to when {
+                    discordance == null -> "Captura ambos pesos"
+                    discordance >= 25.0 -> "Discordancia importante"
+                    discordance >= 20.0 -> "Vigilancia estrecha"
+                    else -> "Sin discordancia marcada"
+                }
+            )
+        )
+    }
+}
+
+@Composable
+private fun CprCalculator() {
+    var mcaText by rememberSaveable { mutableStateOf("") }
+    var uaText by rememberSaveable { mutableStateOf("") }
+
+    val mca = mcaText.replace(',', '.').toDoubleOrNull()
+    val ua = uaText.replace(',', '.').toDoubleOrNull()
+    val cpr = if (mca != null && ua != null && ua > 0.0) mca / ua else null
+
+    CalculatorCard(
+        title = "Relación cerebroplacentaria",
+        note = "Calcula CPR = IP ACM / IP AU. El percentil requiere tablas por edad gestacional."
+    ) {
+        FormTextField("IP arteria cerebral media", mcaText, { mcaText = decimalText(it) }, keyboardType = KeyboardType.Decimal)
+        FormTextField("IP arteria umbilical", uaText, { uaText = decimalText(it) }, keyboardType = KeyboardType.Decimal)
+        ResultBlock(
+            title = "Resultado",
+            rows = listOf(
+                "CPR" to (cpr?.let { formatDecimal(it, 2) } ?: "Pendiente"),
+                "Lectura rápida" to when {
+                    cpr == null -> "Captura ambos IP"
+                    cpr < 1.0 -> "CPR bajo de forma orientativa"
+                    else -> "CPR no bajo por corte simple"
+                }
+            )
+        )
+    }
+}
+
+@Composable
+private fun DopplerQuickCalculator() {
+    var rightUt by rememberSaveable { mutableStateOf("") }
+    var leftUt by rememberSaveable { mutableStateOf("") }
+    var ictText by rememberSaveable { mutableStateOf("") }
+    var irtText by rememberSaveable { mutableStateOf("") }
+    var etText by rememberSaveable { mutableStateOf("") }
+
+    val r = rightUt.replace(',', '.').toDoubleOrNull()
+    val l = leftUt.replace(',', '.').toDoubleOrNull()
+    val meanUt = if (r != null && l != null) (r + l) / 2.0 else null
+
+    val ict = ictText.replace(',', '.').toDoubleOrNull()
+    val irt = irtText.replace(',', '.').toDoubleOrNull()
+    val et = etText.replace(',', '.').toDoubleOrNull()
+    val tei = if (ict != null && irt != null && et != null && et > 0.0) (ict + irt) / et else null
+
+    CalculatorCard(
+        title = "Doppler rápido",
+        note = "Agrupa cálculos aritméticos usados en Doppler. Los percentiles dependen de edad gestacional y tablas."
+    ) {
+        FormTextField("IP uterina derecha", rightUt, { rightUt = decimalText(it) }, keyboardType = KeyboardType.Decimal)
+        FormTextField("IP uterina izquierda", leftUt, { leftUt = decimalText(it) }, keyboardType = KeyboardType.Decimal)
+        HorizontalDivider()
+        FormTextField("Tiempo contracción isovolumétrica", ictText, { ictText = decimalText(it) }, keyboardType = KeyboardType.Decimal)
+        FormTextField("Tiempo relajación isovolumétrica", irtText, { irtText = decimalText(it) }, keyboardType = KeyboardType.Decimal)
+        FormTextField("Tiempo de eyección", etText, { etText = decimalText(it) }, keyboardType = KeyboardType.Decimal)
+        ResultBlock(
+            title = "Resultado",
+            rows = listOf(
+                "IP uterina media" to (meanUt?.let { formatDecimal(it, 2) } ?: "Pendiente"),
+                "Índice TEI" to (tei?.let { formatDecimal(it, 2) } ?: "Pendiente")
+            )
+        )
+    }
+}
+
+@Composable
+private fun LhrCalculator() {
+    var longText by rememberSaveable { mutableStateOf("") }
+    var transText by rememberSaveable { mutableStateOf("") }
+    var hcText by rememberSaveable { mutableStateOf("") }
+
+    val longitudinal = longText.replace(',', '.').toDoubleOrNull()
+    val transverse = transText.replace(',', '.').toDoubleOrNull()
+    val hc = hcText.replace(',', '.').toDoubleOrNull()
+    val area = if (longitudinal != null && transverse != null) longitudinal * transverse else null
+    val lhr = if (area != null && hc != null && hc > 0.0) area / hc else null
+
+    CalculatorCard(
+        title = "LHR · hernia diafragmática",
+        note = "Método de diámetros: área pulmonar = diámetro longitudinal × transversal; LHR = área / CC."
+    ) {
+        FormTextField("Diámetro longitudinal pulmonar", longText, { longText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+        FormTextField("Diámetro transversal pulmonar", transText, { transText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+        FormTextField("Circunferencia cefálica", hcText, { hcText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+        ResultBlock(
+            title = "Resultado",
+            rows = listOf(
+                "Área pulmonar" to (area?.let { "${formatDecimal(it, 1)} mm²" } ?: "Pendiente"),
+                "LHR" to (lhr?.let { formatDecimal(it, 2) } ?: "Pendiente"),
+                "o/e LHR" to "Requiere tablas esperadas por edad gestacional"
+            )
+        )
+    }
+}
+
+@Composable
+private fun CalculatorCard(
+    title: String,
+    note: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    OutlinedCard {
+        Column(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ResultBlock(
+    title: String,
+    rows: List<Pair<String, String>>
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            rows.forEach { (label, value) ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.End,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PercentilesScreen(modifier: Modifier = Modifier) {
@@ -878,6 +1332,7 @@ private fun PercentilesScreen(modifier: Modifier = Modifier) {
                 }
                 assessment?.let { result ->
                     item { PercentileAssessmentSummary(result) }
+                    item { NutritionStatusCard(result.nutritionSummary) }
                     result.results.forEach { growthResult ->
                         item(key = growthResult.indicator.name) { GrowthResultCard(growthResult) }
                     }
@@ -900,7 +1355,7 @@ private fun PercentileInformationCard() {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Text("Percentiles pediátricos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "Calcula peso y talla para la edad, IMC para la edad y, hasta los 5 años, peso para la longitud o talla. Utiliza estándares OMS 2006 y referencias OMS 2007.",
+                "Calcula peso y talla para la edad, IMC para la edad y, hasta los 5 años, peso para la longitud o talla. También muestra la situación nutricional y los pesos aproximados desde los que corresponden sobrepeso y obesidad.",
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
@@ -908,6 +1363,24 @@ private fun PercentileInformationCard() {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Cotejo OMS/CDC",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        "La app mantiene OMS como referencia principal: estándares 0-5 años y referencia 5-19 años. CDC queda documentado como referencia alternativa, especialmente para población de EE. UU. y BMI extendido 2-20 años. No se mezclan curvas en un mismo cálculo.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
         }
     }
 }
@@ -1044,6 +1517,7 @@ private fun PercentileResults(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { PercentileAssessmentSummary(assessment) }
+        item { NutritionStatusCard(assessment.nutritionSummary) }
         assessment.results.forEach { result ->
             item(key = result.indicator.name) { GrowthResultCard(result) }
         }
@@ -1063,6 +1537,110 @@ private fun PercentileAssessmentSummary(assessment: GrowthAssessment) {
             assessment.measurementAdjustment?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
+        }
+    }
+}
+
+
+@Composable
+private fun NutritionStatusCard(summary: NutritionSummary) {
+    val containerColor = when (summary.status) {
+        NutritionStatus.LOW_WEIGHT -> Color(0xFFDCEEFF)
+        NutritionStatus.EXPECTED -> Color(0xFFDDF5E5)
+        NutritionStatus.OVERWEIGHT -> Color(0xFFFFE0A6)
+        NutritionStatus.OBESITY -> Color(0xFFFFC7C7)
+    }
+
+    val contentColor = when (summary.status) {
+        NutritionStatus.LOW_WEIGHT -> Color(0xFF164E7A)
+        NutritionStatus.EXPECTED -> Color(0xFF14532D)
+        NutritionStatus.OVERWEIGHT -> Color(0xFF7C4200)
+        NutritionStatus.OBESITY -> Color(0xFF8B1E1E)
+    }
+
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = containerColor
+        )
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "Situación nutricional",
+                style = MaterialTheme.typography.labelLarge,
+                color = contentColor
+            )
+
+            Surface(
+                color = contentColor,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    summary.label,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Text(
+                "${summary.reference} · ${formatPercentile(summary.bmiPercentile)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = contentColor
+            )
+
+            ThresholdRow(
+                label = "Sobrepeso a partir de:",
+                value = "${formatDecimal(summary.overweightFromKg, 1)} kg",
+                color = contentColor
+            )
+            ThresholdRow(
+                label = "Obesidad a partir de:",
+                value = "${formatDecimal(summary.obesityFromKg, 1)} kg",
+                color = contentColor
+            )
+
+            Text(
+                "Los límites se calculan para la edad, sexo y talla capturados. Son orientativos y no sustituyen la valoración clínica.",
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor.copy(alpha = 0.82f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThresholdRow(
+    label: String,
+    value: String,
+    color: Color
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color.White.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                fontWeight = FontWeight.Bold,
+                color = color,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = color
+            )
         }
     }
 }
@@ -1099,6 +1677,227 @@ private fun ResultPill(label: String, value: String) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GrowthChartView(chart: GrowthChart) {
+    var showExpanded by remember { mutableStateOf(false) }
+
+    BoxWithConstraints {
+        val previewHeight = if (maxWidth >= 600.dp) 440.dp else 330.dp
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    chart.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "Toca para ampliar",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(previewHeight)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                        RoundedCornerShape(14.dp)
+                    )
+                    .clickable { showExpanded = true }
+            ) {
+                GrowthChartCanvas(
+                    chart = chart,
+                    modifier = Modifier.fillMaxSize(),
+                    zoom = 1f,
+                    pan = Offset.Zero
+                )
+
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(10.dp),
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.94f)
+                ) {
+                    Text(
+                        "⛶ Ampliar gráfica",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Text(
+                "Eje X: ${chart.xLabel} · Eje Y: ${chart.yLabel}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            ChartLegend(chart)
+        }
+    }
+
+    if (showExpanded) {
+        ExpandedGrowthChartDialog(
+            chart = chart,
+            onDismiss = { showExpanded = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExpandedGrowthChartDialog(
+    chart: GrowthChart,
+    onDismiss: () -> Unit
+) {
+    var zoom by remember(chart) { mutableStateOf(1f) }
+    var pan by remember(chart) { mutableStateOf(Offset.Zero) }
+
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val nextZoom = (zoom * zoomChange).coerceIn(1f, 6f)
+        zoom = nextZoom
+        pan = if (nextZoom <= 1.01f) {
+            Offset.Zero
+        } else {
+            pan + panChange
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            chart.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Pellizca para acercar · arrastra para desplazarte · doble toque para alternar zoom",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar gráfica")
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AssistChip(
+                        onClick = {},
+                        label = { Text("Zoom ${formatDecimal(zoom.toDouble(), 1)}×") }
+                    )
+                    TextButton(
+                        onClick = {
+                            zoom = 1f
+                            pan = Offset.Zero
+                        }
+                    ) {
+                        Text("Restablecer")
+                    }
+                    TextButton(
+                        onClick = {
+                            zoom = 2.5f
+                            pan = Offset.Zero
+                        }
+                    ) {
+                        Text("Acercar")
+                    }
+                }
+
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .transformable(transformState)
+                        .pointerInput(chart) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    zoom = if (zoom > 1.1f) 1f else 2.5f
+                                    pan = Offset.Zero
+                                }
+                            )
+                        }
+                ) {
+                    GrowthChartCanvas(
+                        chart = chart,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = zoom,
+                                scaleY = zoom,
+                                translationX = pan.x,
+                                translationY = pan.y
+                            ),
+                        zoom = zoom,
+                        pan = pan
+                    )
+                }
+
+                Text(
+                    "Medición: ${formatDecimal(chart.patientPoint.x, 2)} en eje X · ${formatDecimal(chart.patientPoint.y, 2)} ${chart.yLabel}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                ChartLegend(chart)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GrowthChartCanvas(
+    chart: GrowthChart,
+    modifier: Modifier,
+    zoom: Float,
+    pan: Offset
+) {
     val curveColors = listOf(
         Color(0xFF6A5ACD),
         Color(0xFF1E88E5),
@@ -1110,7 +1909,9 @@ private fun GrowthChartView(chart: GrowthChart) {
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val patientColor = MaterialTheme.colorScheme.error
 
-    val allPoints = remember(chart) { chart.curves.flatMap { it.points } + chart.patientPoint }
+    val allPoints = remember(chart) {
+        chart.curves.flatMap { it.points } + chart.patientPoint
+    }
     val minX = allPoints.minOfOrNull { it.x } ?: 0.0
     val maxX = allPoints.maxOfOrNull { it.x } ?: 1.0
     val rawMinY = allPoints.minOfOrNull { it.y } ?: 0.0
@@ -1119,100 +1920,184 @@ private fun GrowthChartView(chart: GrowthChart) {
     val minY = max(0.0, rawMinY - yPadding)
     val maxY = rawMaxY + yPadding
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(chart.title, style = MaterialTheme.typography.labelLarge)
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 250.dp, max = 360.dp)
-                .aspectRatio(1.55f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, gridColor, RoundedCornerShape(12.dp))
-                .padding(4.dp)
-        ) {
-            val left = 52.dp.toPx()
-            val right = 14.dp.toPx()
-            val top = 18.dp.toPx()
-            val bottom = 38.dp.toPx()
-            val plotWidth = size.width - left - right
-            val plotHeight = size.height - top - bottom
+    Canvas(modifier.padding(5.dp)) {
+        val left = 58.dp.toPx()
+        val right = 18.dp.toPx()
+        val top = 22.dp.toPx()
+        val bottom = 44.dp.toPx()
+        val plotWidth = (size.width - left - right).coerceAtLeast(1f)
+        val plotHeight = (size.height - top - bottom).coerceAtLeast(1f)
 
-            fun xToPx(value: Double): Float {
-                val ratio = if (maxX == minX) 0.0 else (value - minX) / (maxX - minX)
-                return left + (ratio * plotWidth).toFloat()
-            }
-            fun yToPx(value: Double): Float {
-                val ratio = if (maxY == minY) 0.0 else (value - minY) / (maxY - minY)
-                return top + ((1.0 - ratio) * plotHeight).toFloat()
-            }
-
-            repeat(5) { index ->
-                val ratio = index / 4f
-                val y = top + ratio * plotHeight
-                drawLine(gridColor, Offset(left, y), Offset(left + plotWidth, y), strokeWidth = 1.dp.toPx())
-                val value = maxY - ratio * (maxY - minY)
-                val paint = AndroidPaint().apply {
-                    color = axisColor.toArgb()
-                    textSize = 10.sp.toPx()
-                    textAlign = AndroidPaint.Align.RIGHT
-                    isAntiAlias = true
-                }
-                drawContext.canvas.nativeCanvas.drawText(formatDecimal(value, 1), left - 6.dp.toPx(), y + 4.dp.toPx(), paint)
-            }
-
-            repeat(5) { index ->
-                val ratio = index / 4f
-                val x = left + ratio * plotWidth
-                drawLine(gridColor, Offset(x, top), Offset(x, top + plotHeight), strokeWidth = 1.dp.toPx())
-                val value = minX + ratio * (maxX - minX)
-                val paint = AndroidPaint().apply {
-                    color = axisColor.toArgb()
-                    textSize = 10.sp.toPx()
-                    textAlign = AndroidPaint.Align.CENTER
-                    isAntiAlias = true
-                }
-                drawContext.canvas.nativeCanvas.drawText(chart.xFormatter(value), x, top + plotHeight + 18.dp.toPx(), paint)
-            }
-
-            drawLine(axisColor, Offset(left, top), Offset(left, top + plotHeight), strokeWidth = 1.5.dp.toPx())
-            drawLine(axisColor, Offset(left, top + plotHeight), Offset(left + plotWidth, top + plotHeight), strokeWidth = 1.5.dp.toPx())
-
-            chart.curves.forEachIndexed { index, curve ->
-                val path = Path()
-                curve.points.forEachIndexed { pointIndex, point ->
-                    val x = xToPx(point.x)
-                    val y = yToPx(point.y)
-                    if (pointIndex == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                drawPath(
-                    path = path,
-                    color = curveColors[index % curveColors.size],
-                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                )
-            }
-
-            val patientX = xToPx(chart.patientPoint.x)
-            val patientY = yToPx(chart.patientPoint.y)
-            drawCircle(Color.White, radius = 7.dp.toPx(), center = Offset(patientX, patientY))
-            drawCircle(patientColor, radius = 5.dp.toPx(), center = Offset(patientX, patientY))
+        fun xToPx(value: Double): Float {
+            val ratio = if (maxX == minX) 0.0 else (value - minX) / (maxX - minX)
+            return left + (ratio * plotWidth).toFloat()
         }
-        Text(
-            "Eje X: ${chart.xLabel} · Eje Y: ${chart.yLabel}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+
+        fun yToPx(value: Double): Float {
+            val ratio = if (maxY == minY) 0.0 else (value - minY) / (maxY - minY)
+            return top + ((1.0 - ratio) * plotHeight).toFloat()
+        }
+
+        repeat(6) { index ->
+            val ratio = index / 5f
+            val y = top + ratio * plotHeight
+            drawLine(
+                gridColor,
+                Offset(left, y),
+                Offset(left + plotWidth, y),
+                strokeWidth = 1.dp.toPx()
+            )
+            val value = maxY - ratio * (maxY - minY)
+            val paint = AndroidPaint().apply {
+                color = axisColor.toArgb()
+                textSize = 10.sp.toPx()
+                textAlign = AndroidPaint.Align.RIGHT
+                isAntiAlias = true
+            }
+            drawContext.canvas.nativeCanvas.drawText(
+                formatDecimal(value, 1),
+                left - 7.dp.toPx(),
+                y + 4.dp.toPx(),
+                paint
+            )
+        }
+
+        repeat(6) { index ->
+            val ratio = index / 5f
+            val x = left + ratio * plotWidth
+            drawLine(
+                gridColor,
+                Offset(x, top),
+                Offset(x, top + plotHeight),
+                strokeWidth = 1.dp.toPx()
+            )
+            val value = minX + ratio * (maxX - minX)
+            val paint = AndroidPaint().apply {
+                color = axisColor.toArgb()
+                textSize = 10.sp.toPx()
+                textAlign = AndroidPaint.Align.CENTER
+                isAntiAlias = true
+            }
+            drawContext.canvas.nativeCanvas.drawText(
+                chart.xFormatter(value),
+                x,
+                top + plotHeight + 20.dp.toPx(),
+                paint
+            )
+        }
+
+        drawLine(
+            axisColor,
+            Offset(left, top),
+            Offset(left, top + plotHeight),
+            strokeWidth = 1.5.dp.toPx()
         )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            chart.curves.forEachIndexed { index, curve ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Box(Modifier.size(10.dp).background(curveColors[index % curveColors.size], RoundedCornerShape(50)))
-                    Text(curve.label, style = MaterialTheme.typography.labelSmall)
+        drawLine(
+            axisColor,
+            Offset(left, top + plotHeight),
+            Offset(left + plotWidth, top + plotHeight),
+            strokeWidth = 1.5.dp.toPx()
+        )
+
+        chart.curves.forEachIndexed { index, curve ->
+            val path = Path()
+            curve.points.forEachIndexed { pointIndex, point ->
+                val x = xToPx(point.x)
+                val y = yToPx(point.y)
+                if (pointIndex == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    path.lineTo(x, y)
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(Modifier.size(10.dp).background(patientColor, RoundedCornerShape(50)))
-                Text("Medición", style = MaterialTheme.typography.labelSmall)
+            drawPath(
+                path = path,
+                color = curveColors[index % curveColors.size],
+                style = Stroke(
+                    width = 2.4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            )
+        }
+
+        val patientX = xToPx(chart.patientPoint.x)
+        val patientY = yToPx(chart.patientPoint.y)
+
+        drawCircle(
+            color = patientColor.copy(alpha = 0.2f),
+            radius = 13.dp.toPx(),
+            center = Offset(patientX, patientY)
+        )
+        drawCircle(
+            Color.White,
+            radius = 8.dp.toPx(),
+            center = Offset(patientX, patientY)
+        )
+        drawCircle(
+            patientColor,
+            radius = 5.5.dp.toPx(),
+            center = Offset(patientX, patientY)
+        )
+
+        val labelPaint = AndroidPaint().apply {
+            color = patientColor.toArgb()
+            textSize = 11.sp.toPx()
+            textAlign = AndroidPaint.Align.LEFT
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        drawContext.canvas.nativeCanvas.drawText(
+            "Niño/a",
+            patientX + 9.dp.toPx(),
+            patientY - 9.dp.toPx(),
+            labelPaint
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChartLegend(chart: GrowthChart) {
+    val curveColors = listOf(
+        Color(0xFF6A5ACD),
+        Color(0xFF1E88E5),
+        Color(0xFF00897B),
+        Color(0xFFF9A825),
+        Color(0xFFD81B60)
+    )
+    val patientColor = MaterialTheme.colorScheme.error
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        chart.curves.forEachIndexed { index, curve ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .background(
+                            curveColors[index % curveColors.size],
+                            RoundedCornerShape(50)
+                        )
+                )
+                Text(curve.label, style = MaterialTheme.typography.labelSmall)
             }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .background(patientColor, RoundedCornerShape(50))
+            )
+            Text("Medición", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
