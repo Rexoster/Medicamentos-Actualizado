@@ -11,7 +11,7 @@ import java.util.concurrent.Executors
 @Database(
     entities = [MedicationEntity::class],
     version = 2,
-    exportSchema = true
+    exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun medicationDao(): MedicationDao

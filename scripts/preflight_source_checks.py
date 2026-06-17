@@ -285,29 +285,33 @@ for token in (
 ):
     require(database, token, "AppDatabase.kt")
 
-for token in (
-    'val roomSchemaDirectory = layout.buildDirectory',
-    '"generated/room-schemas"',
-    '"room.schemaLocation"',
-):
-    require(app_gradle, token, "app/build.gradle.kts")
+require(
+    database,
+    "exportSchema = false",
+    "AppDatabase.kt"
+)
+
+if "room.schemaLocation" in app_gradle:
+    errors.append(
+        "app/build.gradle.kts todavía configura "
+        "room.schemaLocation."
+    )
 
 for workflow_name, workflow_text in (
     ("build-release.yml", release_workflow),
     ("build-apk.yml", debug_workflow),
 ):
     for token in (
-        "Limpiar esquemas Room heredados",
-        "rm -rf app/schemas",
-        "app/build/generated/room-schemas",
+        "Limpiar archivos generados anteriores",
+        "rm -rf app/build app/schemas",
+        "--no-parallel",
     ):
         require(workflow_text, token, workflow_name)
 
-if '"$projectDir/schemas"' in app_gradle:
-    errors.append(
-        "app/build.gradle.kts todavía usa app/schemas "
-        "como destino de Room."
-    )
+    if "--parallel" in workflow_text:
+        errors.append(
+            f"{workflow_name} todavía usa --parallel."
+        )
 
 # La variante debe seguir siendo local.
 combined = app + growth + ultrasound + models + manifest

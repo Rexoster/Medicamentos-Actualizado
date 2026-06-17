@@ -1,0 +1,9 @@
+VERIFICACIÓN V16.3
+
+- exportSchema desactivado: correcto.
+- room.schemaLocation eliminado: correcto.
+- KAPT Debug/Release sin paralelismo: correcto.
+- Limpieza de app/build y app/schemas: correcta.
+- Caché Gradle conservada: correcta.
+- Migración Room 1 a 2: conservada.
+- Preflight: correcto.
