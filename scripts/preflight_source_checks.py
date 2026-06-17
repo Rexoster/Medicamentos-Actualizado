@@ -111,6 +111,10 @@ for token in (
     require(growth, token, "GrowthEngine.kt")
 
 for token in (
+    "private data class CalendarPartOption",
+    "private fun <T> CalendarDatePartSelector",
+    "Ir directamente a una fecha",
+    "updateDateParts(",
     "import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundDatingCalculator",
     "import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundTrimester",
     "ULTRASOUND_DATING",

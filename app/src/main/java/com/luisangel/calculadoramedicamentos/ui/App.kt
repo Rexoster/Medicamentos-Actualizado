@@ -1781,6 +1781,147 @@ private fun DateField(
     }
 }
 
+
+private data class CalendarPartOption<T>(
+    val value: T,
+    val label: String,
+    val enabled: Boolean = true
+)
+
+@Composable
+private fun <T> CalendarDatePartSelector(
+    label: String,
+    selectedValue: T,
+    selectedLabel: String,
+    options: List<CalendarPartOption<T>>,
+    onSelected: (T) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier) {
+        Surface(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (expanded) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                }
+            ),
+            tonalElevation = if (expanded) 4.dp else 0.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                Modifier.padding(
+                    horizontal = 11.dp,
+                    vertical = 9.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        selectedLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Elegir $label",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .heightIn(max = 340.dp)
+                .widthIn(min = 150.dp)
+        ) {
+            options.forEach { option ->
+                val selected = option.value == selectedValue
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            option.label,
+                            fontWeight = if (selected) {
+                                FontWeight.Black
+                            } else {
+                                FontWeight.Medium
+                            },
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    },
+                    trailingIcon = {
+                        if (selected) {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    "✓",
+                                    modifier = Modifier.padding(
+                                        horizontal = 7.dp,
+                                        vertical = 2.dp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+                    },
+                    enabled = option.enabled,
+                    onClick = {
+                        onSelected(option.value)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+private fun clampCalendarDate(
+    date: LocalDate,
+    minDate: LocalDate?,
+    maxDate: LocalDate?
+): LocalDate {
+    var result = date
+
+    if (minDate != null && result.isBefore(minDate)) {
+        result = minDate
+    }
+    if (maxDate != null && result.isAfter(maxDate)) {
+        result = maxDate
+    }
+
+    return result
+}
+
 @Composable
 private fun ClinicalCalendarDialog(
     title: String,
@@ -1819,6 +1960,115 @@ private fun ClinicalCalendarDialog(
         visibleMonth.isAfter(minimumMonth)
     val canGoNext = maximumMonth == null ||
         visibleMonth.isBefore(maximumMonth)
+
+    val minimumYear = minDate?.year ?: 1900
+    val maximumYear = maxDate?.year ?: (today.year + 10)
+
+    val yearOptions = remember(
+        minimumYear,
+        maximumYear
+    ) {
+        (minimumYear..maximumYear)
+            .reversed()
+            .map {
+                CalendarPartOption(
+                    value = it,
+                    label = it.toString()
+                )
+            }
+    }
+
+    val monthFormatter = remember {
+        DateTimeFormatter.ofPattern(
+            "MMMM",
+            Locale("es", "MX")
+        )
+    }
+
+    val monthOptions = remember(
+        selectedDate.year,
+        minDate,
+        maxDate
+    ) {
+        (1..12).map { monthNumber ->
+            val candidateMonth = YearMonth.of(
+                selectedDate.year,
+                monthNumber
+            )
+            val monthStart = candidateMonth.atDay(1)
+            val monthEnd = candidateMonth.atEndOfMonth()
+            val enabled = (
+                (minDate == null ||
+                    !monthEnd.isBefore(minDate)) &&
+                    (maxDate == null ||
+                        !monthStart.isAfter(maxDate))
+                )
+
+            CalendarPartOption(
+                value = monthNumber,
+                label = candidateMonth.format(
+                    monthFormatter
+                ).replaceFirstChar {
+                    if (it.isLowerCase()) {
+                        it.titlecase(Locale("es", "MX"))
+                    } else {
+                        it.toString()
+                    }
+                },
+                enabled = enabled
+            )
+        }
+    }
+
+    val dayOptions = remember(
+        selectedDate.year,
+        selectedDate.monthValue,
+        minDate,
+        maxDate
+    ) {
+        val selectedMonth = YearMonth.of(
+            selectedDate.year,
+            selectedDate.monthValue
+        )
+
+        (1..selectedMonth.lengthOfMonth()).map { day ->
+            val candidate = selectedMonth.atDay(day)
+            val enabled = (
+                (minDate == null ||
+                    !candidate.isBefore(minDate)) &&
+                    (maxDate == null ||
+                        !candidate.isAfter(maxDate))
+                )
+
+            CalendarPartOption(
+                value = day,
+                label = day.toString(),
+                enabled = enabled
+            )
+        }
+    }
+
+    fun updateDateParts(
+        year: Int = selectedDate.year,
+        month: Int = selectedDate.monthValue,
+        day: Int = selectedDate.dayOfMonth
+    ) {
+        val targetMonth = YearMonth.of(year, month)
+        val safeDay = day.coerceIn(
+            1,
+            targetMonth.lengthOfMonth()
+        )
+        val candidate = targetMonth.atDay(safeDay)
+        val clamped = clampCalendarDate(
+            candidate,
+            minDate,
+            maxDate
+        )
+
+        selectedDateText = clamped.toString()
+        visibleMonthText = YearMonth.from(clamped)
+            .toString()
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1878,6 +2128,95 @@ private fun ClinicalCalendarDialog(
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(
+                            alpha = 0.48f
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(9.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarMonth,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.padding(7.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        "Ir directamente a una fecha",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Text(
+                                        "Elige año, mes y día sin recorrer el calendario.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(
+                                            alpha = 0.78f
+                                        )
+                                    )
+                                }
+                            }
+
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CalendarDatePartSelector(
+                                    label = "Día",
+                                    selectedValue = selectedDate.dayOfMonth,
+                                    selectedLabel = selectedDate.dayOfMonth.toString(),
+                                    options = dayOptions,
+                                    onSelected = {
+                                        updateDateParts(day = it)
+                                    },
+                                    modifier = Modifier.weight(0.72f)
+                                )
+                                CalendarDatePartSelector(
+                                    label = "Mes",
+                                    selectedValue = selectedDate.monthValue,
+                                    selectedLabel = selectedDate.format(
+                                        monthFormatter
+                                    ).replaceFirstChar {
+                                        if (it.isLowerCase()) {
+                                            it.titlecase(Locale("es", "MX"))
+                                        } else {
+                                            it.toString()
+                                        }
+                                    },
+                                    options = monthOptions,
+                                    onSelected = {
+                                        updateDateParts(month = it)
+                                    },
+                                    modifier = Modifier.weight(1.35f)
+                                )
+                                CalendarDatePartSelector(
+                                    label = "Año",
+                                    selectedValue = selectedDate.year,
+                                    selectedLabel = selectedDate.year.toString(),
+                                    options = yearOptions,
+                                    onSelected = {
+                                        updateDateParts(year = it)
+                                    },
+                                    modifier = Modifier.weight(0.95f)
+                                )
+                            }
+                        }
+                    }
+
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
