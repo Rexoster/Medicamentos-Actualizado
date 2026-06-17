@@ -14,6 +14,11 @@ jobs:
       - name: Descargar proyecto
         uses: actions/checkout@v4
 
+      - name: Limpiar esquemas Room heredados
+        run: |
+          rm -rf app/schemas
+          mkdir -p app/build/generated/room-schemas
+
       - name: Revisión previa del código
         run: python3 scripts/preflight_source_checks.py
 
