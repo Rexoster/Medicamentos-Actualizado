@@ -1,0 +1,9 @@
+VERIFICACIÓN V16.2
+
+- Ruta antigua app/schemas eliminada del build: correcto.
+- Esquemas Room enviados a build/generated: correcto.
+- Limpieza preventiva en workflow release: correcto.
+- Limpieza preventiva en workflow debug: correcto.
+- Doble assembleDebug eliminado: correcto.
+- Preflight: correcto.
+- Migración Room 1 a 2: conservada.

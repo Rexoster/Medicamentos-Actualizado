@@ -22,6 +22,9 @@ val fallbackVersionCode = appVersionProperties
 val fallbackVersionName = appVersionProperties
     .getProperty("VERSION_NAME", "3.1.0-native")
 
+val roomSchemaDirectory = layout.buildDirectory
+    .dir("generated/room-schemas")
+
 android {
     namespace = "com.luisangel.calculadoramedicamentos"
     compileSdk = 36
@@ -88,7 +91,12 @@ android {
 
     kapt {
         arguments {
-            arg("room.schemaLocation", "$projectDir/schemas")
+            arg(
+                "room.schemaLocation",
+                roomSchemaDirectory.get()
+                    .asFile
+                    .absolutePath
+            )
             arg("room.incremental", "true")
         }
     }

@@ -11,6 +11,9 @@ ULTRASOUND_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedica
 DOSE_RANGE_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedicamentos/model/MedicationDoseRangeTest.kt"
 ENTITY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/MedicationEntity.kt"
 DATABASE_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/AppDatabase.kt"
+APP_GRADLE_PATH = ROOT / "app/build.gradle.kts"
+RELEASE_WORKFLOW_PATH = ROOT / ".github/workflows/build-release.yml"
+DEBUG_WORKFLOW_PATH = ROOT / ".github/workflows/build-apk.yml"
 MODELS_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/model/Models.kt"
 EXCEL_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/io/ExcelService.kt"
 MANIFEST_PATH = ROOT / "app/src/main/AndroidManifest.xml"
@@ -66,6 +69,9 @@ ultrasound_test = require_file(ULTRASOUND_TEST_PATH)
 dose_range_test = require_file(DOSE_RANGE_TEST_PATH)
 entity = require_file(ENTITY_PATH)
 database = require_file(DATABASE_PATH)
+app_gradle = require_file(APP_GRADLE_PATH)
+release_workflow = require_file(RELEASE_WORKFLOW_PATH)
+debug_workflow = require_file(DEBUG_WORKFLOW_PATH)
 models = require_file(MODELS_PATH)
 excel = require_file(EXCEL_PATH)
 manifest = require_file(MANIFEST_PATH)
@@ -278,6 +284,30 @@ for token in (
     "setTransactionExecutor",
 ):
     require(database, token, "AppDatabase.kt")
+
+for token in (
+    'val roomSchemaDirectory = layout.buildDirectory',
+    '"generated/room-schemas"',
+    '"room.schemaLocation"',
+):
+    require(app_gradle, token, "app/build.gradle.kts")
+
+for workflow_name, workflow_text in (
+    ("build-release.yml", release_workflow),
+    ("build-apk.yml", debug_workflow),
+):
+    for token in (
+        "Limpiar esquemas Room heredados",
+        "rm -rf app/schemas",
+        "app/build/generated/room-schemas",
+    ):
+        require(workflow_text, token, workflow_name)
+
+if '"$projectDir/schemas"' in app_gradle:
+    errors.append(
+        "app/build.gradle.kts todavía usa app/schemas "
+        "como destino de Room."
+    )
 
 # La variante debe seguir siendo local.
 combined = app + growth + ultrasound + models + manifest
