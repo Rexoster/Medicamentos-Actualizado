@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.clickable
@@ -100,6 +101,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -108,6 +110,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -159,9 +162,14 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 import java.util.Date
 import java.util.Locale
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
@@ -1042,34 +1050,1167 @@ private fun ObstetricCalculatorContent(calculator: ObstetricCalculator) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GestationalAgeCalculator() {
-    var lmp by rememberSaveable { mutableStateOf(LocalDate.now().minusWeeks(20).toString()) }
-    var reference by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var lmp by rememberSaveable {
+        mutableStateOf(
+            LocalDate.now()
+                .minusWeeks(20)
+                .toString()
+        )
+    }
+    var reference by rememberSaveable {
+        mutableStateOf(LocalDate.now().toString())
+    }
 
-    val lmpDate = remember(lmp) { runCatching { LocalDate.parse(lmp) }.getOrElse { LocalDate.now().minusWeeks(20) } }
-    val referenceDate = remember(reference) { runCatching { LocalDate.parse(reference) }.getOrElse { LocalDate.now() } }
-    val totalDays = ChronoUnit.DAYS.between(lmpDate, referenceDate).coerceAtLeast(0)
+    val lmpDate = remember(lmp) {
+        runCatching { LocalDate.parse(lmp) }
+            .getOrElse {
+                LocalDate.now().minusWeeks(20)
+            }
+    }
+    val referenceDate = remember(reference) {
+        runCatching { LocalDate.parse(reference) }
+            .getOrElse { LocalDate.now() }
+    }
+
+    val totalDays = ChronoUnit.DAYS
+        .between(lmpDate, referenceDate)
+        .coerceAtLeast(0)
     val weeks = totalDays / 7
     val days = totalDays % 7
     val dueDate = lmpDate.plusDays(280)
 
     CalculatorCard(
-        title = "Edad gestacional por FUM",
-        note = "Basada en FUM y regla obstétrica de 280 días. Verifica con ultrasonido cuando corresponda."
-    ) {
-        DateField("Fecha de última menstruación", lmpDate, { lmp = it.toString() }, maxDate = referenceDate)
-        DateField("Fecha de evaluación", referenceDate, { reference = it.toString() }, minDate = lmpDate, maxDate = LocalDate.now().plusDays(1))
-        ResultBlock(
-            title = "Resultado",
-            rows = listOf(
-                "Edad gestacional" to "${weeks} semanas + ${days} días",
-                "Días de gestación" to "$totalDays días",
-                "Fecha probable de parto" to dueDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        title = "Gestograma",
+        note = (
+            "Rueda obstétrica interactiva inspirada en el gestograma clásico. " +
+                "Arrastra la rueda para ajustar la FUM, escribe la fecha o " +
+                "selecciónala en el calendario."
             )
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val wideLayout = maxWidth >= 760.dp
+
+            if (wideLayout) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    GestogramWheelPanel(
+                        lmpDate = lmpDate,
+                        referenceDate = referenceDate,
+                        dueDate = dueDate,
+                        gestationalDays = totalDays.toInt(),
+                        onLmpDateChange = {
+                            lmp = it.toString()
+                        },
+                        modifier = Modifier.weight(1.12f)
+                    )
+
+                    GestogramControls(
+                        lmpDate = lmpDate,
+                        referenceDate = referenceDate,
+                        dueDate = dueDate,
+                        weeks = weeks,
+                        days = days,
+                        onLmpDate = {
+                            lmp = it.toString()
+                        },
+                        onReferenceDate = {
+                            reference = it.toString()
+                        },
+                        modifier = Modifier.weight(0.88f)
+                    )
+                }
+            } else {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    GestogramWheelPanel(
+                        lmpDate = lmpDate,
+                        referenceDate = referenceDate,
+                        dueDate = dueDate,
+                        gestationalDays = totalDays.toInt(),
+                        onLmpDateChange = {
+                            lmp = it.toString()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    GestogramControls(
+                        lmpDate = lmpDate,
+                        referenceDate = referenceDate,
+                        dueDate = dueDate,
+                        weeks = weeks,
+                        days = days,
+                        onLmpDate = {
+                            lmp = it.toString()
+                        },
+                        onReferenceDate = {
+                            reference = it.toString()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GestogramWheelPanel(
+    lmpDate: LocalDate,
+    referenceDate: LocalDate,
+    dueDate: LocalDate,
+    gestationalDays: Int,
+    onLmpDateChange: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(
+        modifier = modifier,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Rueda gestacional",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        "Desliza en círculo para modificar la FUM",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        "${gestationalDays.coerceAtLeast(0) / 7} + " +
+                            "${gestationalDays.coerceAtLeast(0) % 7}",
+                        modifier = Modifier.padding(
+                            horizontal = 11.dp,
+                            vertical = 6.dp
+                        ),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                val wheelSize = maxWidth
+                    .coerceAtMost(560.dp)
+                    .coerceAtLeast(280.dp)
+
+                GestogramWheel(
+                    lmpDate = lmpDate,
+                    referenceDate = referenceDate,
+                    dueDate = dueDate,
+                    gestationalDays = gestationalDays,
+                    onLmpDateChange = onLmpDateChange,
+                    modifier = Modifier.size(wheelSize)
+                )
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                AssistChip(
+                    onClick = {
+                        onLmpDateChange(
+                            lmpDate.minusDays(7)
+                        )
+                    },
+                    label = { Text("− 1 semana") }
+                )
+                AssistChip(
+                    onClick = {
+                        val candidate = lmpDate.plusDays(7)
+                        onLmpDateChange(
+                            if (candidate.isAfter(referenceDate)) {
+                                referenceDate
+                            } else {
+                                candidate
+                            }
+                        )
+                    },
+                    label = { Text("+ 1 semana") }
+                )
+                AssistChip(
+                    onClick = {
+                        onLmpDateChange(
+                            referenceDate.minusWeeks(20)
+                        )
+                    },
+                    label = { Text("Centrar en 20 semanas") }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GestogramWheel(
+    lmpDate: LocalDate,
+    referenceDate: LocalDate,
+    dueDate: LocalDate,
+    gestationalDays: Int,
+    onLmpDateChange: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentLmpDate by rememberUpdatedState(lmpDate)
+    val currentReferenceDate by rememberUpdatedState(referenceDate)
+
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
+    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
+    val surface = MaterialTheme.colorScheme.surface
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val outline = MaterialTheme.colorScheme.outlineVariant
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val error = MaterialTheme.colorScheme.error
+
+    val monthNames = remember {
+        listOf(
+            "Ene", "Feb", "Mar", "Abr",
+            "May", "Jun", "Jul", "Ago",
+            "Sep", "Oct", "Nov", "Dic"
+        )
+    }
+
+    Canvas(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(surface)
+            .pointerInput(referenceDate) {
+                var previousAngle = 0f
+                var accumulatedDegrees = 0f
+                var dragStartDate = currentLmpDate
+
+                fun pointerAngle(position: Offset): Float {
+                    val center = Offset(
+                        size.width / 2f,
+                        size.height / 2f
+                    )
+                    return Math.toDegrees(
+                        atan2(
+                            (position.y - center.y).toDouble(),
+                            (position.x - center.x).toDouble()
+                        )
+                    ).toFloat()
+                }
+
+                fun normalizedDelta(
+                    current: Float,
+                    previous: Float
+                ): Float {
+                    var delta = current - previous
+                    if (delta > 180f) delta -= 360f
+                    if (delta < -180f) delta += 360f
+                    return delta
+                }
+
+                detectDragGestures(
+                    onDragStart = {
+                        dragStartDate = currentLmpDate
+                        previousAngle = pointerAngle(it)
+                        accumulatedDegrees = 0f
+                    }
+                ) { change, _ ->
+                    val currentAngle = pointerAngle(
+                        change.position
+                    )
+                    accumulatedDegrees += normalizedDelta(
+                        currentAngle,
+                        previousAngle
+                    )
+                    previousAngle = currentAngle
+
+                    val yearDays = ChronoUnit.DAYS
+                        .between(
+                            dragStartDate,
+                            dragStartDate.plusYears(1)
+                        )
+                        .coerceAtLeast(365)
+                    val dayShift = (
+                        accumulatedDegrees / 360f *
+                            yearDays.toFloat()
+                        ).roundToInt()
+
+                    val minimumDate = currentReferenceDate
+                        .minusDays(294)
+                    val candidate = dragStartDate.plusDays(
+                        dayShift.toLong()
+                    )
+                    val clamped = candidate.coerceIn(
+                        minimumDate,
+                        currentReferenceDate
+                    )
+
+                    if (clamped != currentLmpDate) {
+                        onLmpDateChange(clamped)
+                    }
+                    change.consume()
+                }
+            }
+            .padding(5.dp)
+    ) {
+        val diameter = min(size.width, size.height)
+        val radius = diameter / 2f
+        val center = Offset(
+            size.width / 2f,
+            size.height / 2f
+        )
+
+        val yearDays = ChronoUnit.DAYS
+            .between(lmpDate, lmpDate.plusYears(1))
+            .coerceAtLeast(365)
+            .toFloat()
+
+        fun angleFor(date: LocalDate): Float {
+            val daysFromLmp = ChronoUnit.DAYS
+                .between(lmpDate, date)
+                .toFloat()
+            return -90f + (
+                daysFromLmp / yearDays * 360f
+                )
+        }
+
+        fun pointAt(
+            angleDegrees: Float,
+            distance: Float
+        ): Offset {
+            val radians = angleDegrees / 180f *
+                PI.toFloat()
+            return Offset(
+                center.x + cos(radians) * distance,
+                center.y + sin(radians) * distance
+            )
+        }
+
+        fun ringRect(ringRadius: Float): Pair<Offset, Size> =
+            Offset(
+                center.x - ringRadius,
+                center.y - ringRadius
+            ) to Size(
+                ringRadius * 2f,
+                ringRadius * 2f
+            )
+
+        val monthRadius = radius * 0.84f
+        val monthStroke = radius * 0.16f
+        val weekRadius = radius * 0.62f
+        val weekStroke = radius * 0.19f
+        val trimesterRadius = radius * 0.47f
+        val centerRadius = radius * 0.34f
+
+        drawCircle(
+            color = surfaceVariant.copy(alpha = 0.42f),
+            radius = radius * 0.98f,
+            center = center
+        )
+
+        val monthStart = YearMonth.from(lmpDate)
+            .minusMonths(1)
+
+        repeat(13) { index ->
+            val yearMonth = monthStart.plusMonths(
+                index.toLong()
+            )
+            val start = yearMonth.atDay(1)
+            val end = yearMonth.plusMonths(1)
+                .atDay(1)
+            val startAngle = angleFor(start)
+            val sweep = angleFor(end) - startAngle
+            val (topLeft, arcSize) = ringRect(monthRadius)
+
+            drawArc(
+                color = if (index % 2 == 0) {
+                    primaryContainer
+                } else {
+                    secondaryContainer
+                },
+                startAngle = startAngle,
+                sweepAngle = sweep,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(
+                    width = monthStroke,
+                    cap = StrokeCap.Butt
+                )
+            )
+
+            val midAngle = startAngle + sweep / 2f
+            val labelPoint = pointAt(
+                midAngle,
+                monthRadius
+            )
+            val labelPaint = AndroidPaint().apply {
+                color = onSurface.toArgb()
+                textSize = radius * 0.052f
+                textAlign = AndroidPaint.Align.CENTER
+                isAntiAlias = true
+                isFakeBoldText = true
+            }
+
+            drawContext.canvas.nativeCanvas.apply {
+                save()
+                rotate(
+                    midAngle + 90f,
+                    labelPoint.x,
+                    labelPoint.y
+                )
+                drawText(
+                    monthNames[
+                        yearMonth.monthValue - 1
+                    ],
+                    labelPoint.x,
+                    labelPoint.y +
+                        radius * 0.018f,
+                    labelPaint
+                )
+                restore()
+            }
+
+            for (
+                day in 5..
+                    yearMonth.lengthOfMonth()
+                    step 5
+            ) {
+                val date = yearMonth.atDay(day)
+                val angle = angleFor(date)
+                val inner = pointAt(
+                    angle,
+                    radius * 0.91f
+                )
+                val outer = pointAt(
+                    angle,
+                    radius * 0.965f
+                )
+
+                drawLine(
+                    color = onSurfaceVariant.copy(
+                        alpha = 0.72f
+                    ),
+                    start = inner,
+                    end = outer,
+                    strokeWidth = if (day % 10 == 0) {
+                        2.dp.toPx()
+                    } else {
+                        1.dp.toPx()
+                    }
+                )
+
+                if (day % 10 == 0) {
+                    val dayPoint = pointAt(
+                        angle,
+                        radius * 0.945f
+                    )
+                    val dayPaint = AndroidPaint().apply {
+                        color = onSurfaceVariant.toArgb()
+                        textSize = radius * 0.030f
+                        textAlign = AndroidPaint.Align.CENTER
+                        isAntiAlias = true
+                    }
+                    drawContext.canvas.nativeCanvas
+                        .drawText(
+                            day.toString(),
+                            dayPoint.x,
+                            dayPoint.y +
+                                radius * 0.010f,
+                            dayPaint
+                        )
+                }
+            }
+        }
+
+        val postpartumStart = angleFor(dueDate)
+        val postpartumSweep = 360f - (
+            postpartumStart + 90f
+            )
+        val (weekTopLeft, weekArcSize) =
+            ringRect(weekRadius)
+
+        if (postpartumSweep > 0f) {
+            drawArc(
+                color = outline.copy(alpha = 0.36f),
+                startAngle = postpartumStart,
+                sweepAngle = postpartumSweep,
+                useCenter = false,
+                topLeft = weekTopLeft,
+                size = weekArcSize,
+                style = Stroke(
+                    width = weekStroke,
+                    cap = StrokeCap.Butt
+                )
+            )
+        }
+
+        repeat(40) { index ->
+            val weekNumber = index + 1
+            val weekStart = lmpDate.plusDays(
+                (index * 7L)
+            )
+            val weekEnd = lmpDate.plusDays(
+                ((index + 1) * 7L)
+            )
+            val startAngle = angleFor(weekStart)
+            val sweep = angleFor(weekEnd) -
+                startAngle
+
+            val color = when (weekNumber) {
+                in 1..13 ->
+                    primaryContainer
+                in 14..27 ->
+                    secondaryContainer
+                else ->
+                    tertiaryContainer
+            }
+
+            drawArc(
+                color = color,
+                startAngle = startAngle,
+                sweepAngle = sweep,
+                useCenter = false,
+                topLeft = weekTopLeft,
+                size = weekArcSize,
+                style = Stroke(
+                    width = weekStroke,
+                    cap = StrokeCap.Butt
+                )
+            )
+
+            drawLine(
+                color = outline.copy(alpha = 0.78f),
+                start = pointAt(
+                    startAngle,
+                    radius * 0.525f
+                ),
+                end = pointAt(
+                    startAngle,
+                    radius * 0.715f
+                ),
+                strokeWidth = 0.8.dp.toPx()
+            )
+
+            if (
+                weekNumber == 1 ||
+                weekNumber % 2 == 0
+            ) {
+                val midAngle = startAngle +
+                    sweep / 2f
+                val labelPoint = pointAt(
+                    midAngle,
+                    weekRadius
+                )
+                val weekPaint = AndroidPaint().apply {
+                    this.color =
+                        onSurface.toArgb()
+                    textSize = radius * 0.036f
+                    textAlign =
+                        AndroidPaint.Align.CENTER
+                    isAntiAlias = true
+                    isFakeBoldText =
+                        weekNumber % 4 == 0
+                }
+
+                drawContext.canvas.nativeCanvas
+                    .drawText(
+                        weekNumber.toString(),
+                        labelPoint.x,
+                        labelPoint.y +
+                            radius * 0.012f,
+                        weekPaint
+                    )
+            }
+        }
+
+        val trimesterData = listOf(
+            Triple("1T", 1, 13),
+            Triple("2T", 14, 27),
+            Triple("3T", 28, 40)
+        )
+        val trimesterColors = listOf(
+            primary,
+            secondary,
+            tertiary
+        )
+
+        trimesterData.forEachIndexed {
+                index,
+                (label, startWeek, endWeek) ->
+            val midpointDay = (
+                ((startWeek - 1) * 7) +
+                    ((endWeek - startWeek + 1) *
+                        7 / 2)
+                )
+            val angle = angleFor(
+                lmpDate.plusDays(
+                    midpointDay.toLong()
+                )
+            )
+            val point = pointAt(
+                angle,
+                trimesterRadius
+            )
+            val paint = AndroidPaint().apply {
+                color = trimesterColors[index]
+                    .toArgb()
+                textSize = radius * 0.050f
+                textAlign =
+                    AndroidPaint.Align.CENTER
+                isAntiAlias = true
+                isFakeBoldText = true
+            }
+            drawContext.canvas.nativeCanvas.drawText(
+                label,
+                point.x,
+                point.y + radius * 0.015f,
+                paint
+            )
+        }
+
+        val dueAngle = angleFor(dueDate)
+        drawLine(
+            color = tertiary,
+            start = pointAt(
+                dueAngle,
+                radius * 0.40f
+            ),
+            end = pointAt(
+                dueAngle,
+                radius * 0.98f
+            ),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = tertiary,
+            radius = radius * 0.027f,
+            center = pointAt(
+                dueAngle,
+                radius * 0.96f
+            )
+        )
+
+        val dueLabelPoint = pointAt(
+            dueAngle,
+            radius * 0.76f
+        )
+        val markerPaint = AndroidPaint().apply {
+            color = tertiary.toArgb()
+            textSize = radius * 0.040f
+            textAlign = AndroidPaint.Align.CENTER
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        drawContext.canvas.nativeCanvas.drawText(
+            "FPP",
+            dueLabelPoint.x,
+            dueLabelPoint.y,
+            markerPaint
+        )
+
+        val currentDays = ChronoUnit.DAYS
+            .between(lmpDate, referenceDate)
+        if (currentDays in 0..294) {
+            val todayAngle = angleFor(referenceDate)
+            drawLine(
+                color = error,
+                start = pointAt(
+                    todayAngle,
+                    radius * 0.43f
+                ),
+                end = pointAt(
+                    todayAngle,
+                    radius * 0.78f
+                ),
+                strokeWidth = 4.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                color = surface,
+                radius = radius * 0.035f,
+                center = pointAt(
+                    todayAngle,
+                    weekRadius
+                )
+            )
+            drawCircle(
+                color = error,
+                radius = radius * 0.024f,
+                center = pointAt(
+                    todayAngle,
+                    weekRadius
+                )
+            )
+
+            val todayPoint = pointAt(
+                todayAngle,
+                radius * 0.76f
+            )
+            val todayPaint = AndroidPaint().apply {
+                color = error.toArgb()
+                textSize = radius * 0.037f
+                textAlign =
+                    AndroidPaint.Align.CENTER
+                isAntiAlias = true
+                isFakeBoldText = true
+            }
+            drawContext.canvas.nativeCanvas
+                .drawText(
+                    "HOY",
+                    todayPoint.x,
+                    todayPoint.y,
+                    todayPaint
+                )
+        }
+
+        drawCircle(
+            color = surface,
+            radius = centerRadius,
+            center = center
+        )
+        drawCircle(
+            color = primaryContainer,
+            radius = centerRadius,
+            center = center,
+            style = Stroke(
+                width = radius * 0.035f
+            )
+        )
+
+        val centerTitlePaint =
+            AndroidPaint().apply {
+                color = primary.toArgb()
+                textSize = radius * 0.085f
+                textAlign =
+                    AndroidPaint.Align.CENTER
+                isAntiAlias = true
+                isFakeBoldText = true
+            }
+        val centerWeekPaint =
+            AndroidPaint().apply {
+                color = onSurface.toArgb()
+                textSize = radius * 0.115f
+                textAlign =
+                    AndroidPaint.Align.CENTER
+                isAntiAlias = true
+                isFakeBoldText = true
+            }
+        val centerDatePaint =
+            AndroidPaint().apply {
+                color = onSurfaceVariant.toArgb()
+                textSize = radius * 0.042f
+                textAlign =
+                    AndroidPaint.Align.CENTER
+                isAntiAlias = true
+            }
+
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(
+                "Gestograma",
+                center.x,
+                center.y - radius * 0.095f,
+                centerTitlePaint
+            )
+            drawText(
+                "${gestationalDays.coerceAtLeast(0) / 7}+" +
+                    "${gestationalDays.coerceAtLeast(0) % 7}",
+                center.x,
+                center.y + radius * 0.035f,
+                centerWeekPaint
+            )
+            drawText(
+                "FPP " + dueDate.format(
+                    DateTimeFormatter.ofPattern(
+                        "dd/MM/yyyy"
+                    )
+                ),
+                center.x,
+                center.y + radius * 0.130f,
+                centerDatePaint
+            )
+        }
+
+        val fumPath = Path().apply {
+            moveTo(
+                center.x,
+                center.y - radius * 0.995f
+            )
+            lineTo(
+                center.x - radius * 0.065f,
+                center.y - radius * 0.82f
+            )
+            lineTo(
+                center.x + radius * 0.065f,
+                center.y - radius * 0.82f
+            )
+            close()
+        }
+        drawPath(
+            path = fumPath,
+            color = error
+        )
+
+        val fumPaint = AndroidPaint().apply {
+            color = onPrimary.toArgb()
+            textSize = radius * 0.042f
+            textAlign = AndroidPaint.Align.CENTER
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        drawContext.canvas.nativeCanvas.drawText(
+            "FUM",
+            center.x,
+            center.y - radius * 0.865f,
+            fumPaint
         )
     }
 }
+
+@Composable
+private fun GestogramControls(
+    lmpDate: LocalDate,
+    referenceDate: LocalDate,
+    dueDate: LocalDate,
+    weeks: Long,
+    days: Long,
+    onLmpDate: (LocalDate) -> Unit,
+    onReferenceDate: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        EditableDateInput(
+            label = "Fecha de última menstruación",
+            date = lmpDate,
+            onDate = onLmpDate,
+            maxDate = referenceDate
+        )
+
+        EditableDateInput(
+            label = "Fecha de evaluación",
+            date = referenceDate,
+            onDate = onReferenceDate,
+            minDate = lmpDate,
+            maxDate = LocalDate.now().plusDays(1)
+        )
+
+        GestogramSummaryCard(
+            lmpDate = lmpDate,
+            dueDate = dueDate,
+            referenceDate = referenceDate,
+            weeks = weeks,
+            days = days
+        )
+
+        Text(
+            "La FPP se calcula a 280 días desde la FUM. " +
+                "Confirma o redatá con ultrasonido cuando corresponda.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun GestogramSummaryCard(
+    lmpDate: LocalDate,
+    dueDate: LocalDate,
+    referenceDate: LocalDate,
+    weeks: Long,
+    days: Long
+) {
+    val displayFormatter = remember {
+        DateTimeFormatter.ofPattern(
+            "d 'de' MMMM 'de' yyyy",
+            Locale("es", "MX")
+        )
+    }
+
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor =
+                MaterialTheme.colorScheme.primaryContainer.copy(
+                    alpha = 0.42f
+                )
+        )
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            GestogramSummaryRow(
+                label = "FUM",
+                value = lmpDate.format(displayFormatter)
+            )
+            GestogramSummaryRow(
+                label = "Parto",
+                value = dueDate.format(displayFormatter)
+            )
+            GestogramSummaryRow(
+                label = "Tienes",
+                value = "$weeks semanas + $days días",
+                emphasize = true
+            )
+            GestogramSummaryRow(
+                label = "Fecha evaluada",
+                value = referenceDate.format(
+                    displayFormatter
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun GestogramSummaryRow(
+    label: String,
+    value: String,
+    emphasize: Boolean = false
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            "$label:",
+            modifier = Modifier.width(86.dp),
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Black
+        )
+        Text(
+            value,
+            modifier = Modifier.weight(1f),
+            fontWeight = if (emphasize) {
+                FontWeight.Black
+            } else {
+                FontWeight.SemiBold
+            },
+            style = if (emphasize) {
+                MaterialTheme.typography.titleMedium
+            } else {
+                MaterialTheme.typography.bodyMedium
+            }
+        )
+    }
+}
+
+private val manualDateFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern(
+        "dd/MM/uuuu",
+        Locale("es", "MX")
+    ).withResolverStyle(
+        ResolverStyle.STRICT
+    )
+
+private fun formatManualDateInput(
+    rawValue: String
+): String {
+    val digits = rawValue
+        .filter(Char::isDigit)
+        .take(8)
+
+    return buildString {
+        digits.forEachIndexed { index, char ->
+            append(char)
+            if (
+                (index == 1 || index == 3) &&
+                index < digits.lastIndex
+            ) {
+                append('/')
+            }
+        }
+    }
+}
+
+private fun parseManualDateInput(
+    value: String
+): LocalDate? = runCatching {
+    LocalDate.parse(
+        value,
+        manualDateFormatter
+    )
+}.getOrNull()
+
+@Composable
+private fun EditableDateInput(
+    label: String,
+    date: LocalDate,
+    onDate: (LocalDate) -> Unit,
+    minDate: LocalDate? = null,
+    maxDate: LocalDate? = null
+) {
+    var text by rememberSaveable(label) {
+        mutableStateOf(
+            date.format(manualDateFormatter)
+        )
+    }
+    var showCalendar by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(date) {
+        val formatted = date.format(
+            manualDateFormatter
+        )
+        if (text != formatted) {
+            text = formatted
+        }
+    }
+
+    val parsedDate = remember(text) {
+        parseManualDateInput(text)
+    }
+    val errorMessage = remember(
+        text,
+        parsedDate,
+        minDate,
+        maxDate
+    ) {
+        when {
+            text.length < 10 ->
+                null
+            parsedDate == null ->
+                "La fecha no es válida."
+            minDate != null &&
+                parsedDate.isBefore(minDate) ->
+                "La fecha mínima es " +
+                    minDate.format(
+                        manualDateFormatter
+                    )
+            maxDate != null &&
+                parsedDate.isAfter(maxDate) ->
+                "La fecha máxima es " +
+                    maxDate.format(
+                        manualDateFormatter
+                    )
+            else ->
+                null
+        }
+    }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = { raw ->
+            val formatted = formatManualDateInput(
+                raw
+            )
+            text = formatted
+
+            val candidate = parseManualDateInput(
+                formatted
+            )
+            val inRange = candidate != null &&
+                (
+                    minDate == null ||
+                        !candidate.isBefore(minDate)
+                    ) &&
+                (
+                    maxDate == null ||
+                        !candidate.isAfter(maxDate)
+                    )
+
+            if (inRange && candidate != date) {
+                onDate(candidate)
+            }
+        },
+        label = { Text(label) },
+        placeholder = { Text("dd/mm/aaaa") },
+        leadingIcon = {
+            Icon(
+                imageVector =
+                    Icons.Default.CalendarMonth,
+                contentDescription = null
+            )
+        },
+        trailingIcon = {
+            IconButton(
+                onClick = {
+                    showCalendar = true
+                }
+            ) {
+                Icon(
+                    imageVector =
+                        Icons.Default.CalendarMonth,
+                    contentDescription =
+                        "Elegir $label en calendario"
+                )
+            }
+        },
+        supportingText = {
+            Text(
+                errorMessage
+                    ?: "Puedes escribir la fecha o abrir el calendario."
+            )
+        },
+        isError = errorMessage != null,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Number
+        ),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    if (showCalendar) {
+        ClinicalCalendarDialog(
+            title = label,
+            initialDate = date,
+            minDate = minDate,
+            maxDate = maxDate,
+            onDismiss = {
+                showCalendar = false
+            },
+            onConfirm = {
+                onDate(it)
+                text = it.format(
+                    manualDateFormatter
+                )
+                showCalendar = false
+            }
+        )
+    }
+}
+
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

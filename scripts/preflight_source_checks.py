@@ -111,6 +111,12 @@ for token in (
     require(growth, token, "GrowthEngine.kt")
 
 for token in (
+    "private fun GestogramWheel(",
+    "private fun GestogramWheelPanel(",
+    "private fun EditableDateInput(",
+    "private fun GestogramSummaryCard(",
+    "Desliza en círculo para modificar la FUM",
+    "Fecha probable de parto",
     "private data class CalendarPartOption",
     "private fun <T> CalendarDatePartSelector",
     "Ir directamente a una fecha",
