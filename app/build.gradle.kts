@@ -44,12 +44,17 @@ android {
 
     signingConfigs {
         val keystorePath = System.getenv("ANDROID_KEYSTORE_FILE")
+        val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+        val signingKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            ?.takeIf { it.isNotBlank() }
+            ?: keystorePassword
+
         if (!keystorePath.isNullOrBlank()) {
             create("release") {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                storePassword = keystorePassword
                 keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                keyPassword = signingKeyPassword
             }
         }
     }
