@@ -37,18 +37,60 @@ jobs:
           echo "APP_VERSION_CODE=$((10000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=${SOURCE_VERSION}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
-      - name: Validar secretos de firma
+      - name: Preparar y validar firma
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+
           test -n "$KEYSTORE_BASE64" || (echo "Falta ANDROID_KEYSTORE_BASE64" && exit 1)
           test -n "$KEYSTORE_PASSWORD" || (echo "Falta ANDROID_KEYSTORE_PASSWORD" && exit 1)
           test -n "$KEY_ALIAS" || (echo "Falta ANDROID_KEY_ALIAS" && exit 1)
-          test -n "$KEY_PASSWORD" || (echo "Falta ANDROID_KEY_PASSWORD" && exit 1)
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/release.keystore"
+
+          KEYSTORE_FILE="$GITHUB_WORKSPACE/release.keystore"
+          printf '%s' "$KEYSTORE_BASE64"             | tr -d '\r\n '             | base64 --decode > "$KEYSTORE_FILE"
+
+          test -s "$KEYSTORE_FILE" || (echo "El archivo de firma quedó vacío" && exit 1)
+          chmod 600 "$KEYSTORE_FILE"
+
+          keytool -list             -keystore "$KEYSTORE_FILE"             -storepass "$KEYSTORE_PASSWORD"             -alias "$KEY_ALIAS" >/dev/null
+
+          cat > "$RUNNER_TEMP/ValidatePrivateKey.java" <<'JAVA'
+          import java.io.FileInputStream;
+          import java.security.Key;
+          import java.security.KeyStore;
+
+          public class ValidatePrivateKey {
+              public static void main(String[] args) throws Exception {
+                  KeyStore keyStore = KeyStore.getInstance(
+                      KeyStore.getDefaultType()
+                  );
+
+                  try (FileInputStream input = new FileInputStream(args[0])) {
+                      keyStore.load(input, args[1].toCharArray());
+                  }
+
+                  Key key = keyStore.getKey(
+                      args[2],
+                      args[1].toCharArray()
+                  );
+
+                  if (key == null) {
+                      throw new IllegalStateException(
+                          "No se encontró la clave privada."
+                      );
+                  }
+
+                  System.out.println(
+                      "Firma validada: almacén y clave privada accesibles."
+                  );
+              }
+          }
+          JAVA
+
+          java "$RUNNER_TEMP/ValidatePrivateKey.java"             "$KEYSTORE_FILE"             "$KEYSTORE_PASSWORD"             "$KEY_ALIAS"
 
       - name: Dar permiso a Gradle
         run: chmod +x gradlew
@@ -61,8 +103,8 @@ jobs:
           ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease bundleRelease
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease bundleRelease --stacktrace
 
       - name: Renombrar archivos
         run: |
