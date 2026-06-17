@@ -2456,6 +2456,7 @@ private fun FormTextField(
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
     placeholder: String = "",
+    suffix: String = "",
     singleLine: Boolean = true,
     minLines: Int = 1
 ) {
@@ -2463,7 +2464,16 @@ private fun FormTextField(
         value = value,
         onValueChange = onValue,
         label = { Text(label) },
-        placeholder = { if (placeholder.isNotBlank()) Text(placeholder) },
+        placeholder = {
+            if (placeholder.isNotBlank()) {
+                Text(placeholder)
+            }
+        },
+        suffix = if (suffix.isNotBlank()) {
+            { Text(suffix) }
+        } else {
+            null
+        },
         singleLine = singleLine,
         minLines = minLines,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
