@@ -12,6 +12,9 @@ jobs:
       - name: Descargar proyecto
         uses: actions/checkout@v4
 
+      - name: Revisión previa del código
+        run: python3 scripts/preflight_source_checks.py
+
       - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
@@ -29,8 +32,8 @@ jobs:
       - name: Permiso de Gradle
         run: chmod +x gradlew
 
-      - name: Ejecutar pruebas
-        run: ./gradlew testDebugUnitTest
+      - name: Compilar Kotlin y ejecutar pruebas
+        run: ./gradlew compileDebugKotlin testDebugUnitTest --stacktrace --warning-mode all
 
       - name: Generar APK
         run: ./gradlew assembleDebug
