@@ -22,6 +22,7 @@ import com.luisangel.calculadoramedicamentos.model.fingerprint
 import com.luisangel.calculadoramedicamentos.model.toRecord
 import com.luisangel.calculadoramedicamentos.model.validationError
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -128,10 +129,16 @@ class MainViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MedicalSpecialties)
 
     init {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Darle primero un respiro al primer frame de Compose.
+            // Sembrar ejemplos al instante no es una emergencia nacional.
+            delay(450)
+
             val alreadySeeded = preferences.examplesSeeded.first()
             if (!alreadySeeded) {
-                if (repository.count() == 0) repository.upsertAll(exampleMedications())
+                if (repository.count() == 0) {
+                    repository.upsertAll(exampleMedications())
+                }
                 preferences.setExamplesSeeded(true)
             }
         }
@@ -263,13 +270,22 @@ class MainViewModel(
     private fun applyFilters(records: List<MedicationRecord>, filter: FilterState): List<MedicationRecord> {
         val query = filter.search.trim().lowercase(Locale.ROOT)
         val filtered = records.filter { record ->
-            val textMatch = query.isBlank() || listOf(
-                record.name, record.presentation, record.dose, record.family,
-                record.subgroup, record.notes, record.specialties.joinToString(" ")
-            ).any { it.lowercase(Locale.ROOT).contains(query) }
+            val textMatch = if (query.isBlank()) {
+                true
+            } else {
+                record.name.contains(query, ignoreCase = true) ||
+                    record.presentation.contains(query, ignoreCase = true) ||
+                    record.dose.contains(query, ignoreCase = true) ||
+                    record.family.contains(query, ignoreCase = true) ||
+                    record.subgroup.contains(query, ignoreCase = true) ||
+                    record.notes.contains(query, ignoreCase = true) ||
+                    record.specialties.any {
+                        it.contains(query, ignoreCase = true)
+                    }
+            }
             val familyMatch = filter.family.isBlank() || record.family == filter.family
             val subgroupMatch = filter.subgroup.isBlank() || record.subgroup == filter.subgroup
-            val specialtyMatch = filter.specialties.isEmpty() || filter.specialties.any(record.specialties::contains)
+            val specialtyMatch = filter.specialties.isEmpty() || record.specialties.any(filter.specialties::contains)
             val typeMatch = when (filter.type) {
                 TypeFilter.BOTH -> true
                 TypeFilter.ADULT -> record.type == MedicationType.ADULT

@@ -1,0 +1,13 @@
+VERIFICACIÓN V16
+
+- Preflight del repositorio: correcto.
+- Modelos principales marcados como @Immutable.
+- Listas auxiliares ya no se observan en el arranque.
+- Sembrado de ejemplos diferido y en Dispatchers.IO.
+- Room usa WAL y ejecutores dedicados.
+- Filtrado optimizado sin listas temporales por registro.
+- Tabla con menos filas iniciales y contentType estable.
+- Gradle properties con caché, incremental y paralelo.
+- Workflows con caché Java/Gradle y menos llamadas Gradle.
+
+La compilación Gradle completa se realizará en GitHub Actions.

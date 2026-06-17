@@ -8,6 +8,11 @@ APP_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/ui/Ap
 GROWTH_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/growth/GrowthEngine.kt"
 ULTRASOUND_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/obstetrics/UltrasoundDating.kt"
 ULTRASOUND_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedicamentos/obstetrics/UltrasoundDatingTest.kt"
+DOSE_RANGE_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedicamentos/model/MedicationDoseRangeTest.kt"
+ENTITY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/MedicationEntity.kt"
+DATABASE_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/AppDatabase.kt"
+MODELS_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/model/Models.kt"
+EXCEL_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/io/ExcelService.kt"
 MANIFEST_PATH = ROOT / "app/src/main/AndroidManifest.xml"
 VERSION_PATH = ROOT / "version.properties"
 VIEW_MODEL_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/ui/MainViewModel.kt"
@@ -35,6 +40,7 @@ def balanced(text: str, source: str) -> None:
     cleaned = re.sub(r"//[^\n]*", "", cleaned)
     cleaned = re.sub(r'""".*?"""', '""', cleaned, flags=re.S)
     cleaned = re.sub(r'"(?:\\.|[^"\\])*"', '""', cleaned)
+    cleaned = re.sub(r"'(?:\\.|[^'\\])'", "''", cleaned)
 
     pairs = {"{": "}", "(": ")", "[": "]"}
     reverse = {value: key for key, value in pairs.items()}
@@ -57,6 +63,11 @@ app = require_file(APP_PATH)
 growth = require_file(GROWTH_PATH)
 ultrasound = require_file(ULTRASOUND_PATH)
 ultrasound_test = require_file(ULTRASOUND_TEST_PATH)
+dose_range_test = require_file(DOSE_RANGE_TEST_PATH)
+entity = require_file(ENTITY_PATH)
+database = require_file(DATABASE_PATH)
+models = require_file(MODELS_PATH)
+excel = require_file(EXCEL_PATH)
 manifest = require_file(MANIFEST_PATH)
 version = require_file(VERSION_PATH)
 view_model = require_file(VIEW_MODEL_PATH)
@@ -68,6 +79,10 @@ balanced(app, "App.kt")
 balanced(growth, "GrowthEngine.kt")
 balanced(ultrasound, "UltrasoundDating.kt")
 balanced(ultrasound_test, "UltrasoundDatingTest.kt")
+balanced(dose_range_test, "MedicationDoseRangeTest.kt")
+balanced(entity, "MedicationEntity.kt")
+balanced(database, "AppDatabase.kt")
+balanced(models, "Models.kt")
 
 # Firma exacta del componente que causó el fallo.
 form_start = app.find("private fun FormTextField(")
@@ -111,6 +126,19 @@ for token in (
     require(growth, token, "GrowthEngine.kt")
 
 for token in (
+    "contentType = { _, _ ->",
+    "private fun EditableSuggestionField(",
+    "PopupProperties(",
+    "focusable = false",
+    ".onFocusChanged { focusState ->",
+    "private fun ClinicalInfoButton(",
+    "private fun ClinicalReferencesDialog(",
+    "Info y referencias",
+    "Referencias usadas",
+    "private fun DateOrbitWheel(",
+    "Gira la rueda, selecciona día, mes y año",
+    "private fun InteractiveDoseWheel(",
+    "Dosis interactiva por rango",
     "private fun GestogramWheel(",
     "private fun GestogramWheelPanel(",
     "private fun EditableDateInput(",
@@ -180,8 +208,77 @@ require(
     "MedicationRepository.kt"
 )
 
+for token in (
+    "isInteractiveDose",
+    "dosePerKgMin",
+    "dosePerKgMax",
+    "dosePerKgStep",
+    "fun MedicationRecord.calculatedDose(",
+    "fun MedicationRecord.interactiveDoseStart(",
+):
+    require(models, token, "Models.kt")
+
+for token in (
+    "val isInteractiveDose: Boolean",
+    "val dosePerKgMin: Double?",
+    "val dosePerKgMax: Double?",
+    "val dosePerKgStep: Double?",
+):
+    require(entity, token, "MedicationEntity.kt")
+
+for token in (
+    "version = 2",
+    "MIGRATION_1_2",
+    "ADD COLUMN isInteractiveDose",
+    "ADD COLUMN dosePerKgMin",
+):
+    require(database, token, "AppDatabase.kt")
+
+for token in (
+    "Dosis interactiva",
+    "Dosis mínima por kg",
+    "Dosis máxima por kg",
+    "Paso de dosis",
+):
+    require(excel, token, "ExcelService.kt")
+
+for token in (
+    "selectedDoseIsUsedForCalculation",
+    "validInteractiveRangePassesValidation",
+):
+    require(
+        dose_range_test,
+        token,
+        "MedicationDoseRangeTest.kt"
+    )
+
+for token in (
+    "@Immutable",
+    "data class MedicationRecord",
+    "data class FilterState",
+):
+    require(models, token, "Models.kt")
+
+for token in (
+    "delay(450)",
+    "viewModelScope.launch(Dispatchers.IO)",
+    "record.specialties.any(filter.specialties::contains)",
+):
+    require(
+        require_file(ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/ui/MainViewModel.kt"),
+        token,
+        "MainViewModel.kt"
+    )
+
+for token in (
+    "setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)",
+    "setQueryExecutor",
+    "setTransactionExecutor",
+):
+    require(database, token, "AppDatabase.kt")
+
 # La variante debe seguir siendo local.
-combined = app + growth + ultrasound + manifest
+combined = app + growth + ultrasound + models + manifest
 for forbidden in (
     "android.webkit.WebView",
     "supabase",

@@ -64,3 +64,12 @@ la APK del workflow debug para instalar actualizaciones.
 La primera transición desde la APK debug exige exportar, desinstalar e instalar
 la release firmada. Las versiones posteriores se instalan encima y conservan
 la base local.
+
+
+## Corrección PKCS12 v10.1
+
+La firma generada es PKCS12. El workflow usa la contraseña del almacén
+también como contraseña de la clave privada. No necesitas modificar ni
+borrar el secreto `ANDROID_KEY_PASSWORD`; simplemente ya no se utiliza.
+
+Antes de compilar, GitHub valida tanto el almacén como la clave privada.

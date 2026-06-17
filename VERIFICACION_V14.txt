@@ -1,0 +1,13 @@
+VERIFICACIÓN V14
+
+- Preflight del repositorio: correcto.
+- Botón Info y referencias presente en Medicamentos.
+- Botón Info y referencias presente en Percentiles.
+- CalculatorCard agrega referencias a cada calculadora Gineco-OB.
+- Diálogo con propósito, método, fuentes, uso, limitaciones y revisión.
+- Referencias disponibles sin conexión.
+- Aplicación conserva funcionamiento local y sin permiso INTERNET.
+
+No fue posible ejecutar Gradle completo en este entorno porque no tuvo
+acceso de red para descargar Gradle 8.11.1. GitHub Actions ejecutará
+compileDebugKotlin y testDebugUnitTest antes de generar la APK.

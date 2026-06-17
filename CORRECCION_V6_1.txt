@@ -1,0 +1,16 @@
+Corrección v6.1
+
+Errores corregidos:
+
+1. App.kt:340
+   'val maxWidth: Dp cannot be called in this context with an implicit receiver'
+
+   Se captura el ancho como availableScreenWidth antes de LazyColumn.
+
+2. App.kt:840 y App.kt:871
+   Function0<Any> no coincide con Function0<Unit>
+
+   La función calculate ahora está declarada como:
+   val calculate: () -> Unit
+
+No se modificaron la base Room, medicamentos, percentiles, Excel ni filtros.

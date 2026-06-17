@@ -55,3 +55,10 @@ El workflow crea automáticamente:
 
 Instala la APK nueva encima de la existente. Android conservará los
 medicamentos siempre que la firma y el applicationId coincidan.
+
+
+## Validación temprana de firma
+
+Desde v10.1 el workflow abre la clave privada antes de compilar. Un error
+de contraseña o Base64 aparecerá en `Preparar y validar firma`, no al final
+de `packageRelease`.

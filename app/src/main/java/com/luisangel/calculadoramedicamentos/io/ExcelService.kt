@@ -115,6 +115,10 @@ class ExcelService {
             "Tipo",
             "Dosis",
             "Dosis por kg",
+            "Dosis interactiva",
+            "Dosis mínima por kg",
+            "Dosis máxima por kg",
+            "Paso de dosis",
             "Unidad",
             "Dosis calculada",
             "Tiempo de uso por día",
@@ -174,11 +178,15 @@ class ExcelService {
                 record.presentation,
                 when {
                     record.type == MedicationType.PEDIATRIC -> "Pediátrico"
-                    record.isSpecialAdult -> "Adulto especial"
+                    record.isSpecialAdult -> "Especial"
                     else -> "Adulto"
                 },
                 record.dose,
                 record.dosePerKg?.let(::trimNumber).orEmpty(),
+                if (record.isInteractiveDose) "Sí" else "No",
+                record.dosePerKgMin?.let(::trimNumber).orEmpty(),
+                record.dosePerKgMax?.let(::trimNumber).orEmpty(),
+                record.dosePerKgStep?.let(::trimNumber).orEmpty(),
                 record.doseUnit,
                 calculated,
                 record.frequencyPerDay,
@@ -211,7 +219,10 @@ class ExcelService {
         sheet.setAutoFilter(org.apache.poi.ss.util.CellRangeAddress(3, maxOf(3, records.size + 3), 0, headers.lastIndex))
         sheet.createFreezePane(0, 4)
         sheet.isDisplayGridlines = false
-        val widths = intArrayOf(24, 30, 18, 22, 14, 10, 18, 24, 18, 22, 22, 36, 42, 20, 20, 34)
+        val widths = intArrayOf(
+            24, 30, 18, 22, 14, 18, 18, 18, 15, 10,
+            18, 24, 18, 22, 22, 36, 42, 20, 20, 34
+        )
         widths.forEachIndexed { index, width -> sheet.setColumnWidth(index, width * 256) }
     }
 
@@ -219,7 +230,7 @@ class ExcelService {
         val sheet = workbook.createSheet("Configuración")
         val styles = Styles(workbook, IndexedColors.ORANGE)
         val rows = listOf(
-            "Versión del formato" to "3",
+            "Versión del formato" to "4",
             "Exportado el" to dateFormat.format(Date()),
             "Búsqueda" to filters.search,
             "Familia" to filters.family,
@@ -251,9 +262,12 @@ class ExcelService {
     private fun createDatabaseSheet(workbook: Workbook, records: List<MedicationRecord>) {
         val sheet = workbook.createSheet("BaseDatos")
         val headers = listOf(
-            "ID", "Tipo", "Adulto especial", "Medicamento", "Presentación", "Dosis",
-            "Dosis por kg", "Unidad", "Tiempo de uso por día", "Tiempo de uso por días",
-            "Familia", "Subgrupo", "Especialidades", "Notas", "Fecha de alta", "Última actualización"
+            "ID", "Tipo", "Especial", "Medicamento", "Presentación", "Dosis",
+            "Dosis por kg", "Dosis interactiva", "Dosis mínima por kg",
+            "Dosis máxima por kg", "Paso de dosis", "Unidad",
+            "Tiempo de uso por día", "Tiempo de uso por días",
+            "Familia", "Subgrupo", "Especialidades", "Notas",
+            "Fecha de alta", "Última actualización"
         )
         val styles = Styles(workbook, IndexedColors.GREY_80_PERCENT)
         sheet.createRow(0).also { row ->
@@ -270,6 +284,10 @@ class ExcelService {
                 record.presentation,
                 record.dose,
                 record.dosePerKg?.let(::trimNumber).orEmpty(),
+                if (record.isInteractiveDose) "Sí" else "No",
+                record.dosePerKgMin?.let(::trimNumber).orEmpty(),
+                record.dosePerKgMax?.let(::trimNumber).orEmpty(),
+                record.dosePerKgStep?.let(::trimNumber).orEmpty(),
                 record.doseUnit,
                 record.frequencyPerDay,
                 record.durationDays.toString(),
@@ -343,7 +361,43 @@ class ExcelService {
                 name = name.trim(),
                 presentation = value(row, headers, "presentacion", "presentacion del medicamento").trim(),
                 dose = value(row, headers, "dosis", "dosis del medicamento").trim(),
-                dosePerKg = value(row, headers, "dosis por kg", "dosis mg kg", "dosis por kilogramo").replace(',', '.').toDoubleOrNull(),
+                dosePerKg = value(
+                    row,
+                    headers,
+                    "dosis por kg",
+                    "dosis mg kg",
+                    "dosis por kilogramo"
+                ).replace(',', '.').toDoubleOrNull(),
+                isInteractiveDose = normalize(
+                    value(
+                        row,
+                        headers,
+                        "dosis interactiva",
+                        "es dosis interactiva",
+                        "rango interactivo"
+                    )
+                ) in setOf("si", "true", "1"),
+                dosePerKgMin = value(
+                    row,
+                    headers,
+                    "dosis minima por kg",
+                    "dosis minima",
+                    "minimo por kg"
+                ).replace(',', '.').toDoubleOrNull(),
+                dosePerKgMax = value(
+                    row,
+                    headers,
+                    "dosis maxima por kg",
+                    "dosis maxima",
+                    "maximo por kg"
+                ).replace(',', '.').toDoubleOrNull(),
+                dosePerKgStep = value(
+                    row,
+                    headers,
+                    "paso de dosis",
+                    "incremento de dosis",
+                    "paso"
+                ).replace(',', '.').toDoubleOrNull(),
                 doseUnit = value(row, headers, "unidad", "unidad de dosis").ifBlank { "mg" }.trim(),
                 frequencyPerDay = value(row, headers, "tiempo de uso por dia", "uso por dia", "frecuencia").trim(),
                 durationDays = value(row, headers, "tiempo de uso por dias", "uso por dias", "duracion")
@@ -418,6 +472,33 @@ class ExcelService {
             dose = text("dose", "dosis"),
             dosePerKg = obj["dosePerKg"]?.jsonPrimitive?.doubleOrNull
                 ?: text("dosisPorKg").replace(',', '.').toDoubleOrNull(),
+            isInteractiveDose = obj["isInteractiveDose"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.toBooleanStrictOrNull()
+                ?: text(
+                    "dosisInteractiva",
+                    "interactiveDose"
+                ).toBooleanStrictOrNull()
+                ?: false,
+            dosePerKgMin = obj["dosePerKgMin"]
+                ?.jsonPrimitive
+                ?.doubleOrNull
+                ?: text("dosisMinimaPorKg")
+                    .replace(',', '.')
+                    .toDoubleOrNull(),
+            dosePerKgMax = obj["dosePerKgMax"]
+                ?.jsonPrimitive
+                ?.doubleOrNull
+                ?: text("dosisMaximaPorKg")
+                    .replace(',', '.')
+                    .toDoubleOrNull(),
+            dosePerKgStep = obj["dosePerKgStep"]
+                ?.jsonPrimitive
+                ?.doubleOrNull
+                ?: text("pasoDeDosis")
+                    .replace(',', '.')
+                    .toDoubleOrNull(),
             doseUnit = text("doseUnit", "unidad").ifBlank { "mg" },
             frequencyPerDay = text("frequencyPerDay", "frecuencia"),
             durationDays = obj["durationDays"]?.jsonPrimitive?.intOrNull
@@ -450,7 +531,25 @@ class ExcelService {
                 name = name,
                 presentation = map["presentacion"].orEmpty(),
                 dose = map["dosis"].orEmpty(),
-                dosePerKg = map["dosis por kg"].orEmpty().replace(',', '.').toDoubleOrNull(),
+                dosePerKg = map["dosis por kg"]
+                    .orEmpty()
+                    .replace(',', '.')
+                    .toDoubleOrNull(),
+                isInteractiveDose = normalize(
+                    map["dosis interactiva"].orEmpty()
+                ) in setOf("si", "true", "1"),
+                dosePerKgMin = map["dosis minima por kg"]
+                    .orEmpty()
+                    .replace(',', '.')
+                    .toDoubleOrNull(),
+                dosePerKgMax = map["dosis maxima por kg"]
+                    .orEmpty()
+                    .replace(',', '.')
+                    .toDoubleOrNull(),
+                dosePerKgStep = map["paso de dosis"]
+                    .orEmpty()
+                    .replace(',', '.')
+                    .toDoubleOrNull(),
                 doseUnit = map["unidad"].orEmpty().ifBlank { "mg" },
                 frequencyPerDay = map["tiempo de uso por dia"].orEmpty().ifBlank { map["frecuencia"].orEmpty() },
                 durationDays = map["tiempo de uso por dias"].orEmpty().filter(Char::isDigit).toIntOrNull() ?: 1,

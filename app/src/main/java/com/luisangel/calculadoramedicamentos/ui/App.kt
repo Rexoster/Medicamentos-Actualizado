@@ -59,6 +59,9 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
@@ -108,6 +111,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -128,6 +132,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.luisangel.calculadoramedicamentos.growth.GrowthAssessment
 import com.luisangel.calculadoramedicamentos.growth.GrowthChart
@@ -148,6 +153,8 @@ import com.luisangel.calculadoramedicamentos.model.SortOption
 import com.luisangel.calculadoramedicamentos.model.TypeFilter
 import com.luisangel.calculadoramedicamentos.model.calculatedDose
 import com.luisangel.calculadoramedicamentos.model.fingerprint
+import com.luisangel.calculadoramedicamentos.model.hasValidInteractiveRange
+import com.luisangel.calculadoramedicamentos.model.interactiveDoseStart
 import com.luisangel.calculadoramedicamentos.model.toDraft
 import com.luisangel.calculadoramedicamentos.model.toRecord
 import com.luisangel.calculadoramedicamentos.model.validationError
@@ -175,6 +182,477 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
+
+
+private data class ClinicalReferenceItem(
+    val source: String,
+    val citation: String,
+    val useInApp: String
+)
+
+private data class ClinicalInfoContent(
+    val title: String,
+    val purpose: String,
+    val method: String,
+    val references: List<ClinicalReferenceItem>,
+    val limitations: List<String>,
+    val reviewedOn: String = "17 de junio de 2026"
+)
+
+private fun medicationClinicalInfo() = ClinicalInfoContent(
+    title = "Medicamentos · información y referencias",
+    purpose = (
+        "La aplicación almacena un catálogo local de medicamentos y calcula " +
+            "peso × dosis por kilogramo cuando el registro lo requiere."
+        ),
+    method = (
+        "Los medicamentos agregados por el usuario no son validados contra una " +
+            "base farmacológica. Las referencias siguientes corresponden solamente " +
+            "a los ejemplos precargados de paracetamol e insulina basal."
+        ),
+    references = listOf(
+        ClinicalReferenceItem(
+            source = "Facultad de Medicina, UNAM",
+            citation = "Paracetamol. Biblioteca Médica Digital, catálogo de medicamentos.",
+            useInApp = "Referencia farmacológica general del ejemplo de paracetamol."
+        ),
+        ClinicalReferenceItem(
+            source = "PLM México",
+            citation = "Monografías de paracetamol y suspensión infantil 160 mg/5 mL.",
+            useInApp = "Presentación, frecuencia orientativa y rango pediátrico del ejemplo."
+        ),
+        ClinicalReferenceItem(
+            source = "Consejo de Salubridad General, México",
+            citation = "PRONAM: Diabetes tipo 2 y síndrome metabólico, edición 2025.",
+            useInApp = "Ejemplo educativo de inicio y titulación de insulina basal."
+        )
+    ),
+    limitations = listOf(
+        "La app no comprueba interacciones, contraindicaciones, función renal, embarazo ni alergias.",
+        "Las dosis introducidas o importadas son responsabilidad del usuario.",
+        "Los pesos se usan durante la sesión y no se almacenan."
+    )
+)
+
+private fun percentileClinicalInfo() = ClinicalInfoContent(
+    title = "Percentiles pediátricos · información y referencias",
+    purpose = (
+        "Calcula puntajes Z y percentiles de crecimiento pediátrico con parámetros " +
+            "LMS incorporados localmente."
+        ),
+    method = (
+        "La referencia principal es OMS. La app usa estándares 0–5 años y la " +
+            "referencia 5–19 años. CDC se documenta como referencia alternativa, " +
+            "pero no se mezcla con OMS dentro de un mismo resultado."
+        ),
+    references = listOf(
+        ClinicalReferenceItem(
+            source = "Organización Mundial de la Salud",
+            citation = "WHO Child Growth Standards, 2006: peso, longitud/talla e IMC de 0 a 5 años.",
+            useInApp = "Curvas LMS y percentiles para menores de 5 años."
+        ),
+        ClinicalReferenceItem(
+            source = "Organización Mundial de la Salud",
+            citation = "Growth reference data for 5–19 years, 2007.",
+            useInApp = "Talla, peso e IMC para escolares y adolescentes."
+        ),
+        ClinicalReferenceItem(
+            source = "Centers for Disease Control and Prevention",
+            citation = "CDC Extended BMI-for-Age Growth Charts, publicadas en 2022 y revisadas en 2024.",
+            useInApp = "Cotejo documental para IMC muy alto; no modifica los cálculos OMS."
+        )
+    ),
+    limitations = listOf(
+        "Un percentil aislado no establece diagnóstico ni sustituye la trayectoria longitudinal.",
+        "La postura de medición, prematuridad, síndromes y enfermedades crónicas pueden requerir otras referencias.",
+        "Los datos introducidos del niño no se guardan."
+    )
+)
+
+private fun clinicalInfoForCalculator(
+    calculatorTitle: String
+): ClinicalInfoContent? = when (calculatorTitle) {
+    "Gestograma" -> ClinicalInfoContent(
+        title = "Gestograma · información y referencias",
+        purpose = "Estima edad gestacional y fecha probable de parto a partir de la FUM.",
+        method = "Edad gestacional = días transcurridos desde la FUM. FPP = FUM + 280 días.",
+        references = listOf(
+            ClinicalReferenceItem(
+                source = "American College of Obstetricians and Gynecologists",
+                citation = "Committee Opinion No. 700: Methods for Estimating the Due Date. Obstet Gynecol. 2017;129:e150–e154.",
+                useInApp = "Datación obstétrica, FPP y criterios de comparación con ultrasonido."
+            )
+        ),
+        limitations = listOf(
+            "Una FUM incierta, ciclos irregulares o anticoncepción reciente reducen la confiabilidad.",
+            "La FPP establecida clínicamente no debe modificarse sin valorar el ultrasonido y los antecedentes."
+        )
+    )
+
+    "Edad gestacional por ultrasonido" -> ClinicalInfoContent(
+        title = "Edad gestacional por ultrasonido · referencias",
+        purpose = "Estima edad gestacional por LCC/CRL o biometría fetal según trimestre.",
+        method = (
+            "Primer trimestre: ecuación de LCC/CRL. Segundo y tercer trimestre: " +
+                "ecuaciones Hadlock con DBP, CC, CA y LF disponibles."
+            ),
+        references = listOf(
+            ClinicalReferenceItem(
+                source = "ACOG",
+                citation = "Committee Opinion No. 700: Methods for Estimating the Due Date, 2017.",
+                useInApp = "Precisión esperada y umbrales orientativos de redatación."
+            ),
+            ClinicalReferenceItem(
+                source = "Hadlock FP, Deter RL, Harrist RB, Park SK",
+                citation = "Estimating fetal age: computer-assisted analysis of multiple fetal growth parameters. Radiology. 1984;152(2):497–501. DOI: 10.1148/radiology.152.2.6739822.",
+                useInApp = "Ecuaciones biométricas del segundo y tercer trimestre."
+            ),
+            ClinicalReferenceItem(
+                source = "British Medical Ultrasound Society",
+                citation = "Fetal measurements guidance: datación por crown-rump length.",
+                useInApp = "Conversión LCC/CRL a edad gestacional en el primer trimestre."
+            )
+        ),
+        limitations = listOf(
+            "El tercer trimestre ofrece la menor precisión para datación.",
+            "La biometría puede reflejar alteraciones del crecimiento y no una edad gestacional distinta.",
+            "El resultado no reemplaza la FPP obstétrica documentada."
+        )
+    )
+
+    "Peso fetal estimado · Hadlock" -> ClinicalInfoContent(
+        title = "Peso fetal estimado Hadlock · referencias",
+        purpose = "Estima peso fetal usando DBP, CC, CA y LF.",
+        method = (
+            "Log10(peso) = 1.3596 − 0.00386(CA×LF) + 0.0064(CC) + " +
+                "0.00061(DBP×CA) + 0.0424(CA) + 0.174(LF)."
+            ),
+        references = listOf(
+            ClinicalReferenceItem(
+                source = "Hadlock FP et al.",
+                citation = "Estimation of fetal weight with the use of head, body, and femur measurements. Am J Obstet Gynecol. 1985.",
+                useInApp = "Fórmula Hadlock de cuatro parámetros utilizada por la calculadora."
+            ),
+            ClinicalReferenceItem(
+                source = "ISUOG",
+                citation = "Practice Guidelines: ultrasound assessment of fetal biometry and growth. Ultrasound Obstet Gynecol. 2019.",
+                useInApp = "Contexto técnico para biometría y evaluación del crecimiento."
+            )
+        ),
+        limitations = listOf(
+            "El peso fetal estimado tiene margen de error y depende de la calidad de las mediciones.",
+            "La app calcula gramos, no asigna automáticamente percentil fetal."
+        )
+    )
+
+    "Discordancia de peso gemelar" -> ClinicalInfoContent(
+        title = "Discordancia gemelar · referencias",
+        purpose = "Calcula la diferencia porcentual de peso fetal estimado entre gemelos.",
+        method = "((peso mayor − peso menor) / peso mayor) × 100.",
+        references = listOf(
+            ClinicalReferenceItem(
+                source = "ISUOG",
+                citation = "Updated Practice Guidelines: role of ultrasound in twin pregnancy. Ultrasound Obstet Gynecol. 2025.",
+                useInApp = "Fórmula de discordancia y contexto de vigilancia en embarazo gemelar."
+            )
+        ),
+        limitations = listOf(
+            "El porcentaje debe interpretarse junto con corionicidad, Doppler y percentiles individuales.",
+            "Los umbrales de 20–25 % son orientativos y no constituyen una decisión aislada."
+        )
+    )
+
+    "Relación cerebroplacentaria" -> ClinicalInfoContent(
+        title = "Relación cerebroplacentaria · referencias",
+        purpose = "Calcula CPR a partir de índices de pulsatilidad fetal.",
+        method = "CPR = IP de arteria cerebral media / IP de arteria umbilical.",
+        references = listOf(
+            ClinicalReferenceItem(
+                source = "ISUOG",
+                citation = "Practice Guidelines: diagnosis and management of the small-for-gestational-age fetus and fetal growth restriction. 2020.",
+                useInApp = "Contexto clínico de Doppler, ACM, arteria umbilical y CPR."
+            ),
+            ClinicalReferenceItem(
+                source = "Medicina Fetal Barcelona",
+                citation = "Calculadoras de Doppler y crecimiento fetal.",
+                useInApp = "Referencia estructural del módulo obstétrico."
+            )
+        ),
+        limitations = listOf(
+            "Un corte fijo de CPR <1 es solamente orientativo.",
+            "La interpretación clínica requiere percentiles por edad gestacional y técnica Doppler adecuada."
+        )
+    )
+
+    "Doppler rápido" -> ClinicalInfoContent(
+        title = "Doppler rápido · referencias",
+        purpose = "Realiza operaciones aritméticas de apoyo para índices Doppler.",
+        method = "IP uterina media = (IP derecha + IP izquierda) / 2. Índice TEI = (ICT + IRT) / ET.",
+        references = listOf(
+            ClinicalReferenceItem(
+                source = "ISUOG",
+                citation = "Practice Guidelines: use of Doppler velocimetry in obstetrics, actualización vigente.",
+                useInApp = "Técnica, uso del índice de pulsatilidad y contexto Doppler."
+            ),
+            ClinicalReferenceItem(
+                source = "Medicina Fetal Barcelona",
+                citation = "Calculadoras de Doppler fetal y arterias uterinas.",
+                useInApp = "Referencia funcional del apartado."
+            )
+        ),
+        limitations = listOf(
+            "La calculadora no asigna percentiles ni clasifica automáticamente una exploración.",
+            "Los tiempos e índices deben proceder de un estudio técnicamente válido."
+        )
+    )
+
+    "LHR · hernia diafragmática" -> ClinicalInfoContent(
+        title = "LHR en hernia diafragmática · referencias",
+        purpose = "Calcula lung-to-head ratio por el método de diámetros.",
+        method = "Área pulmonar = diámetro longitudinal × diámetro perpendicular. LHR = área / circunferencia cefálica.",
+        references = listOf(
+            ClinicalReferenceItem(
+                source = "ISUOG",
+                citation = "Congenital diaphragmatic hernia: educational guidance and O/E LHR methodology.",
+                useInApp = "Método de medición pulmonar y relación con circunferencia cefálica."
+            ),
+            ClinicalReferenceItem(
+                source = "Medicina Fetal Barcelona",
+                citation = "Calculadora de hernia diafragmática congénita.",
+                useInApp = "Referencia estructural del cálculo LHR."
+            )
+        ),
+        limitations = listOf(
+            "La app calcula LHR observado, no el O/E LHR completo.",
+            "El pronóstico requiere lateralidad, hígado, edad gestacional, técnica y evaluación especializada."
+        )
+    )
+
+    else -> null
+}
+
+@Composable
+private fun ClinicalInfoButton(
+    info: ClinicalInfoContent,
+    modifier: Modifier = Modifier
+) {
+    var showDialog by rememberSaveable(info.title) {
+        mutableStateOf(false)
+    }
+
+    OutlinedButton(
+        onClick = { showDialog = true },
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "Info y referencias",
+            fontWeight = FontWeight.Bold
+        )
+    }
+
+    if (showDialog) {
+        ClinicalReferencesDialog(
+            info = info,
+            onDismiss = { showDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun ClinicalReferencesDialog(
+    info: ClinicalInfoContent,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .padding(16.dp)
+                .widthIn(max = 720.dp)
+        ) {
+            Column(
+                Modifier.fillMaxSize()
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer
+                        )
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(9.dp)
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            info.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            "Revisión: ${info.reviewedOn}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Cerrar"
+                        )
+                    }
+                }
+
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    ClinicalInfoSection(
+                        title = "Qué hace",
+                        text = info.purpose
+                    )
+                    ClinicalInfoSection(
+                        title = "Método utilizado",
+                        text = info.method
+                    )
+
+                    Text(
+                        "Referencias usadas",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                    info.references.forEachIndexed { index, reference ->
+                        OutlinedCard(
+                            colors = CardDefaults.outlinedCardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            )
+                        ) {
+                            Column(
+                                Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    "${index + 1}. ${reference.source}",
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    reference.citation,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    "Uso en la app: ${reference.useInApp}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        "Limitaciones",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                    info.limitations.forEach { limitation ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text(
+                                "•",
+                                color = MaterialTheme.colorScheme.tertiary,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                limitation,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(
+                            alpha = 0.55f
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Herramienta de apoyo. No sustituye guías vigentes, " +
+                                "juicio clínico, interpretación especializada ni " +
+                                "valoración individual.",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
+                ) {
+                    Text("Cerrar")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClinicalInfoSection(
+    title: String,
+    text: String
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Black
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
 
 private enum class MainSection(val label: String) {
     MEDICATIONS("Medicamentos"),
@@ -274,10 +752,6 @@ private fun MedicationCalculatorScreen(
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val adultWeight by viewModel.adultWeight.collectAsStateWithLifecycle()
     val pediatricWeight by viewModel.pediatricWeight.collectAsStateWithLifecycle()
-    val families by viewModel.availableFamilies.collectAsStateWithLifecycle()
-    val subgroups by viewModel.availableSubgroups.collectAsStateWithLifecycle()
-    val frequencies by viewModel.availableFrequencies.collectAsStateWithLifecycle()
-    val specialties by viewModel.availableSpecialties.collectAsStateWithLifecycle()
     val pendingImport by viewModel.pendingImport.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
 
@@ -313,7 +787,11 @@ private fun MedicationCalculatorScreen(
     }
     val visibleForTab by remember(filtered, selectedTab) {
         derivedStateOf {
-            filtered.filter { it.type == selectedTab }
+            if (filtered.isEmpty()) {
+                emptyList()
+            } else {
+                filtered.filter { it.type == selectedTab }
+            }
         }
     }
 
@@ -393,6 +871,10 @@ private fun MedicationCalculatorScreen(
                         )
                     }
                 }
+                item {
+                    val info = remember { medicationClinicalInfo() }
+                    ClinicalInfoButton(info = info)
+                }
             }
 
             FloatingActionButton(
@@ -414,6 +896,11 @@ private fun MedicationCalculatorScreen(
     }
 
     if (showEditor) {
+        val families by viewModel.availableFamilies.collectAsStateWithLifecycle()
+        val subgroups by viewModel.availableSubgroups.collectAsStateWithLifecycle()
+        val frequencies by viewModel.availableFrequencies.collectAsStateWithLifecycle()
+        val specialties by viewModel.availableSpecialties.collectAsStateWithLifecycle()
+
         MedicationEditorDialog(
             target = editorTarget,
             allRecords = all,
@@ -430,6 +917,10 @@ private fun MedicationCalculatorScreen(
     }
 
     if (showFilters) {
+        val families by viewModel.availableFamilies.collectAsStateWithLifecycle()
+        val subgroups by viewModel.availableSubgroups.collectAsStateWithLifecycle()
+        val specialties by viewModel.availableSpecialties.collectAsStateWithLifecycle()
+
         FilterSheet(
             current = filters,
             families = families,
@@ -656,9 +1147,9 @@ private fun MedicationTable(
             val maximumVisibleRows = if (
                 availableWidth < 700.dp
             ) {
-                4
+                3
             } else {
-                7
+                5
             }
             val visibleRows = min(
                 records.size,
@@ -683,7 +1174,8 @@ private fun MedicationTable(
                     }
                     itemsIndexed(
                         items = records,
-                        key = { _, record -> record.id }
+                        key = { _, record -> record.id },
+                        contentType = { _, _ -> "medication-row" }
                     ) { index, record ->
                         MedicationDataRow(
                             record = record,
@@ -732,6 +1224,222 @@ private fun MedicationHeaderRow() {
     }
 }
 
+
+private fun formatDoseValue(
+    value: Double
+): String = java.math.BigDecimal
+    .valueOf(value)
+    .stripTrailingZeros()
+    .toPlainString()
+
+private fun nextInteractiveDose(
+    current: Double,
+    minimum: Double,
+    maximum: Double,
+    step: Double,
+    direction: Int
+): Double {
+    val normalizedStep = step.coerceAtLeast(0.000001)
+    val raw = current +
+        normalizedStep * direction
+    val stepIndex = (
+        (raw - minimum) /
+            normalizedStep
+        ).roundToInt()
+    val aligned = minimum +
+        stepIndex * normalizedStep
+
+    return java.math.BigDecimal
+        .valueOf(
+            aligned.coerceIn(
+                minimum,
+                maximum
+            )
+        )
+        .setScale(
+            6,
+            java.math.RoundingMode.HALF_UP
+        )
+        .stripTrailingZeros()
+        .toDouble()
+}
+
+@Composable
+private fun InteractiveDoseWheel(
+    record: MedicationRecord,
+    selectedDose: Double,
+    onSelectedDose: (Double) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val minimum = record.dosePerKgMin
+        ?: selectedDose
+    val maximum = record.dosePerKgMax
+        ?: selectedDose
+    val step = record.dosePerKgStep
+        ?.takeIf { it > 0.0 }
+        ?: 0.1
+
+    fun changeDose(direction: Int) {
+        onSelectedDose(
+            nextInteractiveDose(
+                current = selectedDose,
+                minimum = minimum,
+                maximum = maximum,
+                step = step,
+                direction = direction
+            )
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(
+            alpha = 0.62f
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(
+                alpha = 0.55f
+            )
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(
+                minimum,
+                maximum,
+                step,
+                selectedDose
+            ) {
+                var accumulatedVerticalDrag = 0f
+
+                detectDragGestures(
+                    onDragStart = {
+                        accumulatedVerticalDrag = 0f
+                    },
+                    onDragEnd = {
+                        accumulatedVerticalDrag = 0f
+                    },
+                    onDragCancel = {
+                        accumulatedVerticalDrag = 0f
+                    }
+                ) { pointerChange, dragAmount ->
+                    accumulatedVerticalDrag +=
+                        dragAmount.y
+
+                    when {
+                        accumulatedVerticalDrag <= -24f -> {
+                            changeDose(1)
+                            accumulatedVerticalDrag = 0f
+                        }
+                        accumulatedVerticalDrag >= 24f -> {
+                            changeDose(-1)
+                            accumulatedVerticalDrag = 0f
+                        }
+                    }
+                    pointerChange.consume()
+                }
+            }
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 7.dp,
+                    vertical = 2.dp
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            IconButton(
+                onClick = { changeDose(1) },
+                enabled = selectedDose < maximum,
+                modifier = Modifier.size(21.dp)
+            ) {
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    contentDescription =
+                        "Aumentar dosis",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Text(
+                formatDoseValue(
+                    nextInteractiveDose(
+                        selectedDose,
+                        minimum,
+                        maximum,
+                        step,
+                        -1
+                    )
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                    alpha = if (
+                        selectedDose > minimum
+                    ) {
+                        0.70f
+                    } else {
+                        0.30f
+                    }
+                )
+            )
+
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Text(
+                    "${formatDoseValue(selectedDose)} " +
+                        "${record.doseUnit}/kg",
+                    modifier = Modifier.padding(
+                        horizontal = 9.dp,
+                        vertical = 3.dp
+                    ),
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+
+            Text(
+                formatDoseValue(
+                    nextInteractiveDose(
+                        selectedDose,
+                        minimum,
+                        maximum,
+                        step,
+                        1
+                    )
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                    alpha = if (
+                        selectedDose < maximum
+                    ) {
+                        0.70f
+                    } else {
+                        0.30f
+                    }
+                )
+            )
+
+            IconButton(
+                onClick = { changeDose(-1) },
+                enabled = selectedDose > minimum,
+                modifier = Modifier.size(21.dp)
+            ) {
+                Icon(
+                    Icons.Default.KeyboardArrowDown,
+                    contentDescription =
+                        "Disminuir dosis",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MedicationDataRow(
@@ -741,99 +1449,259 @@ private fun MedicationDataRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
-    var showNotes by remember { mutableStateOf(false) }
-    val rowColor = if (alternate) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f) else MaterialTheme.colorScheme.surface
-    val dose = if (record.type == MedicationType.ADULT && !record.isSpecialAdult) {
+    var menuOpen by remember {
+        mutableStateOf(false)
+    }
+    var showNotes by remember {
+        mutableStateOf(false)
+    }
+
+    val initialInteractiveDose = remember(
+        record.id,
+        record.updatedAt
+    ) {
+        record.interactiveDoseStart()
+            ?: record.dosePerKg
+            ?: 0.0
+    }
+    var selectedInteractiveDose by rememberSaveable(
+        record.id,
+        record.updatedAt
+    ) {
+        mutableStateOf(
+            initialInteractiveDose
+        )
+    }
+
+    val rowColor = if (alternate) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(
+            alpha = 0.34f
+        )
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    val selectedDose = if (
+        record.hasValidInteractiveRange()
+    ) {
+        selectedInteractiveDose
+    } else {
+        record.dosePerKg
+    }
+
+    val doseText = if (
+        record.type == MedicationType.ADULT &&
+        !record.isSpecialAdult
+    ) {
         record.dose
     } else {
-        "${record.dosePerKg ?: ""} ${record.doseUnit}/kg"
+        "${record.dosePerKg ?: ""} " +
+            "${record.doseUnit}/kg"
     }
 
     Row(
         Modifier
             .background(rowColor)
-            .combinedClickable(onClick = {}, onLongClick = { menuOpen = true })
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    menuOpen = true
+                }
+            )
             .height(112.dp)
     ) {
         TableCell(medicationColumns[0].width) {
             Column {
-                Text(record.name, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    record.name,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
                 if (record.isSpecialAdult) {
-                    Text("Adulto especial", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    Text(
+                        "Especial",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+                if (record.isInteractiveDose) {
+                    Text(
+                        "Dosis interactiva",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
-        TableTextCell(record.presentation, medicationColumns[1].width)
-        TableTextCell(dose, medicationColumns[2].width)
-        TableTextCell(record.calculatedDose(weight), medicationColumns[3].width, fontWeight = FontWeight.SemiBold)
-        TableTextCell(record.frequencyPerDay, medicationColumns[4].width)
-        TableTextCell(record.durationDays.toString(), medicationColumns[5].width)
-        TableTextCell(record.family, medicationColumns[6].width)
-        TableTextCell(record.subgroup.ifBlank { "—" }, medicationColumns[7].width)
-        TableTextCell(record.specialties.joinToString(", ").ifBlank { "—" }, medicationColumns[8].width, maxLines = 3)
+
+        TableTextCell(
+            record.presentation,
+            medicationColumns[1].width
+        )
+
+        TableCell(
+            medicationColumns[2].width,
+            contentAlignment = Alignment.Center
+        ) {
+            if (
+                record.hasValidInteractiveRange()
+            ) {
+                InteractiveDoseWheel(
+                    record = record,
+                    selectedDose =
+                        selectedInteractiveDose,
+                    onSelectedDose = {
+                        selectedInteractiveDose = it
+                    },
+                    modifier = Modifier.padding(
+                        horizontal = 7.dp
+                    )
+                )
+            } else {
+                Text(
+                    doseText,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        TableTextCell(
+            record.calculatedDose(
+                weight = weight,
+                selectedDosePerKg =
+                    selectedDose
+            ),
+            medicationColumns[3].width,
+            fontWeight = FontWeight.SemiBold
+        )
+        TableTextCell(
+            record.frequencyPerDay,
+            medicationColumns[4].width
+        )
+        TableTextCell(
+            record.durationDays.toString(),
+            medicationColumns[5].width
+        )
+        TableTextCell(
+            record.family,
+            medicationColumns[6].width
+        )
+        TableTextCell(
+            record.subgroup.ifBlank { "—" },
+            medicationColumns[7].width
+        )
+        TableTextCell(
+            record.specialties
+                .joinToString(", ")
+                .ifBlank { "—" },
+            medicationColumns[8].width,
+            maxLines = 3
+        )
         TableCell(medicationColumns[9].width) {
             Column {
                 Text(
                     record.notes.ifBlank { "—" },
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall
+                    style =
+                        MaterialTheme.typography.bodySmall
                 )
                 if (record.notes.length > 95) {
-                    TextButton(onClick = { showNotes = true }, contentPadding = PaddingValues(0.dp)) {
+                    TextButton(
+                        onClick = {
+                            showNotes = true
+                        },
+                        contentPadding =
+                            PaddingValues(0.dp)
+                    ) {
                         Text("+ Ver más")
                     }
                 }
             }
         }
-        TableCell(medicationColumns[10].width, contentAlignment = Alignment.Center) {
+        TableCell(
+            medicationColumns[10].width,
+            contentAlignment = Alignment.Center
+        ) {
             Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                IconButton(
+                    onClick = {
+                        menuOpen = true
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "Opciones"
+                    )
                 }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = {
+                        menuOpen = false
+                    }
+                ) {
                     DropdownMenuItem(
-                        text = { Text("Editar fármaco") },
-                        leadingIcon = { Icon(Icons.Default.Edit, null) },
-                        onClick = { menuOpen = false; onEdit() }
+                        text = {
+                            Text("Editar fármaco")
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Edit,
+                                null
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onEdit()
+                        }
                     )
                     DropdownMenuItem(
-                        text = { Text("Eliminar fármaco") },
-                        leadingIcon = { Icon(Icons.Default.Delete, null) },
-                        onClick = { menuOpen = false; onDelete() }
+                        text = {
+                            Text("Eliminar fármaco")
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Delete,
+                                null
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onDelete()
+                        }
                     )
                 }
             }
         }
     }
+
     HorizontalDivider()
 
     if (showNotes) {
         AlertDialog(
-            onDismissRequest = { showNotes = false },
-            title = { Text("Notas de ${record.name}") },
-            text = { Text(record.notes) },
-            confirmButton = { TextButton(onClick = { showNotes = false }) { Text("Cerrar") } }
+            onDismissRequest = {
+                showNotes = false
+            },
+            title = {
+                Text(
+                    "${record.name} · Notas"
+                )
+            },
+            text = {
+                Text(record.notes)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showNotes = false
+                    }
+                ) {
+                    Text("Cerrar")
+                }
+            }
         )
-    }
-}
-
-@Composable
-private fun TableCell(
-    width: Dp,
-    contentAlignment: Alignment = Alignment.CenterStart,
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .width(width)
-            .fillMaxHeight()
-            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        contentAlignment = contentAlignment
-    ) {
-        content()
     }
 }
 
@@ -1365,7 +2233,7 @@ private fun GestogramWheel(
                         )
                         .coerceAtLeast(365)
                     val dayShift = (
-                        accumulatedDegrees / 360f *
+                        -accumulatedDegrees / 360f *
                             yearDays.toFloat()
                         ).roundToInt()
 
@@ -2512,9 +3380,21 @@ private fun CalculatorCard(
             Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                note,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             content()
+            clinicalInfoForCalculator(title)?.let { info ->
+                HorizontalDivider()
+                ClinicalInfoButton(info = info)
+            }
         }
     }
 }
@@ -2726,6 +3606,9 @@ private fun PercentileInformationCard() {
                     )
                 }
             }
+            ClinicalInfoButton(
+                info = percentileClinicalInfo()
+            )
         }
     }
 }
@@ -2922,6 +3805,387 @@ private fun DateField(
     }
 }
 
+
+
+@Composable
+private fun DateOrbitWheel(
+    selectedDate: LocalDate,
+    minDate: LocalDate?,
+    maxDate: LocalDate?,
+    onDateChange: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentDate by rememberUpdatedState(selectedDate)
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
+    val surface = MaterialTheme.colorScheme.surface
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val outline = MaterialTheme.colorScheme.outlineVariant
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+
+    val monthNames = remember {
+        listOf(
+            "Ene", "Feb", "Mar", "Abr",
+            "May", "Jun", "Jul", "Ago",
+            "Sep", "Oct", "Nov", "Dic"
+        )
+    }
+
+    Canvas(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(surface)
+            .pointerInput(minDate, maxDate) {
+                var previousAngle = 0f
+                var accumulatedDegrees = 0f
+                var dragStartDate = currentDate
+
+                fun pointerAngle(position: Offset): Float {
+                    val center = Offset(
+                        size.width / 2f,
+                        size.height / 2f
+                    )
+                    return Math.toDegrees(
+                        atan2(
+                            (position.y - center.y).toDouble(),
+                            (position.x - center.x).toDouble()
+                        )
+                    ).toFloat()
+                }
+
+                fun normalizedDelta(
+                    current: Float,
+                    previous: Float
+                ): Float {
+                    var delta = current - previous
+                    if (delta > 180f) delta -= 360f
+                    if (delta < -180f) delta += 360f
+                    return delta
+                }
+
+                detectDragGestures(
+                    onDragStart = {
+                        dragStartDate = currentDate
+                        previousAngle = pointerAngle(it)
+                        accumulatedDegrees = 0f
+                    }
+                ) { change, _ ->
+                    val angle = pointerAngle(change.position)
+                    accumulatedDegrees += normalizedDelta(
+                        angle,
+                        previousAngle
+                    )
+                    previousAngle = angle
+
+                    val dayShift = (
+                        -accumulatedDegrees / 360f *
+                            365.25f
+                        ).roundToInt()
+
+                    var candidate = dragStartDate.plusDays(
+                        dayShift.toLong()
+                    )
+                    if (
+                        minDate != null &&
+                        candidate.isBefore(minDate)
+                    ) {
+                        candidate = minDate
+                    }
+                    if (
+                        maxDate != null &&
+                        candidate.isAfter(maxDate)
+                    ) {
+                        candidate = maxDate
+                    }
+
+                    if (candidate != currentDate) {
+                        onDateChange(candidate)
+                    }
+                    change.consume()
+                }
+            }
+            .padding(5.dp)
+    ) {
+        val diameter = min(size.width, size.height)
+        val radius = diameter / 2f
+        val center = Offset(
+            size.width / 2f,
+            size.height / 2f
+        )
+
+        fun pointAt(
+            angleDegrees: Float,
+            distance: Float
+        ): Offset {
+            val radians = angleDegrees / 180f *
+                PI.toFloat()
+            return Offset(
+                center.x + cos(radians) * distance,
+                center.y + sin(radians) * distance
+            )
+        }
+
+        fun ringRect(ringRadius: Float): Pair<Offset, Size> =
+            Offset(
+                center.x - ringRadius,
+                center.y - ringRadius
+            ) to Size(
+                ringRadius * 2f,
+                ringRadius * 2f
+            )
+
+        val monthRadius = radius * 0.80f
+        val monthStroke = radius * 0.18f
+        val dayRadius = radius * 0.58f
+        val dayStroke = radius * 0.18f
+        val centerRadius = radius * 0.35f
+
+        drawCircle(
+            color = surfaceVariant.copy(alpha = 0.44f),
+            radius = radius * 0.98f,
+            center = center
+        )
+
+        val selectedMonthIndex =
+            selectedDate.monthValue - 1
+
+        repeat(12) { index ->
+            val relative = index - selectedMonthIndex
+            val startAngle = -105f +
+                relative * 30f
+            val (topLeft, arcSize) =
+                ringRect(monthRadius)
+
+            drawArc(
+                color = if (index % 2 == 0) {
+                    primaryContainer
+                } else {
+                    secondaryContainer
+                },
+                startAngle = startAngle,
+                sweepAngle = 30f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(
+                    width = monthStroke,
+                    cap = StrokeCap.Butt
+                )
+            )
+
+            val labelAngle = startAngle + 15f
+            val labelPoint = pointAt(
+                labelAngle,
+                monthRadius
+            )
+            val paint = AndroidPaint().apply {
+                color = if (index == selectedMonthIndex) {
+                    primary.toArgb()
+                } else {
+                    onSurface.toArgb()
+                }
+                textSize = radius * 0.052f
+                textAlign = AndroidPaint.Align.CENTER
+                isAntiAlias = true
+                isFakeBoldText =
+                    index == selectedMonthIndex
+            }
+
+            drawContext.canvas.nativeCanvas.apply {
+                save()
+                rotate(
+                    labelAngle + 90f,
+                    labelPoint.x,
+                    labelPoint.y
+                )
+                drawText(
+                    monthNames[index],
+                    labelPoint.x,
+                    labelPoint.y +
+                        radius * 0.018f,
+                    paint
+                )
+                restore()
+            }
+        }
+
+        val daysInMonth = selectedDate
+            .lengthOfMonth()
+        val selectedDayIndex =
+            selectedDate.dayOfMonth - 1
+
+        repeat(daysInMonth) { index ->
+            val relative = index - selectedDayIndex
+            val sweep = 360f / daysInMonth
+            val startAngle = -90f -
+                sweep / 2f +
+                relative * sweep
+            val (topLeft, arcSize) =
+                ringRect(dayRadius)
+
+            drawArc(
+                color = when {
+                    index == selectedDayIndex ->
+                        tertiary.copy(alpha = 0.88f)
+                    index % 2 == 0 ->
+                        primaryContainer.copy(alpha = 0.82f)
+                    else ->
+                        secondaryContainer.copy(alpha = 0.78f)
+                },
+                startAngle = startAngle,
+                sweepAngle = sweep,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(
+                    width = dayStroke,
+                    cap = StrokeCap.Butt
+                )
+            )
+
+            val dayNumber = index + 1
+            if (
+                dayNumber == selectedDate.dayOfMonth ||
+                dayNumber == 1 ||
+                dayNumber % 5 == 0
+            ) {
+                val labelAngle = startAngle +
+                    sweep / 2f
+                val point = pointAt(
+                    labelAngle,
+                    dayRadius
+                )
+                val paint = AndroidPaint().apply {
+                    color = if (
+                        dayNumber ==
+                            selectedDate.dayOfMonth
+                    ) {
+                        Color.White.toArgb()
+                    } else {
+                        onSurfaceVariant.toArgb()
+                    }
+                    textSize = radius * 0.038f
+                    textAlign =
+                        AndroidPaint.Align.CENTER
+                    isAntiAlias = true
+                    isFakeBoldText =
+                        dayNumber ==
+                            selectedDate.dayOfMonth
+                }
+                drawContext.canvas.nativeCanvas.drawText(
+                    dayNumber.toString(),
+                    point.x,
+                    point.y + radius * 0.012f,
+                    paint
+                )
+            }
+        }
+
+        drawCircle(
+            color = surface,
+            radius = centerRadius,
+            center = center
+        )
+        drawCircle(
+            color = primaryContainer,
+            radius = centerRadius,
+            center = center,
+            style = Stroke(
+                width = radius * 0.035f
+            )
+        )
+
+        val dayPaint = AndroidPaint().apply {
+            color = primary.toArgb()
+            textSize = radius * 0.20f
+            textAlign = AndroidPaint.Align.CENTER
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        val monthPaint = AndroidPaint().apply {
+            color = onSurface.toArgb()
+            textSize = radius * 0.066f
+            textAlign = AndroidPaint.Align.CENTER
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        val yearPaint = AndroidPaint().apply {
+            color = onSurfaceVariant.toArgb()
+            textSize = radius * 0.055f
+            textAlign = AndroidPaint.Align.CENTER
+            isAntiAlias = true
+        }
+
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(
+                selectedDate.dayOfMonth.toString(),
+                center.x,
+                center.y - radius * 0.01f,
+                dayPaint
+            )
+            drawText(
+                selectedDate.format(
+                    DateTimeFormatter.ofPattern(
+                        "MMMM",
+                        Locale("es", "MX")
+                    )
+                ).replaceFirstChar {
+                    if (it.isLowerCase()) {
+                        it.titlecase(Locale("es", "MX"))
+                    } else {
+                        it.toString()
+                    }
+                },
+                center.x,
+                center.y + radius * 0.105f,
+                monthPaint
+            )
+            drawText(
+                selectedDate.year.toString(),
+                center.x,
+                center.y + radius * 0.185f,
+                yearPaint
+            )
+        }
+
+        val markerPath = Path().apply {
+            moveTo(
+                center.x,
+                center.y - radius * 0.995f
+            )
+            lineTo(
+                center.x - radius * 0.055f,
+                center.y - radius * 0.84f
+            )
+            lineTo(
+                center.x + radius * 0.055f,
+                center.y - radius * 0.84f
+            )
+            close()
+        }
+        drawPath(
+            path = markerPath,
+            color = tertiary
+        )
+
+        drawLine(
+            color = outline,
+            start = pointAt(
+                -90f,
+                radius * 0.68f
+            ),
+            end = pointAt(
+                -90f,
+                radius * 0.97f
+            ),
+            strokeWidth = 2.dp.toPx()
+        )
+    }
+}
 
 private data class CalendarPartOption<T>(
     val value: T,
@@ -3220,8 +4484,9 @@ private fun ClinicalCalendarDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.96f)
                 .padding(16.dp)
-                .widthIn(max = 520.dp),
+                .widthIn(max = 560.dp),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 10.dp,
@@ -3263,12 +4528,49 @@ private fun ClinicalCalendarDialog(
                 }
 
                 Column(
-                    Modifier.padding(
-                        horizontal = 16.dp,
-                        vertical = 14.dp
-                    ),
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(
+                            rememberScrollState()
+                        )
+                        .padding(
+                            horizontal = 16.dp,
+                            vertical = 14.dp
+                        ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val wheelSize = maxWidth
+                            .coerceAtMost(330.dp)
+                            .coerceAtLeast(245.dp)
+
+                        DateOrbitWheel(
+                            selectedDate = selectedDate,
+                            minDate = minDate,
+                            maxDate = maxDate,
+                            onDateChange = {
+                                selectedDateText = it.toString()
+                                visibleMonthText =
+                                    YearMonth.from(it)
+                                        .toString()
+                            },
+                            modifier = Modifier.size(
+                                wheelSize
+                            )
+                        )
+                    }
+
+                    Text(
+                        "Gira la rueda, selecciona día, mes y año o utiliza el calendario mensual.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     Surface(
                         shape = RoundedCornerShape(18.dp),
                         color = MaterialTheme.colorScheme.secondaryContainer.copy(
@@ -4289,7 +5591,12 @@ private fun MedicationEditorDialog(
                             )
                             FilterChip(
                                 selected = draft.type == MedicationType.PEDIATRIC,
-                                onClick = { draft = draft.copy(type = MedicationType.PEDIATRIC, isSpecialAdult = false) },
+                                onClick = {
+                                    draft = draft.copy(
+                                        type = MedicationType.PEDIATRIC,
+                                        isSpecialAdult = false
+                                    )
+                                },
                                 label = { Text("Pediátrico") }
                             )
                         }
@@ -4297,30 +5604,179 @@ private fun MedicationEditorDialog(
                     if (draft.type == MedicationType.ADULT) {
                         item {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = draft.isSpecialAdult, onCheckedChange = { draft = draft.copy(isSpecialAdult = it) })
+                                Checkbox(
+                                    checked = draft.isSpecialAdult,
+                                    onCheckedChange = {
+                                        draft = draft.copy(
+                                            isSpecialAdult = it,
+                                            isInteractiveDose = if (it) {
+                                                draft.isInteractiveDose
+                                            } else {
+                                                false
+                                            }
+                                        )
+                                    }
+                                )
                                 Column {
-                                    Text("Medicamento adulto especial")
-                                    Text("Activa el cálculo por kg de peso.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Medicamento especial")
+                                    Text(
+                                        "Activa el cálculo por kg de peso.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
                     }
                     item { FormTextField("Medicamento", draft.name, { draft = draft.copy(name = it) }) }
                     item { FormTextField("Presentación", draft.presentation, { draft = draft.copy(presentation = it) }) }
-                    if (draft.type == MedicationType.PEDIATRIC || draft.isSpecialAdult) {
+                    if (
+                        draft.type == MedicationType.PEDIATRIC ||
+                        draft.isSpecialAdult
+                    ) {
                         item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(
+                                    alpha = 0.48f
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = draft.isInteractiveDose,
+                                        onCheckedChange = { checked ->
+                                            draft = draft.copy(
+                                                isInteractiveDose = checked,
+                                                dosePerKgStep = if (
+                                                    checked &&
+                                                    draft.dosePerKgStep.isBlank()
+                                                ) {
+                                                    "0.1"
+                                                } else {
+                                                    draft.dosePerKgStep
+                                                }
+                                            )
+                                        }
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            "Dosis interactiva por rango",
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Permite elegir la dosis dentro del rango directamente en la tabla.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 FormTextField(
-                                    "Dosis por kg",
+                                    if (draft.isInteractiveDose) {
+                                        "Dosis inicial por kg"
+                                    } else {
+                                        "Dosis por kg"
+                                    },
                                     draft.dosePerKg,
-                                    { draft = draft.copy(dosePerKg = decimalText(it)) },
+                                    {
+                                        draft = draft.copy(
+                                            dosePerKg = decimalText(it)
+                                        )
+                                    },
                                     Modifier.weight(1f),
                                     KeyboardType.Decimal
                                 )
-                                FormTextField("Unidad", draft.doseUnit, { draft = draft.copy(doseUnit = it) }, Modifier.weight(1f))
+                                FormTextField(
+                                    "Unidad",
+                                    draft.doseUnit,
+                                    {
+                                        draft = draft.copy(
+                                            doseUnit = it
+                                        )
+                                    },
+                                    Modifier.weight(1f)
+                                )
                             }
                         }
-                        item { FormTextField("Descripción de dosis", draft.dose, { draft = draft.copy(dose = it) }, placeholder = "Ej. Dosis calculada por peso") }
+
+                        if (draft.isInteractiveDose) {
+                            item {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    FormTextField(
+                                        "Dosis mínima",
+                                        draft.dosePerKgMin,
+                                        {
+                                            draft = draft.copy(
+                                                dosePerKgMin = decimalText(it)
+                                            )
+                                        },
+                                        Modifier.weight(1f),
+                                        KeyboardType.Decimal
+                                    )
+                                    FormTextField(
+                                        "Dosis máxima",
+                                        draft.dosePerKgMax,
+                                        {
+                                            draft = draft.copy(
+                                                dosePerKgMax = decimalText(it)
+                                            )
+                                        },
+                                        Modifier.weight(1f),
+                                        KeyboardType.Decimal
+                                    )
+                                }
+                            }
+                            item {
+                                FormTextField(
+                                    "Incremento de la rueda",
+                                    draft.dosePerKgStep,
+                                    {
+                                        draft = draft.copy(
+                                            dosePerKgStep = decimalText(it)
+                                        )
+                                    },
+                                    keyboardType = KeyboardType.Decimal,
+                                    placeholder = "Ej. 0.1"
+                                )
+                                Text(
+                                    "En la tabla podrás deslizar hacia arriba o abajo, o usar las flechas, para elegir el valor.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+
+                        item {
+                            FormTextField(
+                                "Descripción de dosis",
+                                draft.dose,
+                                {
+                                    draft = draft.copy(
+                                        dose = it
+                                    )
+                                },
+                                placeholder = if (
+                                    draft.isInteractiveDose
+                                ) {
+                                    "Ej. Rango individualizable por peso"
+                                } else {
+                                    "Ej. Dosis calculada por peso"
+                                }
+                            )
+                        }
                     } else {
                         item { FormTextField("Dosis", draft.dose, { draft = draft.copy(dose = it) }, placeholder = "Ej. 1 tableta de 500 mg") }
                         item { FormTextField("Unidad", draft.doseUnit, { draft = draft.copy(doseUnit = it) }) }
@@ -4414,39 +5870,74 @@ private fun EditableSuggestionField(
     modifier: Modifier = Modifier,
     placeholder: String = ""
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember {
+        mutableStateOf(false)
+    }
+    var fieldHasFocus by remember {
+        mutableStateOf(false)
+    }
 
     val cleanOptions = remember(options) {
         options
             .map(String::trim)
             .filter(String::isNotBlank)
-            .distinctBy { it.lowercase(Locale.ROOT) }
-            .sortedBy { it.lowercase(Locale.ROOT) }
+            .distinctBy {
+                it.lowercase(Locale.ROOT)
+            }
+            .sortedBy {
+                it.lowercase(Locale.ROOT)
+            }
     }
 
-    val visibleOptions = remember(value, cleanOptions) {
+    val visibleOptions = remember(
+        value,
+        cleanOptions
+    ) {
         val query = value.trim()
+
         cleanOptions
             .filter {
                 query.isBlank() ||
-                    it.contains(query, ignoreCase = true)
+                    it.contains(
+                        query,
+                        ignoreCase = true
+                    )
             }
             .sortedWith(
                 compareBy<String> {
-                    if (it.equals(query, ignoreCase = true)) 0 else 1
-                }.thenBy { it.lowercase(Locale.ROOT) }
+                    if (
+                        it.equals(
+                            query,
+                            ignoreCase = true
+                        )
+                    ) {
+                        0
+                    } else {
+                        1
+                    }
+                }.thenBy {
+                    it.lowercase(Locale.ROOT)
+                }
             )
             .take(12)
     }
 
-    Box(modifier = modifier.fillMaxWidth()) {
+    Box(
+        modifier = modifier.fillMaxWidth()
+    ) {
         OutlinedTextField(
             value = value,
             onValueChange = {
                 onValue(it)
-                expanded = cleanOptions.isNotEmpty()
+
+                if (fieldHasFocus) {
+                    expanded =
+                        cleanOptions.isNotEmpty()
+                }
             },
-            label = { Text(label) },
+            label = {
+                Text(label)
+            },
             placeholder = {
                 if (placeholder.isNotBlank()) {
                     Text(placeholder)
@@ -4455,16 +5946,29 @@ private fun EditableSuggestionField(
             trailingIcon = {
                 IconButton(
                     onClick = {
-                        expanded = !expanded && cleanOptions.isNotEmpty()
+                        if (
+                            cleanOptions.isNotEmpty()
+                        ) {
+                            expanded = !expanded
+                        }
                     }
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Mostrar opciones anteriores",
-                        tint = if (cleanOptions.isEmpty()) {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        imageVector =
+                            Icons.Default.ArrowDropDown,
+                        contentDescription =
+                            "Mostrar opciones anteriores",
+                        tint = if (
+                            cleanOptions.isEmpty()
+                        ) {
+                            MaterialTheme
+                                .colorScheme
+                                .onSurfaceVariant
+                                .copy(alpha = 0.38f)
                         } else {
-                            MaterialTheme.colorScheme.primary
+                            MaterialTheme
+                                .colorScheme
+                                .primary
                         }
                     )
                 }
@@ -4476,44 +5980,86 @@ private fun EditableSuggestionField(
                     } else {
                         "${cleanOptions.size} opciones usadas anteriormente · también puedes escribir una nueva"
                     },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant
                 )
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focusState ->
+                    fieldHasFocus =
+                        focusState.isFocused
+
+                    if (!focusState.isFocused) {
+                        expanded = false
+                    }
+                }
         )
 
         DropdownMenu(
-            expanded = expanded && cleanOptions.isNotEmpty(),
-            onDismissRequest = { expanded = false },
+            expanded = expanded &&
+                cleanOptions.isNotEmpty(),
+            onDismissRequest = {
+                expanded = false
+            },
+            properties = PopupProperties(
+                focusable = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            ),
             modifier = Modifier
-                .widthIn(min = 280.dp, max = 520.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .widthIn(
+                    min = 280.dp,
+                    max = 520.dp
+                )
+                .background(
+                    MaterialTheme
+                        .colorScheme
+                        .surfaceContainer
+                )
         ) {
             if (visibleOptions.isEmpty()) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 18.dp,
+                        vertical = 14.dp
+                    )
                 ) {
                     Text(
                         "Sin coincidencias",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontWeight =
+                            FontWeight.Bold,
+                        color = MaterialTheme
+                            .colorScheme
+                            .onSurface
                     )
                     Text(
                         "Continúa escribiendo para guardar una opción nueva.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme
+                            .typography
+                            .bodySmall,
+                        color = MaterialTheme
+                            .colorScheme
+                            .onSurfaceVariant
                     )
                 }
             } else {
-                visibleOptions.forEachIndexed { index, option ->
+                visibleOptions.forEachIndexed {
+                        index,
+                        option ->
+
                     DropdownMenuItem(
                         text = {
                             Column {
                                 Text(
                                     option,
                                     fontWeight = if (
-                                        option.equals(value.trim(), ignoreCase = true)
+                                        option.equals(
+                                            value.trim(),
+                                            ignoreCase = true
+                                        )
                                     ) {
                                         FontWeight.Bold
                                     } else {
@@ -4522,21 +6068,35 @@ private fun EditableSuggestionField(
                                 )
                                 Text(
                                     "Usado anteriormente",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = MaterialTheme
+                                        .typography
+                                        .labelSmall,
+                                    color = MaterialTheme
+                                        .colorScheme
+                                        .onSurfaceVariant
                                 )
                             }
                         },
                         leadingIcon = {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
+                                shape =
+                                    RoundedCornerShape(
+                                        10.dp
+                                    ),
+                                color = MaterialTheme
+                                    .colorScheme
+                                    .secondaryContainer
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.History,
+                                    imageVector =
+                                        Icons.Default.History,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(7.dp).size(18.dp)
+                                    tint = MaterialTheme
+                                        .colorScheme
+                                        .onSecondaryContainer,
+                                    modifier = Modifier
+                                        .padding(7.dp)
+                                        .size(18.dp)
                                 )
                             }
                         },
@@ -4546,10 +6106,19 @@ private fun EditableSuggestionField(
                         }
                     )
 
-                    if (index < visibleOptions.lastIndex) {
+                    if (
+                        index <
+                        visibleOptions.lastIndex
+                    ) {
                         HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                            modifier = Modifier
+                                .padding(
+                                    horizontal = 12.dp
+                                ),
+                            color = MaterialTheme
+                                .colorScheme
+                                .outlineVariant
+                                .copy(alpha = 0.55f)
                         )
                     }
                 }
@@ -4780,7 +6349,7 @@ private fun ImportPreviewDialog(
 private fun TypeFilter.label(): String = when (this) {
     TypeFilter.BOTH -> "Adultos y pediátricos"
     TypeFilter.ADULT -> "Adultos"
-    TypeFilter.SPECIAL_ADULT -> "Adultos especiales"
+    TypeFilter.SPECIAL_ADULT -> "Especial"
     TypeFilter.PEDIATRIC -> "Pediátricos"
 }
 

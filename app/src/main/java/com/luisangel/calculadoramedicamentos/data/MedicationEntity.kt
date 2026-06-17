@@ -1,5 +1,6 @@
 package com.luisangel.calculadoramedicamentos.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -23,6 +24,11 @@ data class MedicationEntity(
     val presentation: String,
     val dose: String,
     val dosePerKg: Double?,
+    @ColumnInfo(defaultValue = "0")
+    val isInteractiveDose: Boolean,
+    val dosePerKgMin: Double?,
+    val dosePerKgMax: Double?,
+    val dosePerKgStep: Double?,
     val doseUnit: String,
     val frequencyPerDay: String,
     val durationDays: Int,
@@ -43,6 +49,10 @@ fun MedicationRecord.toEntity() = MedicationEntity(
     presentation = presentation,
     dose = dose,
     dosePerKg = dosePerKg,
+    isInteractiveDose = isInteractiveDose,
+    dosePerKgMin = dosePerKgMin,
+    dosePerKgMax = dosePerKgMax,
+    dosePerKgStep = dosePerKgStep,
     doseUnit = doseUnit,
     frequencyPerDay = frequencyPerDay,
     durationDays = durationDays,
@@ -63,6 +73,10 @@ fun MedicationEntity.toRecord() = MedicationRecord(
     presentation = presentation,
     dose = dose,
     dosePerKg = dosePerKg,
+    isInteractiveDose = isInteractiveDose,
+    dosePerKgMin = dosePerKgMin,
+    dosePerKgMax = dosePerKgMax,
+    dosePerKgStep = dosePerKgStep,
     doseUnit = doseUnit,
     frequencyPerDay = frequencyPerDay,
     durationDays = durationDays,

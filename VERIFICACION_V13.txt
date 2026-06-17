@@ -1,0 +1,14 @@
+VERIFICACIÓN V13
+
+- Preflight del repositorio: correcto.
+- Delimitadores principales: correctos.
+- Migración Room 1 a 2 incluida.
+- ColumnInfo defaultValue alineado con SQL.
+- Modelo, entidad, Excel y UI contienen dosis interactivas.
+- Rueda circular incluida en ClinicalCalendarDialog.
+- Sentido de giro del gestograma invertido para acompañar el dedo.
+- Pruebas unitarias de rango incluidas.
+
+La compilación Gradle completa no pudo ejecutarse en este entorno porque
+no tiene acceso de red para descargar Gradle 8.11.1. GitHub Actions
+ejecutará compileDebugKotlin y testDebugUnitTest antes del APK.
