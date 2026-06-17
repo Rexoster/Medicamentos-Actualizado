@@ -22,14 +22,18 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
+
+      - name: Configurar caché de Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Instalar SDK 36
+      - name: Instalar SDK mínimo
         run: |
           yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" >/dev/null
 
       - name: Preparar versión automática
         run: |
@@ -95,16 +99,13 @@ jobs:
       - name: Dar permiso a Gradle
         run: chmod +x gradlew
 
-      - name: Compilar Kotlin y ejecutar pruebas
-        run: ./gradlew compileDebugKotlin testDebugUnitTest --stacktrace --warning-mode all
-
-      - name: Generar APK y AAB firmados
+      - name: Probar y generar APK/AAB firmados
         env:
           ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: ./gradlew assembleRelease bundleRelease --stacktrace
+        run: ./gradlew testDebugUnitTest assembleRelease bundleRelease --build-cache --parallel --stacktrace --warning-mode all
 
       - name: Renombrar archivos
         run: |
