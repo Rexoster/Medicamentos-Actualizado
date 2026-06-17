@@ -6,8 +6,14 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 APP_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/ui/App.kt"
 GROWTH_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/growth/GrowthEngine.kt"
+ULTRASOUND_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/obstetrics/UltrasoundDating.kt"
+ULTRASOUND_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedicamentos/obstetrics/UltrasoundDatingTest.kt"
 MANIFEST_PATH = ROOT / "app/src/main/AndroidManifest.xml"
 VERSION_PATH = ROOT / "version.properties"
+VIEW_MODEL_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/ui/MainViewModel.kt"
+MAIN_ACTIVITY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/MainActivity.kt"
+APPLICATION_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/CalculatorApplication.kt"
+REPOSITORY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/MedicationRepository.kt"
 
 errors = []
 
@@ -49,11 +55,19 @@ def balanced(text: str, source: str) -> None:
 
 app = require_file(APP_PATH)
 growth = require_file(GROWTH_PATH)
+ultrasound = require_file(ULTRASOUND_PATH)
+ultrasound_test = require_file(ULTRASOUND_TEST_PATH)
 manifest = require_file(MANIFEST_PATH)
 version = require_file(VERSION_PATH)
+view_model = require_file(VIEW_MODEL_PATH)
+main_activity = require_file(MAIN_ACTIVITY_PATH)
+application = require_file(APPLICATION_PATH)
+repository = require_file(REPOSITORY_PATH)
 
 balanced(app, "App.kt")
 balanced(growth, "GrowthEngine.kt")
+balanced(ultrasound, "UltrasoundDating.kt")
+balanced(ultrasound_test, "UltrasoundDatingTest.kt")
 
 # Firma exacta del componente que causó el fallo.
 form_start = app.find("private fun FormTextField(")
@@ -97,6 +111,15 @@ for token in (
     require(growth, token, "GrowthEngine.kt")
 
 for token in (
+    "import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundDatingCalculator",
+    "import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundTrimester",
+    "ULTRASOUND_DATING",
+    "private fun UltrasoundGestationalAgeCalculator",
+    "private fun ClinicalCalendarDialog",
+    "private fun CalendarMonthGrid",
+    "itemsIndexed(",
+    "rememberCoroutineScope()",
+    "withContext(Dispatchers.Default)",
     "import com.luisangel.calculadoramedicamentos.growth.NutritionStatus",
     "import com.luisangel.calculadoramedicamentos.growth.NutritionSummary",
     "private fun NutritionStatusCard",
@@ -104,8 +127,51 @@ for token in (
 ):
     require(app, token, "App.kt")
 
+for token in (
+    "enum class UltrasoundTrimester",
+    "object UltrasoundDatingCalculator",
+    "fun fromCrl(",
+    "fun fromBiometry(",
+    "8.052 * sqrt(1.037 * crlMm) + 23.73",
+    "10.85 +",
+    "redatingThresholdDays",
+):
+    require(ultrasound, token, "UltrasoundDating.kt")
+
+for token in (
+    "crl50mmProducesApproximatelyElevenWeeksFiveDays",
+    "fourParameterHadlockProducesCompositeSecondTrimesterAge",
+):
+    require(ultrasound_test, token, "UltrasoundDatingTest.kt")
+
+if "DatePickerDialog" in app:
+    errors.append("App.kt todavía usa el calendario clásico DatePickerDialog.")
+
+for token in (
+    "excelServiceProvider: () -> ExcelService",
+    "private val excelService: ExcelService by lazy",
+    ".flowOn(Dispatchers.Default)",
+):
+    require(view_model, token, "MainViewModel.kt")
+
+require(
+    main_activity,
+    "excelServiceProvider = app::createExcelService",
+    "MainActivity.kt"
+)
+require(
+    application,
+    "fun createExcelService(): ExcelService",
+    "CalculatorApplication.kt"
+)
+require(
+    repository,
+    ".flowOn(Dispatchers.Default)",
+    "MedicationRepository.kt"
+)
+
 # La variante debe seguir siendo local.
-combined = app + growth + manifest
+combined = app + growth + ultrasound + manifest
 for forbidden in (
     "android.webkit.WebView",
     "supabase",

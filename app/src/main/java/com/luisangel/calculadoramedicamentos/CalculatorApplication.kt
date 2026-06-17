@@ -10,5 +10,5 @@ class CalculatorApplication : Application() {
     val database by lazy { AppDatabase.getInstance(this) }
     val repository by lazy { MedicationRepository(database.medicationDao()) }
     val preferences by lazy { AppPreferences(this) }
-    val excelService by lazy { ExcelService() }
+    fun createExcelService(): ExcelService = ExcelService()
 }

@@ -2,12 +2,16 @@ package com.luisangel.calculadoramedicamentos.data
 
 import com.luisangel.calculadoramedicamentos.model.MedicationRecord
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 class MedicationRepository(private val dao: MedicationDao) {
-    val medications: Flow<List<MedicationRecord>> = dao.observeAll().map { list ->
-        list.map(MedicationEntity::toRecord)
-    }
+    val medications: Flow<List<MedicationRecord>> = dao.observeAll()
+        .map { list ->
+            list.map(MedicationEntity::toRecord)
+        }
+        .flowOn(Dispatchers.Default)
 
     suspend fun getAll(): List<MedicationRecord> = dao.getAll().map(MedicationEntity::toRecord)
 

@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,8 +48,12 @@ data class ImportPreview(
 class MainViewModel(
     private val repository: MedicationRepository,
     private val preferences: AppPreferences,
-    private val excelService: ExcelService
+    private val excelServiceProvider: () -> ExcelService
 ) : ViewModel() {
+    private val excelService: ExcelService by lazy(
+        LazyThreadSafetyMode.NONE,
+        excelServiceProvider
+    )
     val allMedications: StateFlow<List<MedicationRecord>> = repository.medications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -80,6 +85,7 @@ class MainViewModel(
         allMedications,
         filters
     ) { records, filter -> applyFilters(records, filter) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val availableFamilies: StateFlow<List<String>> = allMedications
@@ -89,6 +95,7 @@ class MainViewModel(
                 .distinctBy { it.lowercase(Locale.ROOT) }
                 .sortedBy { it.lowercase(Locale.ROOT) }
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val availableSubgroups: StateFlow<List<String>> = allMedications
@@ -98,6 +105,7 @@ class MainViewModel(
                 .distinctBy { it.lowercase(Locale.ROOT) }
                 .sortedBy { it.lowercase(Locale.ROOT) }
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val availableFrequencies: StateFlow<List<String>> = allMedications
@@ -107,10 +115,16 @@ class MainViewModel(
                 .distinctBy { it.lowercase(Locale.ROOT) }
                 .sortedBy { it.lowercase(Locale.ROOT) }
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val availableSpecialties: StateFlow<List<String>> = allMedications
-        .map { list -> (MedicalSpecialties + list.flatMap { it.specialties }).distinct().sorted() }
+        .map { list ->
+            (MedicalSpecialties + list.flatMap { it.specialties })
+                .distinct()
+                .sorted()
+        }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MedicalSpecialties)
 
     init {
@@ -304,11 +318,15 @@ class MainViewModel(
         fun factory(
             repository: MedicationRepository,
             preferences: AppPreferences,
-            excelService: ExcelService
+            excelServiceProvider: () -> ExcelService
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                MainViewModel(repository, preferences, excelService) as T
+                MainViewModel(
+                    repository,
+                    preferences,
+                    excelServiceProvider
+                ) as T
         }
     }
 }

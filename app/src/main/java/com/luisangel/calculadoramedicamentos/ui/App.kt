@@ -1,6 +1,5 @@
 package com.luisangel.calculadoramedicamentos.ui
 
-import android.app.DatePickerDialog
 import android.graphics.Paint as AndroidPaint
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,6 +38,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +47,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
@@ -92,10 +95,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -130,6 +135,8 @@ import com.luisangel.calculadoramedicamentos.growth.GrowthSex
 import com.luisangel.calculadoramedicamentos.growth.MeasurementMode
 import com.luisangel.calculadoramedicamentos.growth.NutritionStatus
 import com.luisangel.calculadoramedicamentos.growth.NutritionSummary
+import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundDatingCalculator
+import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundTrimester
 import com.luisangel.calculadoramedicamentos.model.FilterState
 import com.luisangel.calculadoramedicamentos.model.MedicationDraft
 import com.luisangel.calculadoramedicamentos.model.MedicationRecord
@@ -142,9 +149,14 @@ import com.luisangel.calculadoramedicamentos.model.toDraft
 import com.luisangel.calculadoramedicamentos.model.toRecord
 import com.luisangel.calculadoramedicamentos.model.validationError
 import com.luisangel.calculadoramedicamentos.ui.theme.CalculatorTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import java.util.Date
@@ -281,9 +293,21 @@ private fun MedicationCalculatorScreen(
         uri?.let { viewModel.importFromUri(context.contentResolver, it) }
     }
 
-    val adultCount = all.count { it.type == MedicationType.ADULT }
-    val pediatricCount = all.count { it.type == MedicationType.PEDIATRIC }
-    val visibleForTab = filtered.filter { it.type == selectedTab }
+    val adultCount by remember(all) {
+        derivedStateOf {
+            all.count { it.type == MedicationType.ADULT }
+        }
+    }
+    val pediatricCount by remember(all) {
+        derivedStateOf {
+            all.count { it.type == MedicationType.PEDIATRIC }
+        }
+    }
+    val visibleForTab by remember(filtered, selectedTab) {
+        derivedStateOf {
+            filtered.filter { it.type == selectedTab }
+        }
+    }
 
     BoxWithConstraints(modifier) {
         val availableScreenWidth = maxWidth
@@ -621,13 +645,47 @@ private fun MedicationTable(
                 Text("${records.size} registros", style = MaterialTheme.typography.labelMedium)
             }
             HorizontalDivider()
-            Box(Modifier.fillMaxWidth().horizontalScroll(scrollState)) {
-                Column(Modifier.width(tableWidth)) {
-                    MedicationHeaderRow()
-                    records.forEachIndexed { index, record ->
+            val maximumVisibleRows = if (
+                availableWidth < 700.dp
+            ) {
+                4
+            } else {
+                7
+            }
+            val visibleRows = min(
+                records.size,
+                maximumVisibleRows
+            ).coerceAtLeast(1)
+            val viewportHeight = 58.dp +
+                (112.dp * visibleRows)
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(scrollState)
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .width(tableWidth)
+                        .height(viewportHeight),
+                    userScrollEnabled = records.size > visibleRows
+                ) {
+                    item(key = "medication-header") {
+                        MedicationHeaderRow()
+                    }
+                    itemsIndexed(
+                        items = records,
+                        key = { _, record -> record.id }
+                    ) { index, record ->
                         MedicationDataRow(
                             record = record,
-                            weight = if (record.type == MedicationType.ADULT) adultWeight else pediatricWeight,
+                            weight = if (
+                                record.type == MedicationType.ADULT
+                            ) {
+                                adultWeight
+                            } else {
+                                pediatricWeight
+                            },
                             alternate = index % 2 == 1,
                             onEdit = { onEdit(record) },
                             onDelete = { onDelete(record) }
@@ -800,6 +858,11 @@ private enum class ObstetricCalculator(
         "EG/FPP",
         "Calcula edad gestacional por FUM y fecha probable de parto."
     ),
+    ULTRASOUND_DATING(
+        "Edad gestacional por ultrasonido",
+        "EG por USG",
+        "Primer trimestre por LCC/CRL y segundo o tercero por biometría Hadlock."
+    ),
     HADLOCK_EFW(
         "Peso fetal estimado",
         "Hadlock",
@@ -970,6 +1033,7 @@ private fun ObstetricCalculatorMenu(
 private fun ObstetricCalculatorContent(calculator: ObstetricCalculator) {
     when (calculator) {
         ObstetricCalculator.GESTATIONAL_AGE -> GestationalAgeCalculator()
+        ObstetricCalculator.ULTRASOUND_DATING -> UltrasoundGestationalAgeCalculator()
         ObstetricCalculator.HADLOCK_EFW -> HadlockCalculator()
         ObstetricCalculator.TWIN_DISCORDANCE -> TwinDiscordanceCalculator()
         ObstetricCalculator.CPR -> CprCalculator()
@@ -1004,6 +1068,132 @@ private fun GestationalAgeCalculator() {
                 "Fecha probable de parto" to dueDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
             )
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun UltrasoundGestationalAgeCalculator() {
+    var trimester by rememberSaveable { mutableStateOf(UltrasoundTrimester.FIRST) }
+    var scanDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var compareWithLmp by rememberSaveable { mutableStateOf(false) }
+    var lmpText by rememberSaveable { mutableStateOf(LocalDate.now().minusWeeks(12).toString()) }
+    var crlText by rememberSaveable { mutableStateOf("") }
+    var bpdText by rememberSaveable { mutableStateOf("") }
+    var hcText by rememberSaveable { mutableStateOf("") }
+    var acText by rememberSaveable { mutableStateOf("") }
+    var flText by rememberSaveable { mutableStateOf("") }
+
+    val scanDate = remember(scanDateText) { runCatching { LocalDate.parse(scanDateText) }.getOrElse { LocalDate.now() } }
+    val lmpDate = remember(lmpText, compareWithLmp) {
+        if (!compareWithLmp) null else runCatching { LocalDate.parse(lmpText) }.getOrNull()
+    }
+    val hasInput = when (trimester) {
+        UltrasoundTrimester.FIRST -> crlText.isNotBlank()
+        UltrasoundTrimester.SECOND, UltrasoundTrimester.THIRD ->
+            listOf(bpdText, hcText, acText, flText).any(String::isNotBlank)
+    }
+    val calculation = remember(trimester, scanDate, lmpDate, crlText, bpdText, hcText, acText, flText, hasInput) {
+        if (!hasInput) null else when (trimester) {
+            UltrasoundTrimester.FIRST -> UltrasoundDatingCalculator.fromCrl(
+                scanDate = scanDate,
+                crlMm = crlText.replace(',', '.').toDoubleOrNull() ?: Double.NaN,
+                lmpDate = lmpDate
+            )
+            UltrasoundTrimester.SECOND, UltrasoundTrimester.THIRD -> UltrasoundDatingCalculator.fromBiometry(
+                scanDate = scanDate,
+                trimester = trimester,
+                bpdMm = bpdText.replace(',', '.').toDoubleOrNull(),
+                hcMm = hcText.replace(',', '.').toDoubleOrNull(),
+                acMm = acText.replace(',', '.').toDoubleOrNull(),
+                flMm = flText.replace(',', '.').toDoubleOrNull(),
+                lmpDate = lmpDate
+            )
+        }
+    }
+    val result = calculation?.getOrNull()
+    val error = calculation?.exceptionOrNull()?.message
+
+    CalculatorCard(
+        title = "Edad gestacional por ultrasonido",
+        note = "Selecciona el trimestre. En 1T se utiliza LCC/CRL; en 2T y 3T se aplican ecuaciones Hadlock con las biometrías disponibles."
+    ) {
+        Text("Trimestre del estudio", fontWeight = FontWeight.Bold)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            UltrasoundTrimester.entries.forEach { option ->
+                FilterChip(selected = trimester == option, onClick = { trimester = option }, label = { Text(option.label) })
+            }
+        }
+        DateField("Fecha del ultrasonido", scanDate, { scanDateText = it.toString() }, maxDate = LocalDate.now().plusDays(1))
+        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = compareWithLmp, onCheckedChange = { compareWithLmp = it })
+                Column(Modifier.weight(1f)) {
+                    Text("Comparar con FUM", fontWeight = FontWeight.SemiBold)
+                    Text("Muestra la diferencia y el umbral ACOG orientativo.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (compareWithLmp) {
+            DateField("Fecha de última menstruación", lmpDate ?: scanDate.minusWeeks(12), { lmpText = it.toString() }, maxDate = scanDate)
+        }
+        when (trimester) {
+            UltrasoundTrimester.FIRST -> {
+                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f), modifier = Modifier.fillMaxWidth()) {
+                    Text("Primer trimestre: captura LCC/CRL en milímetros. Intervalo admitido: 5–84 mm.", modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+                FormTextField("LCC / CRL", crlText, { crlText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm", placeholder = "Ej. 50")
+            }
+            UltrasoundTrimester.SECOND, UltrasoundTrimester.THIRD -> {
+                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f), modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        if (trimester == UltrasoundTrimester.SECOND) "Segundo trimestre: biometría compuesta de 14+0 a 27+6 semanas. Captura una o varias medidas."
+                        else "Tercer trimestre: biometría desde 28+0 semanas. La precisión para datación es menor.",
+                        modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                FormTextField("DBP / BPD", bpdText, { bpdText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+                FormTextField("CC / HC", hcText, { hcText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+                FormTextField("CA / AC", acText, { acText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+                FormTextField("LF / FL", flText, { flText = decimalText(it) }, keyboardType = KeyboardType.Decimal, suffix = "mm")
+            }
+        }
+        if (error != null) {
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                Text(error, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        result?.let { dating ->
+            ResultBlock(
+                title = "Resultado por ultrasonido",
+                rows = listOf(
+                    "Edad gestacional" to dating.gestationalAgeLabel,
+                    "Fecha probable de parto" to dating.estimatedDueDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                    "Método" to dating.method,
+                    "Mediciones utilizadas" to dating.measurementSummary,
+                    "Precisión aproximada" to dating.expectedAccuracy
+                )
+            )
+            dating.lmpComparison?.let { comparison ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (comparison.exceedsThreshold) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("Comparación contra FUM", fontWeight = FontWeight.Bold)
+                        Text("Diferencia: ${comparison.differenceDays} días", style = MaterialTheme.typography.bodyMedium)
+                        Text(comparison.message, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            dating.warnings.forEach { warning ->
+                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+                    Text(warning, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onTertiaryContainer, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Text("La edad calculada es una estimación ultrasonográfica y no sustituye la fecha obstétrica final documentada ni la valoración clínica.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -1230,7 +1420,9 @@ private fun ResultBlock(
 @Composable
 private fun PercentilesScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val engine = remember { GrowthEngine(context) }
+    val engine = remember(context) { GrowthEngine(context) }
+    val calculationScope = rememberCoroutineScope()
+    var calculating by remember { mutableStateOf(false) }
     var sex by rememberSaveable { mutableStateOf(GrowthSex.FEMALE) }
     var measurementMode by rememberSaveable { mutableStateOf(MeasurementMode.HEIGHT) }
     var birthDate by rememberSaveable { mutableStateOf(LocalDate.now().minusYears(2).toString()) }
@@ -1252,23 +1444,33 @@ private fun PercentilesScreen(modifier: Modifier = Modifier) {
             if (weight == null || height == null) {
                 error = "Captura peso y talla con valores numéricos válidos."
                 assessment = null
-            } else {
-                engine.assess(
-                    sex = sex,
-                    birthDate = birth,
-                    measurementDate = measured,
-                    weightKg = weight,
-                    heightCm = height,
-                    measurementMode = measurementMode
-                ).onSuccess {
-                    assessment = it
-                    error = null
-                }.onFailure {
-                    assessment = null
-                    error = it.message ?: "No fue posible calcular los percentiles."
-                }
+            } else if (!calculating) {
+                calculating = true
+                error = null
 
-                Unit
+                calculationScope.launch {
+                    val result = withContext(Dispatchers.Default) {
+                        engine.assess(
+                            sex = sex,
+                            birthDate = birth,
+                            measurementDate = measured,
+                            weightKg = weight,
+                            heightCm = height,
+                            measurementMode = measurementMode
+                        )
+                    }
+
+                    result.onSuccess {
+                        assessment = it
+                        error = null
+                    }.onFailure {
+                        assessment = null
+                        error = it.message
+                            ?: "No fue posible calcular los percentiles."
+                    }
+
+                    calculating = false
+                }
             }
         }
 
@@ -1296,6 +1498,7 @@ private fun PercentilesScreen(modifier: Modifier = Modifier) {
                         measurementMode = measurementMode,
                         onMeasurementMode = { measurementMode = it },
                         onCalculate = calculate,
+                        calculating = calculating,
                         error = error
                     )
                     Spacer(Modifier.height(20.dp))
@@ -1327,6 +1530,7 @@ private fun PercentilesScreen(modifier: Modifier = Modifier) {
                         measurementMode = measurementMode,
                         onMeasurementMode = { measurementMode = it },
                         onCalculate = calculate,
+                        calculating = calculating,
                         error = error
                     )
                 }
@@ -1401,6 +1605,7 @@ private fun PercentileForm(
     measurementMode: MeasurementMode,
     onMeasurementMode: (MeasurementMode) -> Unit,
     onCalculate: () -> Unit,
+    calculating: Boolean,
     error: String?
 ) {
     OutlinedCard {
@@ -1447,8 +1652,21 @@ private fun PercentileForm(
                 }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
-            Button(onClick = onCalculate, modifier = Modifier.fillMaxWidth()) {
-                Text("Calcular percentiles")
+            Button(
+                onClick = onCalculate,
+                enabled = !calculating,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (calculating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Calculando...")
+                } else {
+                    Text("Calcular percentiles")
+                }
             }
         }
     }
@@ -1462,28 +1680,440 @@ private fun DateField(
     minDate: LocalDate? = null,
     maxDate: LocalDate? = null
 ) {
-    val context = LocalContext.current
-    val formatter = remember { DateTimeFormatter.ofPattern("dd/MM/yyyy") }
-    OutlinedButton(
-        onClick = {
-            DatePickerDialog(
-                context,
-                { _, year, month, day -> onDate(LocalDate.of(year, month + 1, day)) },
-                date.year,
-                date.monthValue - 1,
-                date.dayOfMonth
-            ).apply {
-                minDate?.let { datePicker.minDate = it.toEpochDay() * 86_400_000L }
-                maxDate?.let { datePicker.maxDate = it.toEpochDay() * 86_400_000L }
-            }.show()
-        },
-        modifier = Modifier.fillMaxWidth()
+    var showCalendar by rememberSaveable {
+        mutableStateOf(false)
+    }
+    val formatter = remember {
+        DateTimeFormatter.ofPattern(
+            "EEEE, d 'de' MMMM 'de' yyyy",
+            Locale("es", "MX")
+        )
+    }
+    val monthFormatter = remember {
+        DateTimeFormatter.ofPattern(
+            "MMM",
+            Locale("es", "MX")
+        )
+    }
+
+    Surface(
+        onClick = { showCalendar = true },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant
+        )
     ) {
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-            Text(label, style = MaterialTheme.typography.labelSmall)
-            Text(date.format(formatter), fontWeight = FontWeight.SemiBold)
+        Row(
+            Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ) {
+                Column(
+                    modifier = Modifier
+                        .width(62.dp)
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        monthFormatter.format(date).uppercase(
+                            Locale("es", "MX")
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    formatter.format(date).replaceFirstChar {
+                        if (it.isLowerCase()) {
+                            it.titlecase(Locale("es", "MX"))
+                        } else {
+                            it.toString()
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.CalendarMonth,
+                contentDescription = "Abrir calendario",
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
-        Text("▾")
+    }
+
+    if (showCalendar) {
+        ClinicalCalendarDialog(
+            title = label,
+            initialDate = date,
+            minDate = minDate,
+            maxDate = maxDate,
+            onDismiss = { showCalendar = false },
+            onConfirm = {
+                onDate(it)
+                showCalendar = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun ClinicalCalendarDialog(
+    title: String,
+    initialDate: LocalDate,
+    minDate: LocalDate?,
+    maxDate: LocalDate?,
+    onDismiss: () -> Unit,
+    onConfirm: (LocalDate) -> Unit
+) {
+    var selectedDateText by rememberSaveable(initialDate) {
+        mutableStateOf(initialDate.toString())
+    }
+    var visibleMonthText by rememberSaveable(initialDate) {
+        mutableStateOf(
+            YearMonth.from(initialDate).toString()
+        )
+    }
+
+    val selectedDate = remember(selectedDateText) {
+        LocalDate.parse(selectedDateText)
+    }
+    val visibleMonth = remember(visibleMonthText) {
+        YearMonth.parse(visibleMonthText)
+    }
+    val today = remember { LocalDate.now() }
+    val monthTitleFormatter = remember {
+        DateTimeFormatter.ofPattern(
+            "MMMM yyyy",
+            Locale("es", "MX")
+        )
+    }
+
+    val minimumMonth = minDate?.let(YearMonth::from)
+    val maximumMonth = maxDate?.let(YearMonth::from)
+    val canGoPrevious = minimumMonth == null ||
+        visibleMonth.isAfter(minimumMonth)
+    val canGoNext = maximumMonth == null ||
+        visibleMonth.isBefore(maximumMonth)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .widthIn(max = 520.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 10.dp,
+            shadowElevation = 14.dp
+        ) {
+            Column {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            selectedDate.format(
+                                DateTimeFormatter.ofPattern(
+                                    "d 'de' MMMM 'de' yyyy",
+                                    Locale("es", "MX")
+                                )
+                            ).replaceFirstChar {
+                                if (it.isLowerCase()) {
+                                    it.titlecase(Locale("es", "MX"))
+                                } else {
+                                    it.toString()
+                                }
+                            },
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+
+                Column(
+                    Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 14.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        IconButton(
+                            onClick = {
+                                visibleMonthText = visibleMonth
+                                    .minusMonths(1)
+                                    .toString()
+                            },
+                            enabled = canGoPrevious
+                        ) {
+                            Icon(
+                                Icons.Default.ChevronLeft,
+                                contentDescription = "Mes anterior"
+                            )
+                        }
+
+                        Text(
+                            visibleMonth.format(
+                                monthTitleFormatter
+                            ).replaceFirstChar {
+                                if (it.isLowerCase()) {
+                                    it.titlecase(Locale("es", "MX"))
+                                } else {
+                                    it.toString()
+                                }
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        IconButton(
+                            onClick = {
+                                visibleMonthText = visibleMonth
+                                    .plusMonths(1)
+                                    .toString()
+                            },
+                            enabled = canGoNext
+                        ) {
+                            Icon(
+                                Icons.Default.ChevronRight,
+                                contentDescription = "Mes siguiente"
+                            )
+                        }
+                    }
+
+                    CalendarWeekHeader()
+                    CalendarMonthGrid(
+                        month = visibleMonth,
+                        selectedDate = selectedDate,
+                        today = today,
+                        minDate = minDate,
+                        maxDate = maxDate,
+                        onSelected = {
+                            selectedDateText = it.toString()
+                        }
+                    )
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (
+                            (minDate == null || !today.isBefore(minDate)) &&
+                            (maxDate == null || !today.isAfter(maxDate))
+                        ) {
+                            AssistChip(
+                                onClick = {
+                                    selectedDateText = today.toString()
+                                    visibleMonthText = YearMonth.from(today)
+                                        .toString()
+                                },
+                                label = { Text("Hoy") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.CalendarMonth,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            )
+                        }
+
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = onDismiss) {
+                            Text("Cancelar")
+                        }
+                        Button(
+                            onClick = {
+                                onConfirm(selectedDate)
+                            }
+                        ) {
+                            Text("Aceptar")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarWeekHeader() {
+    val labels = listOf(
+        "L",
+        "M",
+        "X",
+        "J",
+        "V",
+        "S",
+        "D"
+    )
+
+    Row(Modifier.fillMaxWidth()) {
+        labels.forEach { label ->
+            Text(
+                label,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun CalendarMonthGrid(
+    month: YearMonth,
+    selectedDate: LocalDate,
+    today: LocalDate,
+    minDate: LocalDate?,
+    maxDate: LocalDate?,
+    onSelected: (LocalDate) -> Unit
+) {
+    val firstDayOffset = (
+        month.atDay(1).dayOfWeek.value -
+            DayOfWeek.MONDAY.value +
+            7
+        ) % 7
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        repeat(6) { week ->
+            Row(Modifier.fillMaxWidth()) {
+                repeat(7) { weekday ->
+                    val cellIndex = week * 7 + weekday
+                    val dayNumber = cellIndex -
+                        firstDayOffset + 1
+
+                    if (
+                        dayNumber !in 1..month.lengthOfMonth()
+                    ) {
+                        Spacer(
+                            Modifier
+                                .weight(1f)
+                                .height(42.dp)
+                        )
+                    } else {
+                        val date = month.atDay(dayNumber)
+                        val enabled = (
+                            (minDate == null ||
+                                !date.isBefore(minDate)) &&
+                                (maxDate == null ||
+                                    !date.isAfter(maxDate))
+                            )
+                        val selected = date == selectedDate
+                        val isToday = date == today
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                onClick = {
+                                    if (enabled) {
+                                        onSelected(date)
+                                    }
+                                },
+                                enabled = enabled,
+                                shape = RoundedCornerShape(14.dp),
+                                color = when {
+                                    selected ->
+                                        MaterialTheme.colorScheme.primary
+                                    isToday ->
+                                        MaterialTheme.colorScheme
+                                            .secondaryContainer
+                                    else -> Color.Transparent
+                                },
+                                contentColor = when {
+                                    selected ->
+                                        MaterialTheme.colorScheme.onPrimary
+                                    isToday ->
+                                        MaterialTheme.colorScheme
+                                            .onSecondaryContainer
+                                    enabled ->
+                                        MaterialTheme.colorScheme.onSurface
+                                    else ->
+                                        MaterialTheme.colorScheme
+                                            .onSurface.copy(alpha = 0.32f)
+                                },
+                                border = if (isToday && !selected) {
+                                    androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.secondary
+                                    )
+                                } else {
+                                    null
+                                }
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(38.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        dayNumber.toString(),
+                                        fontWeight = if (
+                                            selected || isToday
+                                        ) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Medium
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

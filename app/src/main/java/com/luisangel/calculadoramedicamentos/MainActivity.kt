@@ -14,7 +14,7 @@ class MainActivity : ComponentActivity() {
         MainViewModel.factory(
             repository = app.repository,
             preferences = app.preferences,
-            excelService = app.excelService
+            excelServiceProvider = app::createExcelService
         )
     }
 
