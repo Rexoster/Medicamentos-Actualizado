@@ -269,10 +269,11 @@ private fun MedicationCalculatorScreen(
     val visibleForTab = filtered.filter { it.type == selectedTab }
 
     BoxWithConstraints(modifier) {
+        val availableScreenWidth = maxWidth
         val contentMaxWidth = when {
-            maxWidth >= 1400.dp -> 1360.dp
-            maxWidth >= 840.dp -> maxWidth - 32.dp
-            else -> maxWidth
+            availableScreenWidth >= 1400.dp -> 1360.dp
+            availableScreenWidth >= 840.dp -> availableScreenWidth - 32.dp
+            else -> availableScreenWidth
         }
 
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -337,7 +338,7 @@ private fun MedicationCalculatorScreen(
                             records = visibleForTab,
                             adultWeight = adultWeight.toDoubleOrNull(),
                             pediatricWeight = pediatricWeight.toDoubleOrNull(),
-                            availableWidth = maxWidth,
+                            availableWidth = availableScreenWidth,
                             onEdit = { record -> editorTarget = record; showEditor = true },
                             onDelete = { deleteTarget = it }
                         )
@@ -790,9 +791,10 @@ private fun PercentilesScreen(modifier: Modifier = Modifier) {
 
     BoxWithConstraints(modifier) {
         val expanded = maxWidth >= 840.dp
-        val calculate = {
+        val calculate: () -> Unit = {
             val weight = weightText.replace(',', '.').toDoubleOrNull()
             val height = heightText.replace(',', '.').toDoubleOrNull()
+
             if (weight == null || height == null) {
                 error = "Captura peso y talla con valores numéricos válidos."
                 assessment = null
@@ -811,6 +813,8 @@ private fun PercentilesScreen(modifier: Modifier = Modifier) {
                     assessment = null
                     error = it.message ?: "No fue posible calcular los percentiles."
                 }
+
+                Unit
             }
         }
 
