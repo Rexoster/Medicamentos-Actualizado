@@ -1,0 +1,18 @@
+XML válidos: 10
+WebView: ausente
+Supabase: ausente
+Permiso INTERNET: ausente
+android.webkit: ausente
+@Database: OK
+@Entity: OK
+Room.databaseBuilder: OK
+preferencesDataStore: OK
+setContent: OK
+LazyVerticalGrid: OK
+ActivityResultContracts.OpenDocument: OK
+ActivityResultContracts.CreateDocument: OK
+Pesos persistidos: no
+GradleBootstrap.java: compila
+Modelo y ejemplos Kotlin: sintaxis compilada
+Archivos Kotlin revisados: 15
+Android Backup: desactivado

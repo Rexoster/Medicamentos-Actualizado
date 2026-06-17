@@ -1,0 +1,15 @@
+VERIFICACIÓN V5
+
+- Aplicación Android nativa con Jetpack Compose.
+- Sin WebView.
+- Sin Supabase.
+- Sin permiso INTERNET.
+- Base local Room para medicamentos.
+- Tabla horizontal de medicamentos.
+- Interfaz adaptable mediante BoxWithConstraints.
+- Módulo Percentiles con OMS 2006/2007.
+- Gráficas Canvas nativas.
+- Mediciones de percentiles no persistidas.
+- minSdk 26 (Android 8.0).
+- versionCode 5 / versionName 3.0.0-native.
+- Workflow debug y workflow release firmada.

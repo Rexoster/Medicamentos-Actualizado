@@ -1,0 +1,18 @@
+Corrección v3
+
+Error corregido:
+App.kt:65:35 Unresolved reference 'ExposedDropdownMenu'
+
+Causa:
+El archivo importaba componentes ExposedDropdownMenu de Material 3 que no se
+utilizaban. El import ExposedDropdownMenu no está disponible en la versión del
+proyecto.
+
+Cambio:
+Se eliminaron únicamente estos imports:
+- androidx.compose.material3.ExposedDropdownMenu
+- androidx.compose.material3.ExposedDropdownMenuBox
+- androidx.compose.material3.ExposedDropdownMenuDefaults
+
+La interfaz ya utiliza DropdownMenu y DropdownMenuItem, que sí están incluidos.
+No se modificaron medicamentos, base Room, Excel, filtros ni diseño.

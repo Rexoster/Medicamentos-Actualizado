@@ -1,0 +1,24 @@
+Corrección v4
+
+Error corregido:
+:app:mergeDebugGlobalSynthetics FAILED
+MethodHandle.invoke / MethodHandle.invokeExact solo soportado desde Android 8.0.
+
+Causa:
+Apache POI 5.4.1 utiliza java.lang.invoke.MethodHandle.
+D8 no puede convertir esa llamada para minSdk 24.
+
+Cambio aplicado:
+- minSdk = 24 -> minSdk = 26
+- Android mínimo: Android 8.0
+- versionCode = 4
+- versionName = 2.0.2-native
+
+No se modificaron:
+- Base Room/SQLite
+- Filtros
+- Tema claro/oscuro
+- Importación/exportación Excel
+- Medicamentos de ejemplo
+- Especialidades
+- Diseño nativo
