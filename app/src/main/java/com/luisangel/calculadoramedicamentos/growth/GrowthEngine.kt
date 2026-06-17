@@ -53,6 +53,22 @@ data class GrowthResult(
     val chart: GrowthChart
 )
 
+enum class NutritionStatus {
+    LOW_WEIGHT,
+    EXPECTED,
+    OVERWEIGHT,
+    OBESITY
+}
+
+data class NutritionSummary(
+    val status: NutritionStatus,
+    val label: String,
+    val bmiPercentile: Double,
+    val overweightFromKg: Double,
+    val obesityFromKg: Double,
+    val reference: String
+)
+
 data class GrowthAssessment(
     val ageDays: Long,
     val ageMonths: Double,
@@ -60,6 +76,7 @@ data class GrowthAssessment(
     val adjustedHeightCm: Double,
     val measurementAdjustment: String?,
     val bmi: Double,
+    val nutritionSummary: NutritionSummary,
     val results: List<GrowthResult>,
     val warnings: List<String>
 )
@@ -162,6 +179,13 @@ class GrowthEngine(context: Context) {
             "No fue posible calcular percentiles con los datos capturados."
         }
 
+        val nutritionSummary = nutritionSummary(
+            sex = sex,
+            ageMonths = ageMonths,
+            adjustedHeightCm = adjustedHeight,
+            weightKg = weightKg
+        ) ?: error("No fue posible calcular la clasificación nutricional.")
+
         GrowthAssessment(
             ageDays = ageDays,
             ageMonths = ageMonths,
@@ -169,8 +193,49 @@ class GrowthEngine(context: Context) {
             adjustedHeightCm = adjustedHeight,
             measurementAdjustment = adjustment,
             bmi = bmi,
+            nutritionSummary = nutritionSummary,
             results = results,
             warnings = warnings
+        )
+    }
+
+
+    private fun nutritionSummary(
+        sex: GrowthSex,
+        ageMonths: Double,
+        adjustedHeightCm: Double,
+        weightKg: Double
+    ): NutritionSummary? {
+        val table = ageTables[sex to GrowthIndicator.BMI_FOR_AGE].orEmpty()
+        val lms = interpolate(table, ageMonths) ?: return null
+        val heightMeters = adjustedHeightCm / 100.0
+        val bmi = weightKg / heightMeters.pow(2)
+        val percentile = normalCdf(zScore(bmi, lms)) * 100.0
+
+        val overweightBmi = valueAtZ(lms, Z_P85)
+        val obesityBmi = valueAtZ(lms, Z_P97)
+
+        val status = when {
+            percentile < 3.0 -> NutritionStatus.LOW_WEIGHT
+            percentile < 85.0 -> NutritionStatus.EXPECTED
+            percentile < 97.0 -> NutritionStatus.OVERWEIGHT
+            else -> NutritionStatus.OBESITY
+        }
+
+        val label = when (status) {
+            NutritionStatus.LOW_WEIGHT -> "Bajo peso"
+            NutritionStatus.EXPECTED -> "Peso dentro del intervalo esperado"
+            NutritionStatus.OVERWEIGHT -> "Sobrepeso"
+            NutritionStatus.OBESITY -> "Obesidad"
+        }
+
+        return NutritionSummary(
+            status = status,
+            label = label,
+            bmiPercentile = percentile,
+            overweightFromKg = overweightBmi * heightMeters.pow(2),
+            obesityFromKg = obesityBmi * heightMeters.pow(2),
+            reference = "IMC para la edad · límites P85 y P97"
         )
     }
 
@@ -316,10 +381,9 @@ class GrowthEngine(context: Context) {
             GrowthIndicator.BMI_FOR_AGE,
             GrowthIndicator.WEIGHT_FOR_HEIGHT -> when {
                 z < -3 -> "Déficit ponderal grave"
-                z < -2 -> "Déficit ponderal"
-                z <= 1 -> "Dentro del intervalo esperado"
-                z <= 2 -> if (ageMonths <= 60.0) "Riesgo de sobrepeso" else "Sobrepeso"
-                z <= 3 -> if (ageMonths <= 60.0) "Sobrepeso" else "Obesidad"
+                z < -1.8807936081512509 -> "Bajo peso"
+                z < Z_P85 -> "Dentro del intervalo esperado"
+                z < Z_P97 -> "Sobrepeso"
                 else -> "Obesidad"
             }
         }
@@ -390,6 +454,8 @@ class GrowthEngine(context: Context) {
 
     companion object {
         private const val DAYS_PER_MONTH = 365.25 / 12.0
+        private const val Z_P85 = 1.0364333894937896
+        private const val Z_P97 = 1.8807936081512509
 
         private val CURVE_Z = listOf(
             Triple("P3", 3.0, -1.8807936081512509),
