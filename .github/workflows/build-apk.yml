@@ -12,10 +12,9 @@ jobs:
       - name: Descargar proyecto
         uses: actions/checkout@v4
 
-      - name: Limpiar esquemas Room heredados
+      - name: Limpiar archivos generados anteriores
         run: |
-          rm -rf app/schemas
-          mkdir -p app/build/generated/room-schemas
+          rm -rf app/build app/schemas
 
       - name: Revisión previa del código
         run: python3 scripts/preflight_source_checks.py
@@ -42,7 +41,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Compilar y probar
-        run: ./gradlew testDebugUnitTest assembleDebug --build-cache --parallel --stacktrace --warning-mode all
+        run: ./gradlew testDebugUnitTest assembleDebug --build-cache --no-parallel --stacktrace --warning-mode all
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4

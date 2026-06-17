@@ -14,10 +14,9 @@ jobs:
       - name: Descargar proyecto
         uses: actions/checkout@v4
 
-      - name: Limpiar esquemas Room heredados
+      - name: Limpiar archivos generados anteriores
         run: |
-          rm -rf app/schemas
-          mkdir -p app/build/generated/room-schemas
+          rm -rf app/build app/schemas
 
       - name: Revisión previa del código
         run: python3 scripts/preflight_source_checks.py
@@ -110,7 +109,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: ./gradlew testDebugUnitTest assembleRelease bundleRelease --build-cache --parallel --stacktrace --warning-mode all
+        run: ./gradlew testDebugUnitTest assembleRelease bundleRelease --build-cache --no-parallel --stacktrace --warning-mode all
 
       - name: Renombrar archivos
         run: |
