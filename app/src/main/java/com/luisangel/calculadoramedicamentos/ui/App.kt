@@ -1706,6 +1706,33 @@ private fun MedicationDataRow(
 }
 
 @Composable
+private fun TableCell(
+    width: Dp,
+    contentAlignment: Alignment = Alignment.CenterStart,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .fillMaxHeight()
+            .border(
+                width = 0.5.dp,
+                color = MaterialTheme
+                    .colorScheme
+                    .outlineVariant
+                    .copy(alpha = 0.72f)
+            )
+            .padding(
+                horizontal = 12.dp,
+                vertical = 8.dp
+            ),
+        contentAlignment = contentAlignment
+    ) {
+        content()
+    }
+}
+
+@Composable
 private fun TableTextCell(
     text: String,
     width: Dp,

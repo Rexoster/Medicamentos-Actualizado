@@ -1,0 +1,10 @@
+VERIFICACIÓN V16.1
+
+- TableCell restaurado: correcto.
+- TableTextCell enlazado con TableCell: correcto.
+- Llamadas de la tabla de medicamentos resueltas estructuralmente.
+- Delimitadores de App.kt: correctos.
+- Preflight del repositorio: correcto.
+- Optimizaciones v16: conservadas.
+
+GitHub Actions realizará la compilación Android definitiva.

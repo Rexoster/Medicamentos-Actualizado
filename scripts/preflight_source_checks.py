@@ -127,6 +127,8 @@ for token in (
 
 for token in (
     "contentType = { _, _ ->",
+    "private fun TableCell(",
+    "private fun TableTextCell(",
     "private fun EditableSuggestionField(",
     "PopupProperties(",
     "focusable = false",
