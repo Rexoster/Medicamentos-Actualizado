@@ -24,6 +24,7 @@ VIEW_MODEL_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamento
 MAIN_ACTIVITY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/MainActivity.kt"
 APPLICATION_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/CalculatorApplication.kt"
 REPOSITORY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/MedicationRepository.kt"
+DIAL_SOUND_PATH = ROOT / "app/src/main/res/raw/combination_dial_tick.wav"
 
 errors = []
 
@@ -139,6 +140,13 @@ for token in (
     "MainSection.RENAL",
     "mutableStateOf<MainSection?>(null)",
     "private fun SectionNavigationMenu(",
+    "maxPanelHeight: Dp",
+    "wideCompactLayout",
+    "verticalScroll(",
+    "private fun rememberCombinationDialTick()",
+    "R.raw.combination_dial_tick",
+    "val landscape =",
+    "Cada avance produce un clic mecánico discreto.",
     "private fun SectionMenuPanel(",
     "private fun SectionMenuTile(",
     "animateDpAsState(",
@@ -213,6 +221,21 @@ for token in (
 
 if "DatePickerDialog" in app:
     errors.append("App.kt todavía usa el calendario clásico DatePickerDialog.")
+
+if not DIAL_SOUND_PATH.exists():
+    errors.append(
+        "Falta el sonido local de la rueda: "
+        "app/src/main/res/raw/combination_dial_tick.wav"
+    )
+elif DIAL_SOUND_PATH.stat().st_size < 500:
+    errors.append(
+        "El sonido local de la rueda parece estar vacío."
+    )
+
+if "Modifier.height(500.dp)" in app:
+    errors.append(
+        "App.kt todavía contiene un diálogo con altura fija de 500 dp."
+    )
 
 for token in (
     "excelServiceProvider: () -> ExcelService",

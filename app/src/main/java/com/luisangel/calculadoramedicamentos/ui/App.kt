@@ -1,6 +1,8 @@
 package com.luisangel.calculadoramedicamentos.ui
 
 import android.graphics.Paint as AndroidPaint
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -115,6 +117,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -151,6 +154,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.luisangel.calculadoramedicamentos.R
 import com.luisangel.calculadoramedicamentos.growth.GrowthAssessment
 import com.luisangel.calculadoramedicamentos.growth.GrowthChart
 import com.luisangel.calculadoramedicamentos.growth.GrowthEngine
@@ -552,159 +556,338 @@ private fun ClinicalReferencesDialog(
             usePlatformDefaultWidth = false
         )
     ) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .padding(16.dp)
-                .widthIn(max = 720.dp)
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(
-                Modifier.fillMaxSize()
+            val compactHeight =
+                maxHeight < 520.dp
+            val landscape =
+                maxWidth > maxHeight
+
+            Surface(
+                shape = RoundedCornerShape(
+                    if (compactHeight) 18.dp
+                    else 24.dp
+                ),
+                color =
+                    MaterialTheme.colorScheme
+                        .surface,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .widthIn(
+                        max =
+                            if (landscape) {
+                                1050.dp
+                            } else {
+                                720.dp
+                            }
+                    )
+                    .fillMaxWidth()
+                    .fillMaxHeight(
+                        if (compactHeight) {
+                            0.98f
+                        } else {
+                            0.92f
+                        }
+                    )
+                    .padding(
+                        if (compactHeight) 5.dp
+                        else 16.dp
+                    )
             ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.primaryContainer
-                        )
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(9.dp)
-                        )
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            info.title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            "Revisión: ${info.reviewedOn}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Cerrar"
-                        )
-                    }
-                }
-
                 Column(
-                    Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    Modifier.fillMaxSize()
                 ) {
-                    ClinicalInfoSection(
-                        title = "Qué hace",
-                        text = info.purpose
-                    )
-                    ClinicalInfoSection(
-                        title = "Método utilizado",
-                        text = info.method
-                    )
-
-                    Text(
-                        "Referencias usadas",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black
-                    )
-                    info.references.forEachIndexed { index, reference ->
-                        OutlinedCard(
-                            colors = CardDefaults.outlinedCardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme
+                                    .colorScheme
+                                    .primaryContainer
                             )
+                            .padding(
+                                if (compactHeight) {
+                                    9.dp
+                                } else {
+                                    16.dp
+                                }
+                            ),
+                        verticalAlignment =
+                            Alignment.CenterVertically,
+                        horizontalArrangement =
+                            Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape =
+                                RoundedCornerShape(
+                                    999.dp
+                                ),
+                            color =
+                                MaterialTheme
+                                    .colorScheme
+                                    .primary
                         ) {
-                            Column(
-                                Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            Icon(
+                                imageVector =
+                                    Icons.Default.Info,
+                                contentDescription =
+                                    null,
+                                tint =
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onPrimary,
+                                modifier =
+                                    Modifier.padding(
+                                        if (
+                                            compactHeight
+                                        ) {
+                                            6.dp
+                                        } else {
+                                            9.dp
+                                        }
+                                    )
+                            )
+                        }
+                        Column(
+                            Modifier.weight(1f)
+                        ) {
+                            Text(
+                                info.title,
+                                style = if (
+                                    compactHeight
+                                ) {
+                                    MaterialTheme
+                                        .typography
+                                        .titleMedium
+                                } else {
+                                    MaterialTheme
+                                        .typography
+                                        .titleLarge
+                                },
+                                fontWeight =
+                                    FontWeight.Black,
+                                color =
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onPrimaryContainer,
+                                maxLines = 1,
+                                overflow =
+                                    TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "Revisión: ${info.reviewedOn}",
+                                style =
+                                    MaterialTheme
+                                        .typography
+                                        .labelSmall,
+                                color =
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onPrimaryContainer
+                            )
+                        }
+                        IconButton(
+                            onClick = onDismiss
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription =
+                                    "Cerrar"
+                            )
+                        }
+                    }
+
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(
+                                rememberScrollState()
+                            )
+                            .padding(
+                                if (compactHeight) {
+                                    10.dp
+                                } else {
+                                    16.dp
+                                }
+                            ),
+                        verticalArrangement =
+                            Arrangement.spacedBy(
+                                if (compactHeight) {
+                                    9.dp
+                                } else {
+                                    14.dp
+                                }
+                            )
+                    ) {
+                        ClinicalInfoSection(
+                            title = "Qué hace",
+                            text = info.purpose
+                        )
+                        ClinicalInfoSection(
+                            title =
+                                "Método utilizado",
+                            text = info.method
+                        )
+
+                        Text(
+                            "Referencias usadas",
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .titleMedium,
+                            fontWeight =
+                                FontWeight.Black
+                        )
+
+                        info.references
+                            .forEachIndexed {
+                                    index,
+                                    reference ->
+                                OutlinedCard(
+                                    colors =
+                                        CardDefaults
+                                            .outlinedCardColors(
+                                                containerColor =
+                                                    MaterialTheme
+                                                        .colorScheme
+                                                        .surfaceContainer
+                                            )
+                                ) {
+                                    Column(
+                                        Modifier.padding(
+                                            12.dp
+                                        ),
+                                        verticalArrangement =
+                                            Arrangement
+                                                .spacedBy(
+                                                    5.dp
+                                                )
+                                    ) {
+                                        Text(
+                                            "${index + 1}. ${reference.source}",
+                                            fontWeight =
+                                                FontWeight
+                                                    .Black,
+                                            color =
+                                                MaterialTheme
+                                                    .colorScheme
+                                                    .primary
+                                        )
+                                        Text(
+                                            reference
+                                                .citation,
+                                            style =
+                                                MaterialTheme
+                                                    .typography
+                                                    .bodySmall
+                                        )
+                                        Text(
+                                            "Uso en la app: ${reference.useInApp}",
+                                            style =
+                                                MaterialTheme
+                                                    .typography
+                                                    .labelSmall,
+                                            color =
+                                                MaterialTheme
+                                                    .colorScheme
+                                                    .onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                        Text(
+                            "Limitaciones",
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .titleMedium,
+                            fontWeight =
+                                FontWeight.Black
+                        )
+
+                        info.limitations.forEach {
+                                limitation ->
+                            Row(
+                                horizontalArrangement =
+                                    Arrangement
+                                        .spacedBy(8.dp),
+                                verticalAlignment =
+                                    Alignment.Top
                             ) {
                                 Text(
-                                    "${index + 1}. ${reference.source}",
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.primary
+                                    "•",
+                                    color =
+                                        MaterialTheme
+                                            .colorScheme
+                                            .tertiary,
+                                    fontWeight =
+                                        FontWeight.Black
                                 )
                                 Text(
-                                    reference.citation,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Text(
-                                    "Uso en la app: ${reference.useInApp}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    limitation,
+                                    style =
+                                        MaterialTheme
+                                            .typography
+                                            .bodySmall,
+                                    modifier =
+                                        Modifier.weight(
+                                            1f
+                                        )
                                 )
                             }
                         }
-                    }
 
-                    Text(
-                        "Limitaciones",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black
-                    )
-                    info.limitations.forEach { limitation ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.Top
+                        Surface(
+                            shape =
+                                RoundedCornerShape(
+                                    14.dp
+                                ),
+                            color =
+                                MaterialTheme
+                                    .colorScheme
+                                    .errorContainer
+                                    .copy(alpha = 0.55f),
+                            modifier =
+                                Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                "•",
-                                color = MaterialTheme.colorScheme.tertiary,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                limitation,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.weight(1f)
+                                "Herramienta de apoyo. No sustituye guías vigentes, " +
+                                    "juicio clínico, interpretación especializada ni " +
+                                    "valoración individual.",
+                                modifier =
+                                    Modifier.padding(
+                                        12.dp
+                                    ),
+                                style =
+                                    MaterialTheme
+                                        .typography
+                                        .labelSmall,
+                                color =
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onErrorContainer
                             )
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(
-                            alpha = 0.55f
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                    HorizontalDivider()
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                if (compactHeight) {
+                                    8.dp
+                                } else {
+                                    14.dp
+                                }
+                            )
                     ) {
-                        Text(
-                            "Herramienta de apoyo. No sustituye guías vigentes, " +
-                                "juicio clínico, interpretación especializada ni " +
-                                "valoración individual.",
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        Text("Cerrar")
                     }
-                }
-
-                HorizontalDivider()
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp)
-                ) {
-                    Text("Cerrar")
                 }
             }
         }
@@ -953,8 +1136,22 @@ private fun SectionNavigationMenu(
     BoxWithConstraints(
         modifier = modifier
     ) {
-        val expandedButtonWidth = 188.dp
-        val compactButtonWidth = 52.dp
+        val compactHeight = maxHeight < 520.dp
+        val wideCompactLayout =
+            compactHeight && maxWidth >= 720.dp
+
+        val expandedButtonWidth =
+            if (compactHeight) 164.dp else 188.dp
+        val compactButtonWidth =
+            if (compactHeight) 46.dp else 52.dp
+        val buttonHeight =
+            if (compactHeight) 44.dp else 50.dp
+
+        val panelMaxHeight = (
+            maxHeight -
+                buttonHeight -
+                if (compactHeight) 22.dp else 30.dp
+            ).coerceAtLeast(132.dp)
 
         val buttonWidth by animateDpAsState(
             targetValue = if (expanded) {
@@ -969,9 +1166,9 @@ private fun SectionNavigationMenu(
             (
                 (maxWidth - expandedButtonWidth) /
                     2
-                ).coerceAtLeast(16.dp)
+                ).coerceAtLeast(8.dp)
         } else {
-            16.dp
+            if (compactHeight) 8.dp else 16.dp
         }
 
         val buttonOffset by animateDpAsState(
@@ -984,10 +1181,14 @@ private fun SectionNavigationMenu(
                 .fillMaxWidth()
                 .animateContentSize(),
             verticalArrangement =
-                Arrangement.spacedBy(10.dp)
+                Arrangement.spacedBy(
+                    if (compactHeight) 5.dp else 10.dp
+                )
         ) {
             Spacer(
-                modifier = Modifier.height(8.dp)
+                modifier = Modifier.height(
+                    if (compactHeight) 3.dp else 8.dp
+                )
             )
 
             Surface(
@@ -995,8 +1196,10 @@ private fun SectionNavigationMenu(
                 modifier = Modifier
                     .offset(x = buttonOffset)
                     .width(buttonWidth)
-                    .height(50.dp),
-                shape = RoundedCornerShape(18.dp),
+                    .height(buttonHeight),
+                shape = RoundedCornerShape(
+                    if (compactHeight) 15.dp else 18.dp
+                ),
                 color =
                     MaterialTheme.colorScheme
                         .surfaceContainerHigh,
@@ -1021,7 +1224,11 @@ private fun SectionNavigationMenu(
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 13.dp),
+                        .padding(
+                            horizontal =
+                                if (compactHeight) 10.dp
+                                else 13.dp
+                        ),
                     verticalAlignment =
                         Alignment.CenterVertically,
                     horizontalArrangement =
@@ -1032,7 +1239,10 @@ private fun SectionNavigationMenu(
                             Icons.Default.Menu,
                         contentDescription =
                             "Menú de apartados",
-                        modifier = Modifier.size(27.dp)
+                        modifier = Modifier.size(
+                            if (compactHeight) 24.dp
+                            else 27.dp
+                        )
                     )
 
                     AnimatedVisibility(
@@ -1043,7 +1253,7 @@ private fun SectionNavigationMenu(
                         Row {
                             Spacer(
                                 modifier =
-                                    Modifier.width(10.dp)
+                                    Modifier.width(8.dp)
                             )
                             Text(
                                 "Menú",
@@ -1077,7 +1287,9 @@ private fun SectionNavigationMenu(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
-                            horizontal = 16.dp,
+                            horizontal =
+                                if (compactHeight) 6.dp
+                                else 16.dp,
                             vertical = 2.dp
                         ),
                     contentAlignment =
@@ -1088,9 +1300,15 @@ private fun SectionNavigationMenu(
                             selectedSection,
                         onSectionSelected =
                             onSectionSelected,
+                        maxPanelHeight =
+                            panelMaxHeight,
+                        compactHeight =
+                            compactHeight,
+                        wideCompactLayout =
+                            wideCompactLayout,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .widthIn(max = 680.dp)
+                            .widthIn(max = 1180.dp)
                     )
                 }
             }
@@ -1102,11 +1320,24 @@ private fun SectionNavigationMenu(
 private fun SectionMenuPanel(
     selectedSection: MainSection?,
     onSectionSelected: (MainSection) -> Unit,
+    maxPanelHeight: Dp,
+    compactHeight: Boolean,
+    wideCompactLayout: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val columnCount = if (wideCompactLayout) {
+        4
+    } else {
+        2
+    }
+
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(26.dp),
+        modifier = modifier.heightIn(
+            max = maxPanelHeight
+        ),
+        shape = RoundedCornerShape(
+            if (compactHeight) 20.dp else 26.dp
+        ),
         color =
             MaterialTheme.colorScheme
                 .surfaceContainerHigh,
@@ -1121,9 +1352,19 @@ private fun SectionMenuPanel(
         shadowElevation = 10.dp
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .verticalScroll(
+                    rememberScrollState()
+                )
+                .padding(
+                    if (compactHeight) 9.dp
+                    else 14.dp
+                ),
             verticalArrangement =
-                Arrangement.spacedBy(12.dp)
+                Arrangement.spacedBy(
+                    if (compactHeight) 8.dp
+                    else 12.dp
+                )
         ) {
             Text(
                 if (selectedSection == null) {
@@ -1131,8 +1372,11 @@ private fun SectionMenuPanel(
                 } else {
                     "Cambiar de apartado"
                 },
-                style =
-                    MaterialTheme.typography.titleMedium,
+                style = if (compactHeight) {
+                    MaterialTheme.typography.titleSmall
+                } else {
+                    MaterialTheme.typography.titleMedium
+                },
                 fontWeight = FontWeight.Black,
                 color =
                     MaterialTheme.colorScheme
@@ -1147,13 +1391,16 @@ private fun SectionMenuPanel(
             )
 
             MainSection.entries
-                .chunked(2)
+                .chunked(columnCount)
                 .forEach { rowSections ->
                     Row(
                         modifier =
                             Modifier.fillMaxWidth(),
                         horizontalArrangement =
-                            Arrangement.spacedBy(12.dp)
+                            Arrangement.spacedBy(
+                                if (compactHeight) 7.dp
+                                else 12.dp
+                            )
                     ) {
                         rowSections.forEach {
                             menuSection ->
@@ -1162,6 +1409,8 @@ private fun SectionMenuPanel(
                                 selected =
                                     selectedSection ==
                                         menuSection,
+                                compact =
+                                    compactHeight,
                                 onClick = {
                                     onSectionSelected(
                                         menuSection
@@ -1172,7 +1421,10 @@ private fun SectionMenuPanel(
                             )
                         }
 
-                        if (rowSections.size == 1) {
+                        repeat(
+                            columnCount -
+                                rowSections.size
+                        ) {
                             Spacer(
                                 modifier =
                                     Modifier.weight(1f)
@@ -1188,6 +1440,7 @@ private fun SectionMenuPanel(
 private fun SectionMenuTile(
     section: MainSection,
     selected: Boolean,
+    compact: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1209,8 +1462,12 @@ private fun SectionMenuTile(
 
     Surface(
         onClick = onClick,
-        modifier = modifier.height(156.dp),
-        shape = RoundedCornerShape(22.dp),
+        modifier = modifier.height(
+            if (compact) 112.dp else 156.dp
+        ),
+        shape = RoundedCornerShape(
+            if (compact) 17.dp else 22.dp
+        ),
         color = containerColor,
         contentColor = contentColor,
         border =
@@ -1236,7 +1493,9 @@ private fun SectionMenuTile(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(13.dp),
+                .padding(
+                    if (compact) 8.dp else 13.dp
+                ),
             horizontalAlignment =
                 Alignment.CenterHorizontally,
             verticalArrangement =
@@ -1256,8 +1515,14 @@ private fun SectionMenuTile(
                     imageVector = section.icon,
                     contentDescription = null,
                     modifier = Modifier
-                        .padding(10.dp)
-                        .size(31.dp)
+                        .padding(
+                            if (compact) 6.dp
+                            else 10.dp
+                        )
+                        .size(
+                            if (compact) 23.dp
+                            else 31.dp
+                        )
                 )
             }
 
@@ -1265,13 +1530,17 @@ private fun SectionMenuTile(
                 horizontalAlignment =
                     Alignment.CenterHorizontally,
                 verticalArrangement =
-                    Arrangement.spacedBy(4.dp)
+                    Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     section.label,
-                    style =
+                    style = if (compact) {
                         MaterialTheme.typography
-                            .titleMedium,
+                            .titleSmall
+                    } else {
+                        MaterialTheme.typography
+                            .titleMedium
+                    },
                     fontWeight = FontWeight.Black,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -1288,7 +1557,8 @@ private fun SectionMenuTile(
                             alpha = 0.76f
                         ),
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
+                    maxLines =
+                        if (compact) 1 else 2,
                     overflow =
                         TextOverflow.Ellipsis
                 )
@@ -1300,7 +1570,9 @@ private fun SectionMenuTile(
                 contentDescription = null,
                 tint =
                     MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(
+                    if (compact) 16.dp else 20.dp
+                )
             )
         }
     }
@@ -2738,6 +3010,61 @@ private fun GestogramWheelPanel(
     }
 }
 
+
+@Composable
+private fun rememberCombinationDialTick(): () -> Unit {
+    val context = LocalContext.current
+
+    val soundPool = remember {
+        val attributes = AudioAttributes.Builder()
+            .setUsage(
+                AudioAttributes.USAGE_ASSISTANCE_SONIFICATION
+            )
+            .setContentType(
+                AudioAttributes.CONTENT_TYPE_SONIFICATION
+            )
+            .build()
+
+        SoundPool.Builder()
+            .setMaxStreams(2)
+            .setAudioAttributes(attributes)
+            .build()
+    }
+
+    val soundId = remember(
+        soundPool,
+        context
+    ) {
+        soundPool.load(
+            context,
+            R.raw.combination_dial_tick,
+            1
+        )
+    }
+
+    DisposableEffect(soundPool) {
+        onDispose {
+            soundPool.release()
+        }
+    }
+
+    return remember(
+        soundPool,
+        soundId
+    ) {
+        {
+            soundPool.play(
+                soundId,
+                0.16f,
+                0.16f,
+                1,
+                0,
+                1f
+            )
+        }
+    }
+}
+
 @Composable
 private fun GestogramWheel(
     lmpDate: LocalDate,
@@ -2749,6 +3076,7 @@ private fun GestogramWheel(
 ) {
     val currentLmpDate by rememberUpdatedState(lmpDate)
     val currentReferenceDate by rememberUpdatedState(referenceDate)
+    val playDialTick = rememberCombinationDialTick()
 
     var gestogramRotationTarget by remember {
         mutableStateOf(0f)
@@ -2806,6 +3134,7 @@ private fun GestogramWheel(
                 var previousAngle = 0f
                 var accumulatedDegrees = 0f
                 var dragStartDate = currentLmpDate
+                var lastTickDate = currentLmpDate
 
                 fun pointerAngle(position: Offset): Float {
                     val center = Offset(
@@ -2833,6 +3162,7 @@ private fun GestogramWheel(
                 detectDragGestures(
                     onDragStart = {
                         dragStartDate = currentLmpDate
+                        lastTickDate = currentLmpDate
                         previousAngle = pointerAngle(it)
                         accumulatedDegrees = 0f
                         gestogramDragging = true
@@ -2883,7 +3213,9 @@ private fun GestogramWheel(
                         currentReferenceDate
                     )
 
-                    if (clamped != currentLmpDate) {
+                    if (clamped != lastTickDate) {
+                        playDialTick()
+                        lastTickDate = clamped
                         onLmpDateChange(clamped)
                     }
                     change.consume()
@@ -5244,6 +5576,8 @@ private fun DateOrbitWheel(
     modifier: Modifier = Modifier
 ) {
     val currentDate by rememberUpdatedState(selectedDate)
+    val playDialTick = rememberCombinationDialTick()
+
     var activeRing by remember {
         mutableStateOf(DateOrbitRing.NONE)
     }
@@ -5321,6 +5655,7 @@ private fun DateOrbitWheel(
                 var previousAngle = 0f
                 var accumulatedDegrees = 0f
                 var dragStartDate = currentDate
+                var lastTickDate = currentDate
                 var dragRing = DateOrbitRing.NONE
 
                 fun pointerAngle(position: Offset): Float {
@@ -5366,6 +5701,7 @@ private fun DateOrbitWheel(
                 detectDragGestures(
                     onDragStart = { position ->
                         dragStartDate = currentDate
+                        lastTickDate = currentDate
                         previousAngle = pointerAngle(position)
                         accumulatedDegrees = 0f
                         val radiusRatio = pointerRadius(position)
@@ -5448,7 +5784,9 @@ private fun DateOrbitWheel(
                         }
 
                         val clamped = clamp(candidate)
-                        if (clamped != currentDate) {
+                        if (clamped != lastTickDate) {
+                            playDialTick()
+                            lastTickDate = clamped
                             onDateChange(clamped)
                         }
                         change.consume()
@@ -5895,16 +6233,24 @@ private fun ClinicalCalendarDialog(
     onDismiss: () -> Unit,
     onConfirm: (LocalDate) -> Unit
 ) {
-    var selectedDateText by rememberSaveable(initialDate) {
+    var selectedDateText by rememberSaveable(
+        initialDate
+    ) {
         mutableStateOf(initialDate.toString())
     }
 
-    val selectedDate = remember(selectedDateText) {
+    val selectedDate = remember(
+        selectedDateText
+    ) {
         LocalDate.parse(selectedDateText)
     }
-    val today = remember { LocalDate.now() }
-    val minimumYear = minDate?.year ?: 1900
-    val maximumYear = maxDate?.year ?: (today.year + 10)
+    val today = remember {
+        LocalDate.now()
+    }
+    val minimumYear =
+        minDate?.year ?: 1900
+    val maximumYear =
+        maxDate?.year ?: (today.year + 10)
 
     val yearOptions = remember(
         minimumYear,
@@ -5933,18 +6279,15 @@ private fun ClinicalCalendarDialog(
         maxDate
     ) {
         (1..12).map { monthNumber ->
-            val candidateMonth = YearMonth.of(
-                selectedDate.year,
-                monthNumber
-            )
-            val monthStart = candidateMonth.atDay(1)
-            val monthEnd = candidateMonth.atEndOfMonth()
-            val enabled = (
-                (minDate == null ||
-                    !monthEnd.isBefore(minDate)) &&
-                    (maxDate == null ||
-                        !monthStart.isAfter(maxDate))
+            val candidateMonth =
+                YearMonth.of(
+                    selectedDate.year,
+                    monthNumber
                 )
+            val monthStart =
+                candidateMonth.atDay(1)
+            val monthEnd =
+                candidateMonth.atEndOfMonth()
 
             CalendarPartOption(
                 value = monthNumber,
@@ -5952,12 +6295,27 @@ private fun ClinicalCalendarDialog(
                     monthFormatter
                 ).replaceFirstChar {
                     if (it.isLowerCase()) {
-                        it.titlecase(Locale("es", "MX"))
+                        it.titlecase(
+                            Locale("es", "MX")
+                        )
                     } else {
                         it.toString()
                     }
                 },
-                enabled = enabled
+                enabled = (
+                    (
+                        minDate == null ||
+                            !monthEnd.isBefore(
+                                minDate
+                            )
+                        ) &&
+                        (
+                            maxDate == null ||
+                                !monthStart.isAfter(
+                                    maxDate
+                                )
+                            )
+                    )
             )
         }
     }
@@ -5968,45 +6326,457 @@ private fun ClinicalCalendarDialog(
         minDate,
         maxDate
     ) {
-        val selectedMonth = YearMonth.of(
-            selectedDate.year,
-            selectedDate.monthValue
-        )
-
-        (1..selectedMonth.lengthOfMonth()).map { day ->
-            val candidate = selectedMonth.atDay(day)
-            val enabled = (
-                (minDate == null ||
-                    !candidate.isBefore(minDate)) &&
-                    (maxDate == null ||
-                        !candidate.isAfter(maxDate))
-                )
-
-            CalendarPartOption(
-                value = day,
-                label = day.toString(),
-                enabled = enabled
+        val selectedMonth =
+            YearMonth.of(
+                selectedDate.year,
+                selectedDate.monthValue
             )
-        }
+
+        (1..selectedMonth.lengthOfMonth())
+            .map { day ->
+                val candidate =
+                    selectedMonth.atDay(day)
+
+                CalendarPartOption(
+                    value = day,
+                    label = day.toString(),
+                    enabled = (
+                        (
+                            minDate == null ||
+                                !candidate.isBefore(
+                                    minDate
+                                )
+                            ) &&
+                            (
+                                maxDate == null ||
+                                    !candidate.isAfter(
+                                        maxDate
+                                    )
+                                )
+                        )
+                )
+            }
     }
 
     fun updateDateParts(
         year: Int = selectedDate.year,
-        month: Int = selectedDate.monthValue,
-        day: Int = selectedDate.dayOfMonth
+        month: Int =
+            selectedDate.monthValue,
+        day: Int =
+            selectedDate.dayOfMonth
     ) {
-        val targetMonth = YearMonth.of(year, month)
+        val targetMonth =
+            YearMonth.of(year, month)
         val safeDay = day.coerceIn(
             1,
             targetMonth.lengthOfMonth()
         )
-        val candidate = targetMonth.atDay(safeDay)
-        val clamped = clampCalendarDate(
-            candidate,
-            minDate,
-            maxDate
+        val candidate =
+            targetMonth.atDay(safeDay)
+        val clamped =
+            clampCalendarDate(
+                candidate,
+                minDate,
+                maxDate
+            )
+
+        selectedDateText =
+            clamped.toString()
+    }
+
+    val formattedDate = selectedDate.format(
+        DateTimeFormatter.ofPattern(
+            "d 'de' MMMM 'de' yyyy",
+            Locale("es", "MX")
         )
-        selectedDateText = clamped.toString()
+    ).replaceFirstChar {
+        if (it.isLowerCase()) {
+            it.titlecase(
+                Locale("es", "MX")
+            )
+        } else {
+            it.toString()
+        }
+    }
+
+    val controlsContent:
+        @Composable ColumnScope.() -> Unit = {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color =
+                MaterialTheme.colorScheme
+                    .surfaceContainer,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                Modifier.padding(11.dp),
+                verticalArrangement =
+                    Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    "Dos ruedas independientes",
+                    fontWeight =
+                        FontWeight.Black,
+                    color =
+                        MaterialTheme.colorScheme
+                            .primary
+                )
+                Text(
+                    "Gira el aro exterior para cambiar el mes y el aro interior para cambiar el día.",
+                    style =
+                        MaterialTheme.typography
+                            .labelSmall,
+                    color =
+                        MaterialTheme.colorScheme
+                            .onSurfaceVariant
+                )
+                Text(
+                    "Cada avance produce un clic mecánico discreto.",
+                    style =
+                        MaterialTheme.typography
+                            .labelSmall,
+                    color =
+                        MaterialTheme.colorScheme
+                            .onSurfaceVariant
+                )
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color =
+                MaterialTheme.colorScheme
+                    .secondaryContainer
+                    .copy(alpha = 0.48f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                Modifier.padding(12.dp),
+                verticalArrangement =
+                    Arrangement.spacedBy(9.dp)
+            ) {
+                Row(
+                    verticalAlignment =
+                        Alignment.CenterVertically,
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape =
+                            RoundedCornerShape(10.dp),
+                        color =
+                            MaterialTheme.colorScheme
+                                .primary
+                    ) {
+                        Icon(
+                            imageVector =
+                                Icons.Default
+                                    .CalendarMonth,
+                            contentDescription = null,
+                            tint =
+                                MaterialTheme.colorScheme
+                                    .onPrimary,
+                            modifier =
+                                Modifier.padding(7.dp)
+                        )
+                    }
+                    Column(
+                        Modifier.weight(1f)
+                    ) {
+                        Text(
+                            "Ir directamente a una fecha",
+                            style =
+                                MaterialTheme.typography
+                                    .labelLarge,
+                            fontWeight =
+                                FontWeight.Black,
+                            color =
+                                MaterialTheme.colorScheme
+                                    .onSecondaryContainer
+                        )
+                        Text(
+                            "Elige año, mes y día sin girar las ruedas.",
+                            style =
+                                MaterialTheme.typography
+                                    .labelSmall,
+                            color =
+                                MaterialTheme.colorScheme
+                                    .onSecondaryContainer
+                                    .copy(alpha = 0.78f)
+                        )
+                    }
+                }
+
+                BoxWithConstraints(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                ) {
+                    if (maxWidth < 390.dp) {
+                        Column(
+                            verticalArrangement =
+                                Arrangement.spacedBy(
+                                    8.dp
+                                )
+                        ) {
+                            CalendarDatePartSelector(
+                                label = "Día",
+                                selectedValue =
+                                    selectedDate
+                                        .dayOfMonth,
+                                selectedLabel =
+                                    selectedDate
+                                        .dayOfMonth
+                                        .toString(),
+                                options = dayOptions,
+                                onSelected = {
+                                    updateDateParts(
+                                        day = it
+                                    )
+                                },
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                            )
+                            CalendarDatePartSelector(
+                                label = "Mes",
+                                selectedValue =
+                                    selectedDate
+                                        .monthValue,
+                                selectedLabel =
+                                    selectedDate.format(
+                                        monthFormatter
+                                    ).replaceFirstChar {
+                                        if (
+                                            it.isLowerCase()
+                                        ) {
+                                            it.titlecase(
+                                                Locale(
+                                                    "es",
+                                                    "MX"
+                                                )
+                                            )
+                                        } else {
+                                            it.toString()
+                                        }
+                                    },
+                                options = monthOptions,
+                                onSelected = {
+                                    updateDateParts(
+                                        month = it
+                                    )
+                                },
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                            )
+                            CalendarDatePartSelector(
+                                label = "Año",
+                                selectedValue =
+                                    selectedDate.year,
+                                selectedLabel =
+                                    selectedDate.year
+                                        .toString(),
+                                options = yearOptions,
+                                onSelected = {
+                                    updateDateParts(
+                                        year = it
+                                    )
+                                },
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                            )
+                        }
+                    } else {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.spacedBy(
+                                    8.dp
+                                )
+                        ) {
+                            CalendarDatePartSelector(
+                                label = "Día",
+                                selectedValue =
+                                    selectedDate
+                                        .dayOfMonth,
+                                selectedLabel =
+                                    selectedDate
+                                        .dayOfMonth
+                                        .toString(),
+                                options = dayOptions,
+                                onSelected = {
+                                    updateDateParts(
+                                        day = it
+                                    )
+                                },
+                                modifier =
+                                    Modifier.weight(0.72f)
+                            )
+                            CalendarDatePartSelector(
+                                label = "Mes",
+                                selectedValue =
+                                    selectedDate
+                                        .monthValue,
+                                selectedLabel =
+                                    selectedDate.format(
+                                        monthFormatter
+                                    ).replaceFirstChar {
+                                        if (
+                                            it.isLowerCase()
+                                        ) {
+                                            it.titlecase(
+                                                Locale(
+                                                    "es",
+                                                    "MX"
+                                                )
+                                            )
+                                        } else {
+                                            it.toString()
+                                        }
+                                    },
+                                options = monthOptions,
+                                onSelected = {
+                                    updateDateParts(
+                                        month = it
+                                    )
+                                },
+                                modifier =
+                                    Modifier.weight(1.35f)
+                            )
+                            CalendarDatePartSelector(
+                                label = "Año",
+                                selectedValue =
+                                    selectedDate.year,
+                                selectedLabel =
+                                    selectedDate.year
+                                        .toString(),
+                                options = yearOptions,
+                                onSelected = {
+                                    updateDateParts(
+                                        year = it
+                                    )
+                                },
+                                modifier =
+                                    Modifier.weight(0.95f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val todayAllowed = (
+                (
+                    minDate == null ||
+                        !today.isBefore(minDate)
+                    ) &&
+                    (
+                        maxDate == null ||
+                            !today.isAfter(maxDate)
+                        )
+                )
+
+            if (maxWidth < 390.dp) {
+                Column(
+                    verticalArrangement =
+                        Arrangement.spacedBy(8.dp)
+                ) {
+                    if (todayAllowed) {
+                        AssistChip(
+                            onClick = {
+                                selectedDateText =
+                                    today.toString()
+                            },
+                            label = {
+                                Text("Hoy")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default
+                                        .CalendarMonth,
+                                    contentDescription =
+                                        null,
+                                    modifier =
+                                        Modifier.size(
+                                            18.dp
+                                        )
+                                )
+                            }
+                        )
+                    }
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = onDismiss
+                        ) {
+                            Text("Cancelar")
+                        }
+                        Button(
+                            onClick = {
+                                onConfirm(
+                                    selectedDate
+                                )
+                            }
+                        ) {
+                            Text("Aceptar")
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp),
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
+                    if (todayAllowed) {
+                        AssistChip(
+                            onClick = {
+                                selectedDateText =
+                                    today.toString()
+                            },
+                            label = {
+                                Text("Hoy")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default
+                                        .CalendarMonth,
+                                    contentDescription =
+                                        null,
+                                    modifier =
+                                        Modifier.size(
+                                            18.dp
+                                        )
+                                )
+                            }
+                        )
+                    }
+
+                    Spacer(
+                        Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = onDismiss
+                    ) {
+                        Text("Cancelar")
+                    }
+                    Button(
+                        onClick = {
+                            onConfirm(selectedDate)
+                        }
+                    ) {
+                        Text("Aceptar")
+                    }
+                }
+            }
+        }
     }
 
     Dialog(
@@ -6015,226 +6785,279 @@ private fun ClinicalCalendarDialog(
             usePlatformDefaultWidth = false
         )
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.96f)
-                .padding(16.dp)
-                .widthIn(max = 560.dp),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 10.dp,
-            shadowElevation = 14.dp
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            selectedDate.format(
-                                DateTimeFormatter.ofPattern(
-                                    "d 'de' MMMM 'de' yyyy",
-                                    Locale("es", "MX")
-                                )
-                            ).replaceFirstChar {
-                                if (it.isLowerCase()) {
-                                    it.titlecase(Locale("es", "MX"))
-                                } else {
-                                    it.toString()
-                                }
-                            },
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                }
+            val landscape =
+                maxWidth > maxHeight
+            val compactHeight =
+                maxHeight < 520.dp
+            val outerPadding =
+                if (compactHeight) 5.dp
+                else 14.dp
+            val dialogMaxWidth =
+                if (landscape) 1180.dp
+                else 620.dp
 
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .widthIn(
+                        max = dialogMaxWidth
+                    )
+                    .fillMaxWidth()
+                    .fillMaxHeight(
+                        if (compactHeight) {
+                            0.99f
+                        } else {
+                            0.95f
+                        }
+                    )
+                    .padding(outerPadding),
+                shape = RoundedCornerShape(
+                    if (compactHeight) 20.dp
+                    else 28.dp
+                ),
+                color =
+                    MaterialTheme.colorScheme
+                        .surface,
+                tonalElevation = 10.dp,
+                shadowElevation = 14.dp
+            ) {
                 Column(
-                    Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(
-                            horizontal = 16.dp,
-                            vertical = 14.dp
-                        ),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    Modifier.fillMaxSize()
                 ) {
-                    BoxWithConstraints(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val wheelSize = maxWidth
-                            .coerceAtMost(360.dp)
-                            .coerceAtLeast(255.dp)
-
-                        DateOrbitWheel(
-                            selectedDate = selectedDate,
-                            minDate = minDate,
-                            maxDate = maxDate,
-                            onDateChange = {
-                                selectedDateText = it.toString()
-                            },
-                            modifier = Modifier.size(wheelSize)
-                        )
-                    }
-
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier.fillMaxWidth()
+                        color =
+                            MaterialTheme.colorScheme
+                                .primaryContainer,
+                        contentColor =
+                            MaterialTheme.colorScheme
+                                .onPrimaryContainer
                     ) {
                         Column(
-                            Modifier.padding(11.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                "Dos ruedas independientes",
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                "Gira el aro exterior para cambiar el mes y el aro interior para cambiar el día.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(
-                            alpha = 0.48f
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(9.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.primary
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CalendarMonth,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.padding(7.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        "Ir directamente a una fecha",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Black,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                    Text(
-                                        "Elige año, mes y día sin girar las ruedas.",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(
-                                            alpha = 0.78f
-                                        )
-                                    )
-                                }
-                            }
-
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                CalendarDatePartSelector(
-                                    label = "Día",
-                                    selectedValue = selectedDate.dayOfMonth,
-                                    selectedLabel = selectedDate.dayOfMonth.toString(),
-                                    options = dayOptions,
-                                    onSelected = {
-                                        updateDateParts(day = it)
-                                    },
-                                    modifier = Modifier.weight(0.72f)
-                                )
-                                CalendarDatePartSelector(
-                                    label = "Mes",
-                                    selectedValue = selectedDate.monthValue,
-                                    selectedLabel = selectedDate.format(
-                                        monthFormatter
-                                    ).replaceFirstChar {
-                                        if (it.isLowerCase()) {
-                                            it.titlecase(Locale("es", "MX"))
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    horizontal =
+                                        if (
+                                            compactHeight
+                                        ) {
+                                            13.dp
                                         } else {
-                                            it.toString()
+                                            20.dp
+                                        },
+                                    vertical =
+                                        if (
+                                            compactHeight
+                                        ) {
+                                            8.dp
+                                        } else {
+                                            16.dp
                                         }
-                                    },
-                                    options = monthOptions,
-                                    onSelected = {
-                                        updateDateParts(month = it)
-                                    },
-                                    modifier = Modifier.weight(1.35f)
+                                ),
+                            verticalArrangement =
+                                Arrangement.spacedBy(
+                                    if (
+                                        compactHeight
+                                    ) {
+                                        2.dp
+                                    } else {
+                                        5.dp
+                                    }
                                 )
-                                CalendarDatePartSelector(
-                                    label = "Año",
-                                    selectedValue = selectedDate.year,
-                                    selectedLabel = selectedDate.year.toString(),
-                                    options = yearOptions,
-                                    onSelected = {
-                                        updateDateParts(year = it)
-                                    },
-                                    modifier = Modifier.weight(0.95f)
-                                )
-                            }
+                        ) {
+                            Text(
+                                title,
+                                style =
+                                    MaterialTheme
+                                        .typography
+                                        .labelLarge,
+                                fontWeight =
+                                    FontWeight.Bold,
+                                maxLines = 1,
+                                overflow =
+                                    TextOverflow
+                                        .Ellipsis
+                            )
+                            Text(
+                                formattedDate,
+                                style = if (
+                                    compactHeight
+                                ) {
+                                    MaterialTheme
+                                        .typography
+                                        .titleLarge
+                                } else {
+                                    MaterialTheme
+                                        .typography
+                                        .headlineSmall
+                                },
+                                fontWeight =
+                                    FontWeight.Black,
+                                maxLines = 1,
+                                overflow =
+                                    TextOverflow
+                                        .Ellipsis
+                            )
                         }
                     }
 
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (
-                            (minDate == null || !today.isBefore(minDate)) &&
-                            (maxDate == null || !today.isAfter(maxDate))
+                    if (landscape) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(
+                                    horizontal =
+                                        if (
+                                            compactHeight
+                                        ) {
+                                            6.dp
+                                        } else {
+                                            12.dp
+                                        },
+                                    vertical =
+                                        if (
+                                            compactHeight
+                                        ) {
+                                            4.dp
+                                        } else {
+                                            10.dp
+                                        }
+                                ),
+                            horizontalArrangement =
+                                Arrangement.spacedBy(
+                                    if (
+                                        compactHeight
+                                    ) {
+                                        6.dp
+                                    } else {
+                                        12.dp
+                                    }
+                                )
                         ) {
-                            AssistChip(
-                                onClick = {
-                                    selectedDateText = today.toString()
-                                },
-                                label = { Text("Hoy") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.CalendarMonth,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                            BoxWithConstraints(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                contentAlignment =
+                                    Alignment.Center
+                            ) {
+                                val available =
+                                    if (
+                                        maxWidth <
+                                            maxHeight
+                                    ) {
+                                        maxWidth
+                                    } else {
+                                        maxHeight
+                                    }
+                                val wheelSize =
+                                    available
+                                        .coerceAtMost(
+                                            430.dp
+                                        )
+                                        .coerceAtLeast(
+                                            155.dp
+                                        )
+
+                                DateOrbitWheel(
+                                    selectedDate =
+                                        selectedDate,
+                                    minDate = minDate,
+                                    maxDate = maxDate,
+                                    onDateChange = {
+                                        selectedDateText =
+                                            it.toString()
+                                    },
+                                    modifier =
+                                        Modifier.size(
+                                            wheelSize
+                                        )
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1.08f)
+                                    .fillMaxHeight()
+                                    .verticalScroll(
+                                        rememberScrollState()
                                     )
-                                }
+                                    .padding(
+                                        end =
+                                            if (
+                                                compactHeight
+                                            ) {
+                                                4.dp
+                                            } else {
+                                                8.dp
+                                            }
+                                    ),
+                                verticalArrangement =
+                                    Arrangement.spacedBy(
+                                        if (
+                                            compactHeight
+                                        ) {
+                                            7.dp
+                                        } else {
+                                            12.dp
+                                        }
+                                    ),
+                                content =
+                                    controlsContent
                             )
                         }
-
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = onDismiss) {
-                            Text("Cancelar")
-                        }
-                        Button(
-                            onClick = {
-                                onConfirm(selectedDate)
-                            }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .verticalScroll(
+                                    rememberScrollState()
+                                )
+                                .padding(
+                                    horizontal = 16.dp,
+                                    vertical = 12.dp
+                                ),
+                            verticalArrangement =
+                                Arrangement.spacedBy(
+                                    12.dp
+                                )
                         ) {
-                            Text("Aceptar")
+                            BoxWithConstraints(
+                                modifier =
+                                    Modifier.fillMaxWidth(),
+                                contentAlignment =
+                                    Alignment.Center
+                            ) {
+                                val wheelSize =
+                                    maxWidth
+                                        .coerceAtMost(
+                                            360.dp
+                                        )
+                                        .coerceAtLeast(
+                                            220.dp
+                                        )
+
+                                DateOrbitWheel(
+                                    selectedDate =
+                                        selectedDate,
+                                    minDate = minDate,
+                                    maxDate = maxDate,
+                                    onDateChange = {
+                                        selectedDateText =
+                                            it.toString()
+                                    },
+                                    modifier =
+                                        Modifier.size(
+                                            wheelSize
+                                        )
+                                )
+                            }
+
+                            controlsContent()
                         }
                     }
                 }
@@ -7615,52 +8438,278 @@ private fun SpecialtySelectionDialog(
     onDismiss: () -> Unit,
     onApply: (Set<String>) -> Unit
 ) {
-    var search by rememberSaveable { mutableStateOf("") }
-    var working by remember(selected) { mutableStateOf(selected) }
-    val visible = remember(all, search) {
-        all.filter { it.contains(search, ignoreCase = true) }
+    var search by rememberSaveable {
+        mutableStateOf("")
     }
-    AlertDialog(
+    var working by remember(selected) {
+        mutableStateOf(selected)
+    }
+
+    val visible = remember(
+        all,
+        search
+    ) {
+        all.filter {
+            it.contains(
+                search,
+                ignoreCase = true
+            )
+        }
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(Modifier.height(500.dp)) {
-                OutlinedTextField(
-                    value = search,
-                    onValueChange = { search = it },
-                    label = { Text("Buscar especialidad") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                LazyColumn(Modifier.padding(top = 8.dp)) {
-                    visible.forEach { specialty ->
-                        item(key = specialty) {
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val compactHeight =
+                maxHeight < 520.dp
+            val landscape =
+                maxWidth > maxHeight
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .widthIn(
+                        max =
+                            if (landscape) {
+                                820.dp
+                            } else {
+                                580.dp
+                            }
+                    )
+                    .fillMaxWidth()
+                    .fillMaxHeight(
+                        if (compactHeight) {
+                            0.97f
+                        } else {
+                            0.82f
+                        }
+                    )
+                    .padding(
+                        if (compactHeight) 5.dp
+                        else 16.dp
+                    ),
+                shape = RoundedCornerShape(
+                    if (compactHeight) 18.dp
+                    else 24.dp
+                ),
+                color =
+                    MaterialTheme.colorScheme
+                        .surface,
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    Modifier.fillMaxSize()
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme
+                                    .colorScheme
+                                    .primaryContainer
+                            )
+                            .padding(
+                                if (compactHeight) {
+                                    9.dp
+                                } else {
+                                    14.dp
+                                }
+                            ),
+                        verticalAlignment =
+                            Alignment.CenterVertically
+                    ) {
+                        Text(
+                            title,
+                            modifier =
+                                Modifier.weight(1f),
+                            style = if (
+                                compactHeight
+                            ) {
+                                MaterialTheme
+                                    .typography
+                                    .titleMedium
+                            } else {
+                                MaterialTheme
+                                    .typography
+                                    .titleLarge
+                            },
+                            fontWeight =
+                                FontWeight.Black,
+                            maxLines = 1,
+                            overflow =
+                                TextOverflow.Ellipsis
+                        )
+                        IconButton(
+                            onClick = onDismiss
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription =
+                                    "Cerrar"
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = {
+                            search = it
+                        },
+                        label = {
+                            Text(
+                                "Buscar especialidad"
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Search,
+                                null
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal =
+                                    if (
+                                        compactHeight
+                                    ) {
+                                        10.dp
+                                    } else {
+                                        16.dp
+                                    },
+                                vertical = 8.dp
+                            ),
+                        singleLine = true
+                    )
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding =
+                            PaddingValues(
+                                horizontal =
+                                    if (
+                                        compactHeight
+                                    ) {
+                                        10.dp
+                                    } else {
+                                        16.dp
+                                    },
+                                vertical = 4.dp
+                            )
+                    ) {
+                        itemsIndexed(
+                            items = visible,
+                            key = {
+                                    _,
+                                    specialty ->
+                                specialty
+                            }
+                        ) {
+                                _,
+                                specialty ->
                             Row(
-                                Modifier.fillMaxWidth().clickable {
-                                    working = if (specialty in working) working - specialty else working + specialty
-                                }.padding(vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        working =
+                                            if (
+                                                specialty
+                                                    in working
+                                            ) {
+                                                working -
+                                                    specialty
+                                            } else {
+                                                working +
+                                                    specialty
+                                            }
+                                    }
+                                    .padding(
+                                        vertical = 4.dp
+                                    ),
+                                verticalAlignment =
+                                    Alignment
+                                        .CenterVertically
                             ) {
                                 Checkbox(
-                                    checked = specialty in working,
-                                    onCheckedChange = { checked -> working = if (checked) working + specialty else working - specialty }
+                                    checked =
+                                        specialty
+                                            in working,
+                                    onCheckedChange = {
+                                            checked ->
+                                        working =
+                                            if (checked) {
+                                                working +
+                                                    specialty
+                                            } else {
+                                                working -
+                                                    specialty
+                                            }
+                                    }
                                 )
-                                Text(specialty, modifier = Modifier.weight(1f))
+                                Text(
+                                    specialty,
+                                    modifier =
+                                        Modifier.weight(
+                                            1f
+                                        )
+                                )
                             }
+                        }
+                    }
+
+                    HorizontalDivider()
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                if (compactHeight) {
+                                    8.dp
+                                } else {
+                                    12.dp
+                                }
+                            ),
+                        horizontalArrangement =
+                            Arrangement.End,
+                        verticalArrangement =
+                            Arrangement.spacedBy(
+                                4.dp
+                            )
+                    ) {
+                        TextButton(
+                            onClick = {
+                                working =
+                                    emptySet()
+                            }
+                        ) {
+                            Text("Limpiar")
+                        }
+                        TextButton(
+                            onClick = onDismiss
+                        ) {
+                            Text("Cancelar")
+                        }
+                        Button(
+                            onClick = {
+                                onApply(working)
+                            }
+                        ) {
+                            Text(
+                                "Aceptar (${working.size})"
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = { Button(onClick = { onApply(working) }) { Text("Aceptar (${working.size})") } },
-        dismissButton = {
-            Row {
-                TextButton(onClick = { working = emptySet() }) { Text("Limpiar") }
-                TextButton(onClick = onDismiss) { Text("Cancelar") }
-            }
         }
-    )
+    }
 }
 
 @Composable

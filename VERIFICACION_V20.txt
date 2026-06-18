@@ -1,0 +1,25 @@
+VERIFICACIÓN V20
+
+ADAPTACIÓN
+- Menú desplazable: correcto.
+- Menú compacto horizontal: correcto.
+- Cuatro módulos en una fila cuando hay ancho y poca altura: correcto.
+- Calendario en dos columnas al rotar: correcto.
+- Rueda ajustada al espacio disponible: correcto.
+- Controles del calendario desplazables: correcto.
+- Referencias clínicas adaptativas: correcto.
+- Especialidades sin altura fija: correcto.
+
+SONIDO
+- Recurso local: correcto.
+- Formato: WAV PCM mono de 16 bits.
+- Frecuencia: 44100 Hz.
+- Duración: 0.055 segundos.
+- Tamaño: 4894 bytes.
+- Sin permiso INTERNET ni descarga externa.
+
+CÓDIGO
+- Delimitadores de App.kt: correctos.
+- Preflight: correcto.
+
+GitHub Actions realizará la compilación Android definitiva.
