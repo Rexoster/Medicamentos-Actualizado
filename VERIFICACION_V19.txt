@@ -1,0 +1,12 @@
+VERIFICACIÓN V19
+
+- Aro de meses con rotación continua: correcto.
+- Aro de días con rotación continua: correcto.
+- Ajuste suave al soltar: incluido.
+- Gestograma con rotación continua: correcto.
+- Aro azul de interacción eliminado: correcto.
+- Línea radial central eliminada: correcto.
+- Animación discreta del centro y marcador: incluida.
+- Preflight: correcto.
+
+GitHub Actions realizará la compilación Android definitiva.

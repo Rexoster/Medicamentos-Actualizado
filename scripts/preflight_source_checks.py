@@ -161,6 +161,12 @@ for token in (
     "Info y referencias",
     "Referencias usadas",
     "private fun DateOrbitWheel(",
+    "calendarMonthRotation",
+    "calendarDayRotation",
+    "gestogramRotation",
+    "ringInteraction",
+    "monthRotationTarget",
+    "dayRotationTarget",
     "private fun InteractiveDoseWheel(",
     "Dosis interactiva por rango",
     "private fun GestogramWheel(",
@@ -344,6 +350,16 @@ for token in (
     "kdigoCategoriesAndRiskMatrixAreClassified",
 ):
     require(renal_test, token, "RenalEngineTest.kt")
+
+if 'color = primary.copy(alpha = 0.82f)' in app:
+    errors.append(
+        "App.kt todavía contiene el aro azul de interacción."
+    )
+
+if 'start = pointAt(-90f, radius * 0.68f)' in app:
+    errors.append(
+        "App.kt todavía contiene la línea radial del calendario."
+    )
 
 if "CalendarMonthGrid(" in app or "CalendarWeekHeader(" in app:
     errors.append(

@@ -6,7 +6,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -2746,6 +2750,32 @@ private fun GestogramWheel(
     val currentLmpDate by rememberUpdatedState(lmpDate)
     val currentReferenceDate by rememberUpdatedState(referenceDate)
 
+    var gestogramRotationTarget by remember {
+        mutableStateOf(0f)
+    }
+    var gestogramDragging by remember {
+        mutableStateOf(false)
+    }
+
+    val gestogramRotation by animateFloatAsState(
+        targetValue = gestogramRotationTarget,
+        animationSpec = if (gestogramDragging) {
+            tween(durationMillis = 45)
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
+        label = "gestogramRotation"
+    )
+
+    val gestogramInteraction by animateFloatAsState(
+        targetValue = if (gestogramDragging) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "gestogramInteraction"
+    )
+
     val primary = MaterialTheme.colorScheme.primary
     val onPrimary = MaterialTheme.colorScheme.onPrimary
     val secondary = MaterialTheme.colorScheme.secondary
@@ -2755,7 +2785,6 @@ private fun GestogramWheel(
     val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
     val surface = MaterialTheme.colorScheme.surface
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    val outline = MaterialTheme.colorScheme.outlineVariant
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val error = MaterialTheme.colorScheme.error
@@ -2805,6 +2834,16 @@ private fun GestogramWheel(
                         dragStartDate = currentLmpDate
                         previousAngle = pointerAngle(it)
                         accumulatedDegrees = 0f
+                        gestogramDragging = true
+                        gestogramRotationTarget = 0f
+                    },
+                    onDragEnd = {
+                        gestogramDragging = false
+                        gestogramRotationTarget = 0f
+                    },
+                    onDragCancel = {
+                        gestogramDragging = false
+                        gestogramRotationTarget = 0f
                     }
                 ) { change, _ ->
                     val currentAngle = pointerAngle(
@@ -2822,10 +2861,16 @@ private fun GestogramWheel(
                             dragStartDate.plusYears(1)
                         )
                         .coerceAtLeast(365)
+                    val degreesPerDay =
+                        360f / yearDays.toFloat()
                     val dayShift = (
-                        -accumulatedDegrees / 360f *
-                            yearDays.toFloat()
+                        -accumulatedDegrees /
+                            degreesPerDay
                         ).roundToInt()
+
+                    gestogramRotationTarget =
+                        accumulatedDegrees +
+                            dayShift * degreesPerDay
 
                     val minimumDate = currentReferenceDate
                         .minusDays(294)
@@ -2863,7 +2908,7 @@ private fun GestogramWheel(
                 .toFloat()
             return -90f + (
                 daysFromLmp / yearDays * 360f
-                )
+                ) + gestogramRotation
         }
 
         fun pointAt(
@@ -2892,7 +2937,10 @@ private fun GestogramWheel(
         val weekRadius = radius * 0.62f
         val weekStroke = radius * 0.19f
         val trimesterRadius = radius * 0.47f
-        val centerRadius = radius * 0.34f
+        val centerRadius = radius * (
+            0.34f +
+                gestogramInteraction * 0.006f
+            )
 
         drawCircle(
             color = surfaceVariant.copy(alpha = 0.42f),
@@ -2926,7 +2974,17 @@ private fun GestogramWheel(
                 topLeft = topLeft,
                 size = arcSize,
                 style = Stroke(
-                    width = monthStroke,
+                    width = monthStroke * (
+                        1f +
+                            if (
+                                activeRing ==
+                                    DateOrbitRing.MONTH
+                            ) {
+                                ringInteraction * 0.035f
+                            } else {
+                                0f
+                            }
+                        ),
                     cap = StrokeCap.Butt
                 )
             )
@@ -5195,6 +5253,54 @@ private fun DateOrbitWheel(
     var activeRing by remember {
         mutableStateOf(DateOrbitRing.NONE)
     }
+    var monthRotationTarget by remember {
+        mutableStateOf(0f)
+    }
+    var dayRotationTarget by remember {
+        mutableStateOf(0f)
+    }
+
+    val monthRotation by animateFloatAsState(
+        targetValue = monthRotationTarget,
+        animationSpec = if (
+            activeRing == DateOrbitRing.MONTH
+        ) {
+            tween(durationMillis = 40)
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
+        label = "calendarMonthRotation"
+    )
+
+    val dayRotation by animateFloatAsState(
+        targetValue = dayRotationTarget,
+        animationSpec = if (
+            activeRing == DateOrbitRing.DAY
+        ) {
+            tween(durationMillis = 40)
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
+        label = "calendarDayRotation"
+    )
+
+    val ringInteraction by animateFloatAsState(
+        targetValue = if (
+            activeRing == DateOrbitRing.NONE
+        ) {
+            0f
+        } else {
+            1f
+        },
+        animationSpec = tween(durationMillis = 170),
+        label = "calendarRingInteraction"
+    )
 
     val primary = MaterialTheme.colorScheme.primary
     val tertiary = MaterialTheme.colorScheme.tertiary
@@ -5278,12 +5384,27 @@ private fun DateOrbitWheel(
                             else -> DateOrbitRing.NONE
                         }
                         activeRing = dragRing
+
+                        if (
+                            dragRing == DateOrbitRing.MONTH
+                        ) {
+                            monthRotationTarget = 0f
+                        }
+                        if (
+                            dragRing == DateOrbitRing.DAY
+                        ) {
+                            dayRotationTarget = 0f
+                        }
                     },
                     onDragEnd = {
                         activeRing = DateOrbitRing.NONE
+                        monthRotationTarget = 0f
+                        dayRotationTarget = 0f
                     },
                     onDragCancel = {
                         activeRing = DateOrbitRing.NONE
+                        monthRotationTarget = 0f
+                        dayRotationTarget = 0f
                     }
                 ) { change, _ ->
                     if (dragRing != DateOrbitRing.NONE) {
@@ -5299,11 +5420,17 @@ private fun DateOrbitWheel(
                                 val monthShift = (
                                     -accumulatedDegrees / 30f
                                 ).roundToInt()
+
+                                monthRotationTarget =
+                                    accumulatedDegrees +
+                                        monthShift * 30f
+
                                 shiftDateMonth(
                                     dragStartDate,
                                     monthShift
                                 )
                             }
+
                             DateOrbitRing.DAY -> {
                                 val degreesPerDay = 360f /
                                     dragStartDate.lengthOfMonth()
@@ -5311,12 +5438,20 @@ private fun DateOrbitWheel(
                                     -accumulatedDegrees /
                                         degreesPerDay
                                 ).roundToInt()
+
+                                dayRotationTarget =
+                                    accumulatedDegrees +
+                                        dayShift *
+                                            degreesPerDay
+
                                 shiftDateDayWithinMonth(
                                     dragStartDate,
                                     dayShift
                                 )
                             }
-                            DateOrbitRing.NONE -> dragStartDate
+
+                            DateOrbitRing.NONE ->
+                                dragStartDate
                         }
 
                         val clamped = clamp(candidate)
@@ -5361,7 +5496,10 @@ private fun DateOrbitWheel(
         val monthStroke = radius * 0.18f
         val dayRadius = radius * 0.58f
         val dayStroke = radius * 0.18f
-        val centerRadius = radius * 0.35f
+        val centerRadius = radius * (
+            0.35f +
+                ringInteraction * 0.005f
+            )
 
         drawCircle(
             color = surfaceVariant.copy(alpha = 0.44f),
@@ -5374,7 +5512,10 @@ private fun DateOrbitWheel(
 
         repeat(12) { index ->
             val relative = index - selectedMonthIndex
-            val startAngle = -105f + relative * 30f
+            val startAngle =
+                -105f +
+                    relative * 30f +
+                    monthRotation
             val (topLeft, arcSize) = ringRect(monthRadius)
 
             drawArc(
@@ -5434,8 +5575,11 @@ private fun DateOrbitWheel(
         repeat(daysInMonth) { index ->
             val relative = index - selectedDayIndex
             val sweep = 360f / daysInMonth
-            val startAngle = -90f - sweep / 2f +
-                relative * sweep
+            val startAngle =
+                -90f -
+                    sweep / 2f +
+                    relative * sweep +
+                    dayRotation
             val (topLeft, arcSize) = ringRect(dayRadius)
 
             drawArc(
@@ -5453,7 +5597,17 @@ private fun DateOrbitWheel(
                 topLeft = topLeft,
                 size = arcSize,
                 style = Stroke(
-                    width = dayStroke,
+                    width = dayStroke * (
+                        1f +
+                            if (
+                                activeRing ==
+                                    DateOrbitRing.DAY
+                            ) {
+                                ringInteraction * 0.035f
+                            } else {
+                                0f
+                            }
+                        ),
                     cap = StrokeCap.Butt
                 )
             )
@@ -5489,27 +5643,6 @@ private fun DateOrbitWheel(
             }
         }
 
-        if (activeRing != DateOrbitRing.NONE) {
-            val activeRadius = if (
-                activeRing == DateOrbitRing.MONTH
-            ) monthRadius else dayRadius
-            val activeStroke = if (
-                activeRing == DateOrbitRing.MONTH
-            ) monthStroke else dayStroke
-            val (topLeft, arcSize) = ringRect(activeRadius)
-            drawArc(
-                color = primary.copy(alpha = 0.82f),
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(
-                    width = activeStroke * 0.12f
-                )
-            )
-        }
-
         drawCircle(
             color = surface,
             radius = centerRadius,
@@ -5519,7 +5652,12 @@ private fun DateOrbitWheel(
             color = primaryContainer,
             radius = centerRadius,
             center = center,
-            style = Stroke(width = radius * 0.035f)
+            style = Stroke(
+                width = radius * (
+                    0.035f +
+                        ringInteraction * 0.002f
+                    )
+            )
         )
 
         val dayPaint = AndroidPaint().apply {
@@ -5575,25 +5713,32 @@ private fun DateOrbitWheel(
             )
         }
 
+        val markerHalfWidth = radius * (
+            0.055f +
+                ringInteraction * 0.004f
+            )
         val markerPath = Path().apply {
-            moveTo(center.x, center.y - radius * 0.995f)
+            moveTo(
+                center.x,
+                center.y - radius * 0.995f
+            )
             lineTo(
-                center.x - radius * 0.055f,
+                center.x - markerHalfWidth,
                 center.y - radius * 0.84f
             )
             lineTo(
-                center.x + radius * 0.055f,
+                center.x + markerHalfWidth,
                 center.y - radius * 0.84f
             )
             close()
         }
-        drawPath(path = markerPath, color = tertiary)
-
-        drawLine(
-            color = outline,
-            start = pointAt(-90f, radius * 0.68f),
-            end = pointAt(-90f, radius * 0.97f),
-            strokeWidth = 2.dp.toPx()
+        drawPath(
+            path = markerPath,
+            color = tertiary.copy(
+                alpha =
+                    0.86f +
+                        ringInteraction * 0.14f
+            )
         )
     }
 }
