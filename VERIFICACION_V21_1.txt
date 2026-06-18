@@ -1,0 +1,16 @@
+VERIFICACIÓN V21.1
+
+- Base utilizada: v20.2 de este chat.
+- Archivos de otra rama añadidos: ninguno.
+- Ejemplos precargados: 3.
+- Paracetamol adulto: presente.
+- Paracetamol pediátrico: presente.
+- Insulina basal: presente.
+- Catálogo PDF infeccioso: no incluido.
+- Encabezado fijo: incluido.
+- Ver más condicionado por desbordamiento: incluido.
+- Preflight: correcto.
+
+Nota:
+Los medicamentos ya almacenados en el teléfono pertenecen a la
+base local de Android y no se eliminan al actualizar.

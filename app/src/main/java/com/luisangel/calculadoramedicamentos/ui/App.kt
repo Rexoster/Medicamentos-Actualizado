@@ -1962,28 +1962,69 @@ private fun MedicationTable(
     onEdit: (MedicationRecord) -> Unit,
     onDelete: (MedicationRecord) -> Unit
 ) {
-    val scrollState = rememberScrollState()
-    val naturalWidth = medicationColumns.fold(0.dp) { total, column -> total + column.width }
-    val tableWidth = if (availableWidth > naturalWidth) availableWidth else naturalWidth
+    val horizontalScrollState =
+        rememberScrollState()
+    val naturalWidth =
+        medicationColumns.fold(0.dp) {
+                total,
+                column ->
+            total + column.width
+        }
+    val tableWidth = if (
+        availableWidth > naturalWidth
+    ) {
+        availableWidth
+    } else {
+        naturalWidth
+    }
 
-    OutlinedCard(Modifier.fillMaxWidth()) {
+    OutlinedCard(
+        Modifier.fillMaxWidth()
+    ) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 12.dp,
+                        vertical = 8.dp
+                    ),
+                verticalAlignment =
+                    Alignment.CenterVertically,
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Tabla de medicamentos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Column(
+                    Modifier.weight(1f)
+                ) {
                     Text(
-                        "Desliza horizontalmente para consultar todas las columnas.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "Tabla de medicamentos",
+                        style =
+                            MaterialTheme.typography
+                                .titleMedium,
+                        fontWeight =
+                            FontWeight.Bold
+                    )
+                    Text(
+                        "Los encabezados permanecen visibles mientras bajas. Desliza horizontalmente para consultar las columnas.",
+                        style =
+                            MaterialTheme.typography
+                                .labelSmall,
+                        color =
+                            MaterialTheme.colorScheme
+                                .onSurfaceVariant
                     )
                 }
-                Text("${records.size} registros", style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "${records.size} registros",
+                    style =
+                        MaterialTheme.typography
+                            .labelMedium
+                )
             }
+
             HorizontalDivider()
+
             val maximumVisibleRows = if (
                 availableWidth < 700.dp
             ) {
@@ -1995,41 +2036,67 @@ private fun MedicationTable(
                 records.size,
                 maximumVisibleRows
             ).coerceAtLeast(1)
-            val viewportHeight = 58.dp +
-                (112.dp * visibleRows)
+            val bodyViewportHeight =
+                112.dp * visibleRows
 
             Box(
-                Modifier
+                modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(scrollState)
+                    .horizontalScroll(
+                        horizontalScrollState
+                    )
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .width(tableWidth)
-                        .height(viewportHeight),
-                    userScrollEnabled = records.size > visibleRows
+                Column(
+                    modifier =
+                        Modifier.width(tableWidth)
                 ) {
-                    item(key = "medication-header") {
-                        MedicationHeaderRow()
-                    }
-                    itemsIndexed(
-                        items = records,
-                        key = { _, record -> record.id },
-                        contentType = { _, _ -> "medication-row" }
-                    ) { index, record ->
-                        MedicationDataRow(
-                            record = record,
-                            weight = if (
-                                record.type == MedicationType.ADULT
-                            ) {
-                                adultWeight
-                            } else {
-                                pediatricWeight
+                    // El encabezado queda fuera del
+                    // desplazamiento vertical del cuerpo.
+                    MedicationHeaderRow()
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .width(tableWidth)
+                            .height(
+                                bodyViewportHeight
+                            ),
+                        userScrollEnabled =
+                            records.size >
+                                visibleRows
+                    ) {
+                        itemsIndexed(
+                            items = records,
+                            key = {
+                                    _,
+                                    record ->
+                                record.id
                             },
-                            alternate = index % 2 == 1,
-                            onEdit = { onEdit(record) },
-                            onDelete = { onDelete(record) }
-                        )
+                            contentType = { _, _ ->
+                                "medication-row"
+                            }
+                        ) {
+                                index,
+                                record ->
+                            MedicationDataRow(
+                                record = record,
+                                weight = if (
+                                    record.type ==
+                                        MedicationType.ADULT
+                                ) {
+                                    adultWeight
+                                } else {
+                                    pediatricWeight
+                                },
+                                alternate =
+                                    index % 2 == 1,
+                                onEdit = {
+                                    onEdit(record)
+                                },
+                                onDelete = {
+                                    onDelete(record)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -2292,9 +2359,6 @@ private fun MedicationDataRow(
     var menuOpen by remember {
         mutableStateOf(false)
     }
-    var showNotes by remember {
-        mutableStateOf(false)
-    }
 
     val initialInteractiveDose = remember(
         record.id,
@@ -2314,9 +2378,10 @@ private fun MedicationDataRow(
     }
 
     val rowColor = if (alternate) {
-        MaterialTheme.colorScheme.surfaceVariant.copy(
-            alpha = 0.34f
-        )
+        MaterialTheme.colorScheme
+            .surfaceVariant.copy(
+                alpha = 0.34f
+            )
     } else {
         MaterialTheme.colorScheme.surface
     }
@@ -2330,7 +2395,8 @@ private fun MedicationDataRow(
     }
 
     val doseText = if (
-        record.type == MedicationType.ADULT &&
+        record.type ==
+            MedicationType.ADULT &&
         !record.isSpecialAdult
     ) {
         record.dose
@@ -2340,7 +2406,7 @@ private fun MedicationDataRow(
     }
 
     Row(
-        Modifier
+        modifier = Modifier
             .background(rowColor)
             .combinedClickable(
                 onClick = {},
@@ -2350,39 +2416,60 @@ private fun MedicationDataRow(
             )
             .height(112.dp)
     ) {
-        TableCell(medicationColumns[0].width) {
-            Column {
-                Text(
-                    record.name,
-                    fontWeight = FontWeight.Bold,
+        TableCell(
+            medicationColumns[0].width
+        ) {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(2.dp)
+            ) {
+                OverflowAwareTableText(
+                    text = record.name,
+                    dialogTitle =
+                        "Medicamento",
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight =
+                        FontWeight.Bold
                 )
+
                 if (record.isSpecialAdult) {
                     Text(
                         "Especial",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary
+                        style =
+                            MaterialTheme.typography
+                                .labelSmall,
+                        color =
+                            MaterialTheme.colorScheme
+                                .tertiary
                     )
                 }
+
                 if (record.isInteractiveDose) {
                     Text(
                         "Dosis interactiva",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        style =
+                            MaterialTheme.typography
+                                .labelSmall,
+                        color =
+                            MaterialTheme.colorScheme
+                                .primary
                     )
                 }
             }
         }
 
         TableTextCell(
-            record.presentation,
-            medicationColumns[1].width
+            text = record.presentation,
+            width =
+                medicationColumns[1].width,
+            dialogTitle =
+                "${record.name} · Presentación"
         )
 
         TableCell(
             medicationColumns[2].width,
-            contentAlignment = Alignment.Center
+            contentAlignment =
+                Alignment.Center
         ) {
             if (
                 record.hasValidInteractiveRange()
@@ -2399,71 +2486,94 @@ private fun MedicationDataRow(
                     )
                 )
             } else {
-                Text(
-                    doseText,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
+                OverflowAwareTableText(
+                    text = doseText,
+                    dialogTitle =
+                        "${record.name} · Dosis",
+                    maxLines = 3
                 )
             }
         }
 
         TableTextCell(
-            record.calculatedDose(
+            text = record.calculatedDose(
                 weight = weight,
                 selectedDosePerKg =
                     selectedDose
             ),
-            medicationColumns[3].width,
-            fontWeight = FontWeight.SemiBold
+            width =
+                medicationColumns[3].width,
+            dialogTitle =
+                "${record.name} · Dosis calculada",
+            fontWeight =
+                FontWeight.SemiBold
         )
+
         TableTextCell(
-            record.frequencyPerDay,
-            medicationColumns[4].width
+            text = record.frequencyPerDay,
+            width =
+                medicationColumns[4].width,
+            dialogTitle =
+                "${record.name} · Uso por día"
         )
+
         TableTextCell(
-            record.durationDays.toString(),
-            medicationColumns[5].width
+            text =
+                record.durationDays.toString(),
+            width =
+                medicationColumns[5].width,
+            dialogTitle =
+                "${record.name} · Días",
+            maxLines = 2
         )
+
         TableTextCell(
-            record.family,
-            medicationColumns[6].width
+            text = record.family,
+            width =
+                medicationColumns[6].width,
+            dialogTitle =
+                "${record.name} · Familia"
         )
+
         TableTextCell(
-            record.subgroup.ifBlank { "—" },
-            medicationColumns[7].width
+            text =
+                record.subgroup.ifBlank {
+                    "—"
+                },
+            width =
+                medicationColumns[7].width,
+            dialogTitle =
+                "${record.name} · Subgrupo"
         )
+
         TableTextCell(
-            record.specialties
+            text = record.specialties
                 .joinToString(", ")
-                .ifBlank { "—" },
-            medicationColumns[8].width,
+                .ifBlank {
+                    "—"
+                },
+            width =
+                medicationColumns[8].width,
+            dialogTitle =
+                "${record.name} · Especialidades",
             maxLines = 3
         )
-        TableCell(medicationColumns[9].width) {
-            Column {
-                Text(
-                    record.notes.ifBlank { "—" },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style =
-                        MaterialTheme.typography.bodySmall
-                )
-                if (record.notes.length > 95) {
-                    TextButton(
-                        onClick = {
-                            showNotes = true
-                        },
-                        contentPadding =
-                            PaddingValues(0.dp)
-                    ) {
-                        Text("+ Ver más")
-                    }
-                }
-            }
-        }
+
+        TableTextCell(
+            text = record.notes.ifBlank {
+                "—"
+            },
+            width =
+                medicationColumns[9].width,
+            dialogTitle =
+                "${record.name} · Notas",
+            maxLines = 2
+        )
+
         TableCell(
             medicationColumns[10].width,
-            contentAlignment = Alignment.Center
+            contentAlignment =
+                Alignment.Center
         ) {
             Box {
                 IconButton(
@@ -2473,9 +2583,11 @@ private fun MedicationDataRow(
                 ) {
                     Icon(
                         Icons.Default.MoreVert,
-                        contentDescription = "Opciones"
+                        contentDescription =
+                            "Opciones"
                     )
                 }
+
                 DropdownMenu(
                     expanded = menuOpen,
                     onDismissRequest = {
@@ -2484,7 +2596,9 @@ private fun MedicationDataRow(
                 ) {
                     DropdownMenuItem(
                         text = {
-                            Text("Editar fármaco")
+                            Text(
+                                "Editar fármaco"
+                            )
                         },
                         leadingIcon = {
                             Icon(
@@ -2497,9 +2611,12 @@ private fun MedicationDataRow(
                             onEdit()
                         }
                     )
+
                     DropdownMenuItem(
                         text = {
-                            Text("Eliminar fármaco")
+                            Text(
+                                "Eliminar fármaco"
+                            )
                         },
                         leadingIcon = {
                             Icon(
@@ -2518,31 +2635,6 @@ private fun MedicationDataRow(
     }
 
     HorizontalDivider()
-
-    if (showNotes) {
-        AlertDialog(
-            onDismissRequest = {
-                showNotes = false
-            },
-            title = {
-                Text(
-                    "${record.name} · Notas"
-                )
-            },
-            text = {
-                Text(record.notes)
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showNotes = false
-                    }
-                ) {
-                    Text("Cerrar")
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -2573,18 +2665,153 @@ private fun TableCell(
 }
 
 @Composable
+private fun OverflowAwareTableText(
+    text: String,
+    dialogTitle: String,
+    maxLines: Int = 3,
+    fontWeight: FontWeight? = null
+) {
+    val displayText = text.ifBlank {
+        "—"
+    }
+    var hasOverflow by remember(
+        displayText,
+        maxLines
+    ) {
+        mutableStateOf(false)
+    }
+    var showFullText by remember(
+        displayText,
+        dialogTitle
+    ) {
+        mutableStateOf(false)
+    }
+
+    Column(
+        verticalArrangement =
+            Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = displayText,
+            maxLines = maxLines,
+            overflow =
+                TextOverflow.Ellipsis,
+            style =
+                MaterialTheme.typography
+                    .bodySmall,
+            fontWeight = fontWeight,
+            onTextLayout = {
+                layoutResult ->
+                hasOverflow =
+                    layoutResult
+                        .hasVisualOverflow
+            }
+        )
+
+        if (
+            hasOverflow &&
+            displayText != "—"
+        ) {
+            Text(
+                text = "+ Ver más",
+                style =
+                    MaterialTheme.typography
+                        .labelSmall,
+                fontWeight =
+                    FontWeight.Bold,
+                color =
+                    MaterialTheme.colorScheme
+                        .primary,
+                modifier = Modifier
+                    .clip(
+                        RoundedCornerShape(6.dp)
+                    )
+                    .clickable {
+                        showFullText = true
+                    }
+                    .padding(
+                        horizontal = 3.dp,
+                        vertical = 2.dp
+                    )
+            )
+        }
+    }
+
+    if (showFullText) {
+        TableCellDetailsDialog(
+            title = dialogTitle,
+            text = displayText,
+            onDismiss = {
+                showFullText = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun TableCellDetailsDialog(
+    title: String,
+    text: String,
+    onDismiss: () -> Unit
+) {
+    val configuration =
+        LocalConfiguration.current
+    val maximumTextHeight = (
+        configuration.screenHeightDp.dp *
+            0.55f
+        ).coerceAtLeast(130.dp)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                title,
+                fontWeight =
+                    FontWeight.Black
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(
+                        max = maximumTextHeight
+                    )
+                    .verticalScroll(
+                        rememberScrollState()
+                    )
+            ) {
+                Text(
+                    text = text,
+                    style =
+                        MaterialTheme.typography
+                            .bodyMedium
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cerrar")
+            }
+        }
+    )
+}
+
+@Composable
 private fun TableTextCell(
     text: String,
     width: Dp,
+    dialogTitle: String,
     maxLines: Int = 3,
     fontWeight: FontWeight? = null
 ) {
     TableCell(width) {
-        Text(
-            text.ifBlank { "—" },
+        OverflowAwareTableText(
+            text = text,
+            dialogTitle = dialogTitle,
             maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodySmall,
             fontWeight = fontWeight
         )
     }

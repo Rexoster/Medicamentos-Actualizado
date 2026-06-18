@@ -165,6 +165,10 @@ for token in (
     "private enum class DateOrbitRing",
     "contentType = { _, _ ->",
     "private fun TableCell(",
+    "private fun OverflowAwareTableText(",
+    "private fun TableCellDetailsDialog(",
+    "hasVisualOverflow",
+    "Los encabezados permanecen visibles mientras bajas.",
     "private fun TableTextCell(",
     "private fun EditableSuggestionField(",
     "PopupProperties(",
@@ -231,6 +235,11 @@ for token in (
     "fourParameterHadlockProducesCompositeSecondTrimesterAge",
 ):
     require(ultrasound_test, token, "UltrasoundDatingTest.kt")
+
+if 'item(key = "medication-header")' in app:
+    errors.append(
+        "MedicationHeaderRow todavía se desplaza dentro del LazyColumn."
+    )
 
 if "DatePickerDialog" in app:
     errors.append("App.kt todavía usa el calendario clásico DatePickerDialog.")
