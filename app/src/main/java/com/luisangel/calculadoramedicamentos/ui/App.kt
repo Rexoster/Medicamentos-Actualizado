@@ -4,6 +4,13 @@ import android.graphics.Paint as AndroidPaint
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -34,6 +41,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -61,6 +69,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PregnantWoman
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
@@ -119,6 +133,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -713,90 +728,575 @@ private fun ClinicalInfoSection(
     }
 }
 
-private enum class MainSection(val label: String) {
-    MEDICATIONS("Medicamentos"),
-    PERCENTILES("Percentiles"),
-    OBSTETRICS("Gineco-OB"),
-    RENAL("Renal")
+private enum class MainSection(
+    val label: String,
+    val description: String,
+    val icon: ImageVector
+) {
+    MEDICATIONS(
+        label = "Medicamentos",
+        description = "Consultar y gestionar medicamentos locales",
+        icon = Icons.Default.Medication
+    ),
+    PERCENTILES(
+        label = "Percentiles",
+        description = "Tablas y curvas de crecimiento",
+        icon = Icons.Default.Insights
+    ),
+    OBSTETRICS(
+        label = "Gineco-OB",
+        description = "Herramientas para salud materna",
+        icon = Icons.Default.PregnantWoman
+    ),
+    RENAL(
+        label = "Renal",
+        description = "Cálculos y fórmulas renales",
+        icon = Icons.Default.WaterDrop
+    )
 }
 
 @Composable
 fun CalculatorApp(viewModel: MainViewModel) {
     val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
+
     CalculatorTheme(darkTheme) {
-        ApplicationShell(viewModel, darkTheme)
+        ApplicationShell(
+            viewModel = viewModel,
+            darkTheme = darkTheme
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ApplicationShell(viewModel: MainViewModel, darkTheme: Boolean) {
-    var section by rememberSaveable { mutableStateOf(MainSection.MEDICATIONS) }
-    val snackbarHost = remember { SnackbarHostState() }
+private fun ApplicationShell(
+    viewModel: MainViewModel,
+    darkTheme: Boolean
+) {
+    var section by rememberSaveable {
+        mutableStateOf<MainSection?>(null)
+    }
+    var menuExpanded by rememberSaveable {
+        mutableStateOf(true)
+    }
+
+    val snackbarHost = remember {
+        SnackbarHostState()
+    }
 
     LaunchedEffect(Unit) {
-        viewModel.messages.collectLatest { snackbarHost.showSnackbar(it) }
+        viewModel.messages.collectLatest {
+            snackbarHost.showSnackbar(it)
+        }
     }
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
-            Column {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "Herramientas clínicas",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                "Aplicación nativa · datos locales",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = viewModel::toggleTheme) {
-                            Icon(
-                                imageVector = if (darkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
-                                contentDescription = if (darkTheme) "Cambiar a tema claro" else "Cambiar a tema oscuro"
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                )
-                TabRow(selectedTabIndex = section.ordinal) {
-                    MainSection.entries.forEach { item ->
-                        Tab(
-                            selected = section == item,
-                            onClick = { section = item },
-                            text = { Text(item.label, fontWeight = if (section == item) FontWeight.Bold else FontWeight.Medium) }
+            CenterAlignedTopAppBar(
+                title = {
+                    Column(
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Herramientas clínicas",
+                            maxLines = 1,
+                            overflow =
+                                TextOverflow.Ellipsis
                         )
+                        Text(
+                            "Aplicación nativa · datos locales",
+                            style =
+                                MaterialTheme.typography.labelSmall,
+                            color =
+                                MaterialTheme.colorScheme
+                                    .onPrimaryContainer
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = viewModel::toggleTheme
+                    ) {
+                        Icon(
+                            imageVector = if (darkTheme) {
+                                Icons.Default.DarkMode
+                            } else {
+                                Icons.Default.LightMode
+                            },
+                            contentDescription = if (darkTheme) {
+                                "Cambiar a tema claro"
+                            } else {
+                                "Cambiar a tema oscuro"
+                            }
+                        )
+                    }
+                },
+                colors =
+                    TopAppBarDefaults
+                        .centerAlignedTopAppBarColors(
+                            containerColor =
+                                MaterialTheme.colorScheme
+                                    .primaryContainer,
+                            titleContentColor =
+                                MaterialTheme.colorScheme
+                                    .onPrimaryContainer,
+                            actionIconContentColor =
+                                MaterialTheme.colorScheme
+                                    .onPrimaryContainer
+                        )
+            )
+        },
+        snackbarHost = {
+            SnackbarHost(snackbarHost)
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            AnimatedVisibility(
+                visible = section != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 68.dp)
+                ) {
+                    when (section) {
+                        MainSection.MEDICATIONS ->
+                            MedicationCalculatorScreen(
+                                viewModel = viewModel,
+                                modifier =
+                                    Modifier.fillMaxSize()
+                            )
+
+                        MainSection.PERCENTILES ->
+                            PercentilesScreen(
+                                modifier =
+                                    Modifier.fillMaxSize()
+                            )
+
+                        MainSection.OBSTETRICS ->
+                            ObstetricsScreen(
+                                modifier =
+                                    Modifier.fillMaxSize()
+                            )
+
+                        MainSection.RENAL ->
+                            RenalFunctionScreen(
+                                modifier =
+                                    Modifier.fillMaxSize()
+                            )
+
+                        null -> Unit
                     }
                 }
             }
-        },
-        snackbarHost = { SnackbarHost(snackbarHost) }
-    ) { padding ->
-        when (section) {
-            MainSection.MEDICATIONS -> MedicationCalculatorScreen(
-                viewModel = viewModel,
-                modifier = Modifier.fillMaxSize().padding(padding)
+
+            AnimatedVisibility(
+                visible =
+                    menuExpanded && section != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Color.Black.copy(
+                                alpha = 0.46f
+                            )
+                        )
+                        .clickable {
+                            menuExpanded = false
+                        }
+                )
+            }
+
+            SectionNavigationMenu(
+                expanded = menuExpanded,
+                selectedSection = section,
+                onToggle = {
+                    if (section != null) {
+                        menuExpanded = !menuExpanded
+                    }
+                },
+                onSectionSelected = {
+                    section = it
+                    menuExpanded = false
+                },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
             )
-            MainSection.PERCENTILES -> PercentilesScreen(
-                modifier = Modifier.fillMaxSize().padding(padding)
+        }
+    }
+}
+
+@Composable
+private fun SectionNavigationMenu(
+    expanded: Boolean,
+    selectedSection: MainSection?,
+    onToggle: () -> Unit,
+    onSectionSelected: (MainSection) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(
+        modifier = modifier
+    ) {
+        val expandedButtonWidth = 188.dp
+        val compactButtonWidth = 52.dp
+
+        val buttonWidth by animateDpAsState(
+            targetValue = if (expanded) {
+                expandedButtonWidth
+            } else {
+                compactButtonWidth
+            },
+            label = "sectionMenuWidth"
+        )
+
+        val targetOffset = if (expanded) {
+            (
+                (maxWidth - expandedButtonWidth) /
+                    2
+                ).coerceAtLeast(16.dp)
+        } else {
+            16.dp
+        }
+
+        val buttonOffset by animateDpAsState(
+            targetValue = targetOffset,
+            label = "sectionMenuOffset"
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(),
+            verticalArrangement =
+                Arrangement.spacedBy(10.dp)
+        ) {
+            Spacer(
+                modifier = Modifier.height(8.dp)
             )
-            MainSection.OBSTETRICS -> ObstetricsScreen(
-                modifier = Modifier.fillMaxSize().padding(padding)
+
+            Surface(
+                onClick = onToggle,
+                modifier = Modifier
+                    .offset(x = buttonOffset)
+                    .width(buttonWidth)
+                    .height(50.dp),
+                shape = RoundedCornerShape(18.dp),
+                color =
+                    MaterialTheme.colorScheme
+                        .surfaceContainerHigh,
+                contentColor =
+                    MaterialTheme.colorScheme.primary,
+                border =
+                    androidx.compose.foundation
+                        .BorderStroke(
+                            width = 1.4.dp,
+                            color =
+                                MaterialTheme.colorScheme
+                                    .primary.copy(
+                                        alpha = 0.82f
+                                    )
+                        ),
+                tonalElevation = if (expanded) {
+                    5.dp
+                } else {
+                    2.dp
+                }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 13.dp),
+                    verticalAlignment =
+                        Alignment.CenterVertically,
+                    horizontalArrangement =
+                        Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector =
+                            Icons.Default.Menu,
+                        contentDescription =
+                            "Menú de apartados",
+                        modifier = Modifier.size(27.dp)
+                    )
+
+                    AnimatedVisibility(
+                        visible = expanded,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Row {
+                            Spacer(
+                                modifier =
+                                    Modifier.width(10.dp)
+                            )
+                            Text(
+                                "Menú",
+                                style =
+                                    MaterialTheme.typography
+                                        .titleMedium,
+                                fontWeight =
+                                    FontWeight.Black
+                            )
+                        }
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter =
+                    fadeIn() +
+                        expandVertically(
+                            expandFrom =
+                                Alignment.Top
+                        ),
+                exit =
+                    fadeOut() +
+                        shrinkVertically(
+                            shrinkTowards =
+                                Alignment.Top
+                        )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = 16.dp,
+                            vertical = 2.dp
+                        ),
+                    contentAlignment =
+                        Alignment.TopCenter
+                ) {
+                    SectionMenuPanel(
+                        selectedSection =
+                            selectedSection,
+                        onSectionSelected =
+                            onSectionSelected,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 680.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionMenuPanel(
+    selectedSection: MainSection?,
+    onSectionSelected: (MainSection) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(26.dp),
+        color =
+            MaterialTheme.colorScheme
+                .surfaceContainerHigh,
+        border =
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color =
+                    MaterialTheme.colorScheme
+                        .outlineVariant
+            ),
+        tonalElevation = 8.dp,
+        shadowElevation = 10.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                if (selectedSection == null) {
+                    "Selecciona un apartado para comenzar"
+                } else {
+                    "Cambiar de apartado"
+                },
+                style =
+                    MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color =
+                    MaterialTheme.colorScheme
+                        .onSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 4.dp,
+                        vertical = 2.dp
+                    ),
+                textAlign = TextAlign.Center
             )
-            MainSection.RENAL -> RenalFunctionScreen(
-                modifier = Modifier.fillMaxSize().padding(padding)
+
+            MainSection.entries
+                .chunked(2)
+                .forEach { rowSections ->
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowSections.forEach {
+                            menuSection ->
+                            SectionMenuTile(
+                                section = menuSection,
+                                selected =
+                                    selectedSection ==
+                                        menuSection,
+                                onClick = {
+                                    onSectionSelected(
+                                        menuSection
+                                    )
+                                },
+                                modifier =
+                                    Modifier.weight(1f)
+                            )
+                        }
+
+                        if (rowSections.size == 1) {
+                            Spacer(
+                                modifier =
+                                    Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+        }
+    }
+}
+
+@Composable
+private fun SectionMenuTile(
+    section: MainSection,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme
+            .primaryContainer
+    } else {
+        MaterialTheme.colorScheme
+            .surfaceContainer
+    }
+
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme
+            .onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme
+            .onSurface
+    }
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(156.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        border =
+            androidx.compose.foundation.BorderStroke(
+                width = if (selected) {
+                    1.8.dp
+                } else {
+                    0.8.dp
+                },
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme
+                        .outlineVariant
+                }
+            ),
+        tonalElevation = if (selected) {
+            6.dp
+        } else {
+            1.dp
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(13.dp),
+            horizontalAlignment =
+                Alignment.CenterHorizontally,
+            verticalArrangement =
+                Arrangement.SpaceBetween
+        ) {
+            Surface(
+                shape =
+                    RoundedCornerShape(999.dp),
+                color =
+                    MaterialTheme.colorScheme
+                        .secondaryContainer,
+                contentColor =
+                    MaterialTheme.colorScheme
+                        .onSecondaryContainer
+            ) {
+                Icon(
+                    imageVector = section.icon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .size(31.dp)
+                )
+            }
+
+            Column(
+                horizontalAlignment =
+                    Alignment.CenterHorizontally,
+                verticalArrangement =
+                    Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    section.label,
+                    style =
+                        MaterialTheme.typography
+                            .titleMedium,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow =
+                        TextOverflow.Ellipsis
+                )
+                Text(
+                    section.description,
+                    style =
+                        MaterialTheme.typography
+                            .labelSmall,
+                    color =
+                        contentColor.copy(
+                            alpha = 0.76f
+                        ),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow =
+                        TextOverflow.Ellipsis
+                )
+            }
+
+            Icon(
+                imageVector =
+                    Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint =
+                    MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
             )
         }
     }

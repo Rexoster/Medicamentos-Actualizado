@@ -137,6 +137,14 @@ for token in (
 
 for token in (
     "MainSection.RENAL",
+    "mutableStateOf<MainSection?>(null)",
+    "private fun SectionNavigationMenu(",
+    "private fun SectionMenuPanel(",
+    "private fun SectionMenuTile(",
+    "animateDpAsState(",
+    "sectionMenuOffset",
+    "Selecciona un apartado para comenzar",
+    "Cambiar de apartado",
     "private fun RenalFunctionScreen(",
     "private fun KidneyRiskGrid(",
     "Dos ruedas independientes",
@@ -340,6 +348,16 @@ for token in (
 if "CalendarMonthGrid(" in app or "CalendarWeekHeader(" in app:
     errors.append(
         "App.kt todavía contiene el calendario mensual convencional."
+    )
+
+if "TabRow(selectedTabIndex = section.ordinal)" in app:
+    errors.append(
+        "ApplicationShell todavía contiene la barra fija de apartados."
+    )
+
+if 'var section by rememberSaveable { mutableStateOf(MainSection.MEDICATIONS) }' in app:
+    errors.append(
+        "La aplicación todavía inicia directamente en Medicamentos."
     )
 
 # La variante debe seguir siendo local.
