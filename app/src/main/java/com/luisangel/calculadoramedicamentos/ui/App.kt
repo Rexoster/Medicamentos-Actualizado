@@ -2347,6 +2347,69 @@ private fun InteractiveDoseWheel(
     }
 }
 
+private fun MedicationRecord.formattedDoseForTable(): String {
+    val cleanDose = dose.trim()
+    val cleanUnit = doseUnit.trim()
+
+    if (
+        type != MedicationType.ADULT ||
+        isSpecialAdult
+    ) {
+        val value = dosePerKg
+            ?.let(::formatDoseValue)
+            .orEmpty()
+
+        return when {
+            value.isBlank() &&
+                cleanUnit.isBlank() -> "—"
+
+            cleanUnit.isBlank() ->
+                "$value/kg"
+
+            else ->
+                "$value $cleanUnit/kg"
+        }
+    }
+
+    if (cleanDose.isBlank()) {
+        return cleanUnit.ifBlank {
+            "—"
+        }
+    }
+
+    if (cleanUnit.isBlank()) {
+        return cleanDose
+    }
+
+    val unitPattern = Regex(
+        pattern = (
+            "(^|[^\\p{L}\\p{N}])" +
+                Regex.escape(cleanUnit) +
+                "(?:/kg)?" +
+                "($|[^\\p{L}\\p{N}])"
+            ),
+        option = RegexOption.IGNORE_CASE
+    )
+
+    if (unitPattern.containsMatchIn(cleanDose)) {
+        return cleanDose
+    }
+
+    val isSimpleNumericDose = Regex(
+        pattern = (
+            "^[0-9]+(?:[.,][0-9]+)?" +
+                "(?:\\s*[-–]\\s*" +
+                "[0-9]+(?:[.,][0-9]+)?)?$"
+            )
+    ).matches(cleanDose)
+
+    return if (isSimpleNumericDose) {
+        "$cleanDose $cleanUnit"
+    } else {
+        "$cleanDose · Unidad: $cleanUnit"
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MedicationDataRow(
@@ -2394,16 +2457,8 @@ private fun MedicationDataRow(
         record.dosePerKg
     }
 
-    val doseText = if (
-        record.type ==
-            MedicationType.ADULT &&
-        !record.isSpecialAdult
-    ) {
-        record.dose
-    } else {
-        "${record.dosePerKg ?: ""} " +
-            "${record.doseUnit}/kg"
-    }
+    val doseText =
+        record.formattedDoseForTable()
 
     Row(
         modifier = Modifier

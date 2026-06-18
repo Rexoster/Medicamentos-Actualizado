@@ -1,0 +1,13 @@
+VERIFICACIÓN V21.2
+
+- Dosis numérica con unidad: correcto.
+- Rangos numéricos con unidad: correcto.
+- Unidad ya escrita sin duplicación: correcto.
+- Dosis textual con unidad visible: correcto.
+- Dosis por kilogramo conservada: correcto.
+- Dosis interactiva conservada: correcto.
+- Encabezado fijo v21.1 conservado: correcto.
+- Ver más condicional conservado: correcto.
+- Preflight: correcto.
+
+GitHub Actions realizará la compilación Android definitiva.
