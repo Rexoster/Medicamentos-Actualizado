@@ -41,6 +41,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Compilar y probar
+        env:
+          APP_UPDATE_REPOSITORY: ${{ github.repository }}
         run: ./gradlew testDebugUnitTest assembleDebug --build-cache --no-parallel --stacktrace --warning-mode all
 
       - name: Publicar APK

@@ -109,14 +109,29 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          APP_UPDATE_REPOSITORY: ${{ github.repository }}
         run: ./gradlew testDebugUnitTest assembleRelease bundleRelease --build-cache --no-parallel --stacktrace --warning-mode all
 
-      - name: Renombrar archivos
+      - name: Renombrar archivos y manifiesto de actualización
         run: |
-          cp app/build/outputs/apk/release/app-release.apk \
-            "HerramientasClinicas-${APP_VERSION_NAME}.apk"
-          cp app/build/outputs/bundle/release/app-release.aab \
-            "HerramientasClinicas-${APP_VERSION_NAME}.aab"
+          APK_NAME="HerramientasClinicas-${APP_VERSION_NAME}.apk"
+          AAB_NAME="HerramientasClinicas-${APP_VERSION_NAME}.aab"
+          RELEASE_TAG="v${APP_VERSION_NAME}"
+          APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${APK_NAME}"
+
+          cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          cp app/build/outputs/bundle/release/app-release.aab "$AAB_NAME"
+
+          cat > update.json <<JSON
+          {
+            "versionCode": ${APP_VERSION_CODE},
+            "versionName": "${APP_VERSION_NAME}",
+            "apkUrl": "${APK_URL}",
+            "apkFileName": "${APK_NAME}",
+            "releaseUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}",
+            "notes": "Actualización firmada. Puede instalarse desde la aplicación sin descargar manualmente desde GitHub."
+          }
+          JSON
 
       - name: Publicar artefactos
         uses: actions/upload-artifact@v4
@@ -125,6 +140,7 @@ jobs:
           path: |
             HerramientasClinicas-${{ env.APP_VERSION_NAME }}.apk
             HerramientasClinicas-${{ env.APP_VERSION_NAME }}.aab
+            update.json
           if-no-files-found: error
 
       - name: Crear versión descargable en GitHub
@@ -134,5 +150,6 @@ jobs:
           gh release create "v${APP_VERSION_NAME}" \
             "HerramientasClinicas-${APP_VERSION_NAME}.apk" \
             "HerramientasClinicas-${APP_VERSION_NAME}.aab" \
+            "update.json" \
             --title "Herramientas Clínicas ${APP_VERSION_NAME}" \
-            --notes "Actualización firmada. Puede instalarse sobre una versión anterior firmada con la misma clave."
+            --notes "Actualización firmada. Puede instalarse desde la app o sobre una versión anterior firmada con la misma clave."
