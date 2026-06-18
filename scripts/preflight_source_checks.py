@@ -351,6 +351,42 @@ for token in (
 ):
     require(renal_test, token, "RenalEngineTest.kt")
 
+gestogram_start = app.find(
+    "private fun GestogramWheel("
+)
+date_orbit_start = app.find(
+    "private fun DateOrbitWheel("
+)
+
+if gestogram_start == -1 or date_orbit_start == -1:
+    errors.append(
+        "No se localizaron GestogramWheel y DateOrbitWheel."
+    )
+else:
+    gestogram_block = app[
+        gestogram_start:date_orbit_start
+    ]
+
+    for forbidden_token in (
+        "activeRing ==",
+        "ringInteraction *",
+    ):
+        if forbidden_token in gestogram_block:
+            errors.append(
+                "GestogramWheel contiene una variable "
+                f"fuera de alcance: {forbidden_token}"
+            )
+
+    for required_token in (
+        "gestogramInteraction * 0.025f",
+        "val outline = MaterialTheme.colorScheme.outlineVariant",
+    ):
+        if required_token not in gestogram_block:
+            errors.append(
+                "GestogramWheel no contiene: "
+                f"{required_token}"
+            )
+
 if 'color = primary.copy(alpha = 0.82f)' in app:
     errors.append(
         "App.kt todavía contiene el aro azul de interacción."

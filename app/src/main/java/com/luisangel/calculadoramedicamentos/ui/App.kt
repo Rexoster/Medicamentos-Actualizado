@@ -2785,6 +2785,7 @@ private fun GestogramWheel(
     val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
     val surface = MaterialTheme.colorScheme.surface
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val outline = MaterialTheme.colorScheme.outlineVariant
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val error = MaterialTheme.colorScheme.error
@@ -2976,14 +2977,7 @@ private fun GestogramWheel(
                 style = Stroke(
                     width = monthStroke * (
                         1f +
-                            if (
-                                activeRing ==
-                                    DateOrbitRing.MONTH
-                            ) {
-                                ringInteraction * 0.035f
-                            } else {
-                                0f
-                            }
+                            gestogramInteraction * 0.025f
                         ),
                     cap = StrokeCap.Butt
                 )
@@ -5308,7 +5302,6 @@ private fun DateOrbitWheel(
     val secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
     val surface = MaterialTheme.colorScheme.surface
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    val outline = MaterialTheme.colorScheme.outlineVariant
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -5530,7 +5523,17 @@ private fun DateOrbitWheel(
                 topLeft = topLeft,
                 size = arcSize,
                 style = Stroke(
-                    width = monthStroke,
+                    width = monthStroke * (
+                        1f +
+                            if (
+                                activeRing ==
+                                    DateOrbitRing.MONTH
+                            ) {
+                                ringInteraction * 0.035f
+                            } else {
+                                0f
+                            }
+                        ),
                     cap = StrokeCap.Butt
                 )
             )
