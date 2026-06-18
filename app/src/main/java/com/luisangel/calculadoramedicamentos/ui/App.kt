@@ -141,6 +141,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -2720,8 +2721,14 @@ private fun ObstetricCalculatorMenu(
 ) {
     OutlinedCard(modifier) {
         Column(
-            Modifier.fillMaxSize().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(
+                    rememberScrollState()
+                )
+                .padding(10.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 "Menú",
@@ -2795,18 +2802,32 @@ private fun GestationalAgeCalculator() {
         )
     }
     var reference by rememberSaveable {
-        mutableStateOf(LocalDate.now().toString())
+        mutableStateOf(
+            LocalDate.now().toString()
+        )
     }
 
+    val configuration =
+        LocalConfiguration.current
+    val screenIsLandscape =
+        configuration.screenWidthDp >
+            configuration.screenHeightDp
+    val compactHeight =
+        configuration.screenHeightDp < 560
+
     val lmpDate = remember(lmp) {
-        runCatching { LocalDate.parse(lmp) }
-            .getOrElse {
-                LocalDate.now().minusWeeks(20)
-            }
+        runCatching {
+            LocalDate.parse(lmp)
+        }.getOrElse {
+            LocalDate.now().minusWeeks(20)
+        }
     }
     val referenceDate = remember(reference) {
-        runCatching { LocalDate.parse(reference) }
-            .getOrElse { LocalDate.now() }
+        runCatching {
+            LocalDate.parse(reference)
+        }.getOrElse {
+            LocalDate.now()
+        }
     }
 
     val totalDays = ChronoUnit.DAYS
@@ -2818,37 +2839,68 @@ private fun GestationalAgeCalculator() {
 
     CalculatorCard(
         title = "Gestograma",
-        note = (
-            "Rueda obstétrica interactiva inspirada en el gestograma clásico. " +
-                "Arrastra la rueda para ajustar la FUM, escribe la fecha o " +
-                "selecciónala en el calendario."
-            )
+        note = if (
+            screenIsLandscape &&
+            compactHeight
+        ) {
+            "Ajusta la FUM con la rueda, el campo o el calendario."
+        } else {
+            (
+                "Rueda obstétrica interactiva inspirada en el gestograma clásico. " +
+                    "Arrastra la rueda para ajustar la FUM, escribe la fecha o " +
+                    "selecciónala en el calendario."
+                )
+        }
     ) {
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth()
         ) {
-            val wideLayout = maxWidth >= 760.dp
+            val sideBySide = (
+                screenIsLandscape &&
+                    maxWidth >= 560.dp
+                ) || maxWidth >= 900.dp
 
-            if (wideLayout) {
+            if (sideBySide) {
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    verticalAlignment = Alignment.Top
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(
+                            if (compactHeight) {
+                                8.dp
+                            } else {
+                                18.dp
+                            }
+                        ),
+                    verticalAlignment =
+                        Alignment.Top
                 ) {
                     GestogramWheelPanel(
                         lmpDate = lmpDate,
-                        referenceDate = referenceDate,
+                        referenceDate =
+                            referenceDate,
                         dueDate = dueDate,
-                        gestationalDays = totalDays.toInt(),
+                        gestationalDays =
+                            totalDays.toInt(),
                         onLmpDateChange = {
                             lmp = it.toString()
                         },
-                        modifier = Modifier.weight(1.12f)
+                        compactHeight =
+                            compactHeight,
+                        landscape = true,
+                        modifier = Modifier.weight(
+                            if (compactHeight) {
+                                0.92f
+                            } else {
+                                1.08f
+                            }
+                        )
                     )
 
                     GestogramControls(
                         lmpDate = lmpDate,
-                        referenceDate = referenceDate,
+                        referenceDate =
+                            referenceDate,
                         dueDate = dueDate,
                         weeks = weeks,
                         days = days,
@@ -2856,30 +2908,55 @@ private fun GestationalAgeCalculator() {
                             lmp = it.toString()
                         },
                         onReferenceDate = {
-                            reference = it.toString()
+                            reference =
+                                it.toString()
                         },
-                        modifier = Modifier.weight(0.88f)
+                        compactHeight =
+                            compactHeight,
+                        modifier = Modifier.weight(
+                            if (compactHeight) {
+                                1.08f
+                            } else {
+                                0.92f
+                            }
+                        )
                     )
                 }
             } else {
                 Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            if (compactHeight) {
+                                8.dp
+                            } else {
+                                14.dp
+                            }
+                        )
                 ) {
                     GestogramWheelPanel(
                         lmpDate = lmpDate,
-                        referenceDate = referenceDate,
+                        referenceDate =
+                            referenceDate,
                         dueDate = dueDate,
-                        gestationalDays = totalDays.toInt(),
+                        gestationalDays =
+                            totalDays.toInt(),
                         onLmpDateChange = {
                             lmp = it.toString()
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        compactHeight =
+                            compactHeight,
+                        landscape =
+                            screenIsLandscape,
+                        modifier =
+                            Modifier.fillMaxWidth()
                     )
 
                     GestogramControls(
                         lmpDate = lmpDate,
-                        referenceDate = referenceDate,
+                        referenceDate =
+                            referenceDate,
                         dueDate = dueDate,
                         weeks = weeks,
                         days = days,
@@ -2887,9 +2964,13 @@ private fun GestationalAgeCalculator() {
                             lmp = it.toString()
                         },
                         onReferenceDate = {
-                            reference = it.toString()
+                            reference =
+                                it.toString()
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        compactHeight =
+                            compactHeight,
+                        modifier =
+                            Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -2904,77 +2985,221 @@ private fun GestogramWheelPanel(
     dueDate: LocalDate,
     gestationalDays: Int,
     onLmpDateChange: (LocalDate) -> Unit,
+    compactHeight: Boolean = false,
+    landscape: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val configuration =
+        LocalConfiguration.current
+
     OutlinedCard(
         modifier = modifier,
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
+        colors =
+            CardDefaults.outlinedCardColors(
+                containerColor =
+                    MaterialTheme.colorScheme
+                        .surfaceContainer
+            )
     ) {
         Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(
+                    if (compactHeight) {
+                        8.dp
+                    } else {
+                        12.dp
+                    }
+                ),
+            verticalArrangement =
+                Arrangement.spacedBy(
+                    if (compactHeight) {
+                        6.dp
+                    } else {
+                        9.dp
+                    }
+                ),
+            horizontalAlignment =
+                Alignment.CenterHorizontally
         ) {
             Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+                verticalAlignment =
+                    Alignment.CenterVertically
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
                         "Rueda gestacional",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black
+                        style = if (
+                            compactHeight
+                        ) {
+                            MaterialTheme.typography
+                                .titleSmall
+                        } else {
+                            MaterialTheme.typography
+                                .titleMedium
+                        },
+                        fontWeight =
+                            FontWeight.Black,
+                        maxLines = 1,
+                        overflow =
+                            TextOverflow.Ellipsis
                     )
                     Text(
-                        "Desliza en círculo para modificar la FUM",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        if (compactHeight) {
+                            "Gira para modificar la FUM"
+                        } else {
+                            "Desliza en círculo para modificar la FUM"
+                        },
+                        style =
+                            MaterialTheme.typography
+                                .labelSmall,
+                        color =
+                            MaterialTheme.colorScheme
+                                .onSurfaceVariant,
+                        maxLines = 1,
+                        overflow =
+                            TextOverflow.Ellipsis
                     )
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    shape =
+                        RoundedCornerShape(999.dp),
+                    color =
+                        MaterialTheme.colorScheme
+                            .primaryContainer
                 ) {
                     Text(
-                        "${gestationalDays.coerceAtLeast(0) / 7} + " +
-                            "${gestationalDays.coerceAtLeast(0) % 7}",
+                        (
+                            "${gestationalDays.coerceAtLeast(0) / 7} + " +
+                                "${gestationalDays.coerceAtLeast(0) % 7}"
+                            ),
                         modifier = Modifier.padding(
-                            horizontal = 11.dp,
-                            vertical = 6.dp
+                            horizontal =
+                                if (compactHeight) {
+                                    8.dp
+                                } else {
+                                    11.dp
+                                },
+                            vertical =
+                                if (compactHeight) {
+                                    4.dp
+                                } else {
+                                    6.dp
+                                }
                         ),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Black
+                        color =
+                            MaterialTheme.colorScheme
+                                .onPrimaryContainer,
+                        style =
+                            MaterialTheme.typography
+                                .labelLarge,
+                        fontWeight =
+                            FontWeight.Black
                     )
                 }
             }
 
             BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier.fillMaxWidth(),
+                contentAlignment =
+                    Alignment.Center
             ) {
-                val wheelSize = maxWidth
-                    .coerceAtMost(560.dp)
-                    .coerceAtLeast(280.dp)
+                val screenHeight =
+                    configuration.screenHeightDp.dp
+
+                val heightBudget = if (
+                    landscape
+                ) {
+                    (
+                        screenHeight -
+                            if (compactHeight) {
+                                178.dp
+                            } else {
+                                238.dp
+                            }
+                        ).coerceAtLeast(
+                        if (compactHeight) {
+                            138.dp
+                        } else {
+                            190.dp
+                        }
+                    )
+                } else {
+                    maxWidth
+                }
+
+                val availableSize = minOf(
+                    maxWidth,
+                    heightBudget
+                )
+
+                val maximumSize = when {
+                    landscape &&
+                        compactHeight -> 270.dp
+
+                    landscape -> 430.dp
+
+                    else -> 560.dp
+                }
+
+                val minimumSize = when {
+                    landscape &&
+                        compactHeight -> 138.dp
+
+                    landscape -> 190.dp
+
+                    else -> 220.dp
+                }
+
+                val wheelSize = availableSize
+                    .coerceAtMost(maximumSize)
+                    .coerceAtLeast(
+                        minimumSize.coerceAtMost(
+                            availableSize
+                        )
+                    )
 
                 GestogramWheel(
                     lmpDate = lmpDate,
-                    referenceDate = referenceDate,
+                    referenceDate =
+                        referenceDate,
                     dueDate = dueDate,
-                    gestationalDays = gestationalDays,
-                    onLmpDateChange = onLmpDateChange,
-                    modifier = Modifier.size(wheelSize)
+                    gestationalDays =
+                        gestationalDays,
+                    onLmpDateChange =
+                        onLmpDateChange,
+                    modifier =
+                        Modifier.size(wheelSize)
                 )
             }
 
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                modifier =
+                    Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.spacedBy(
+                        if (compactHeight) {
+                            5.dp
+                        } else {
+                            7.dp
+                        }
+                    ),
+                verticalArrangement =
+                    Arrangement.spacedBy(
+                        if (compactHeight) {
+                            4.dp
+                        } else {
+                            7.dp
+                        }
+                    )
             ) {
                 AssistChip(
                     onClick = {
@@ -2982,28 +3207,59 @@ private fun GestogramWheelPanel(
                             lmpDate.minusDays(7)
                         )
                     },
-                    label = { Text("− 1 semana") }
+                    label = {
+                        Text(
+                            if (compactHeight) {
+                                "−1 sem"
+                            } else {
+                                "− 1 semana"
+                            }
+                        )
+                    }
                 )
                 AssistChip(
                     onClick = {
-                        val candidate = lmpDate.plusDays(7)
+                        val candidate =
+                            lmpDate.plusDays(7)
+
                         onLmpDateChange(
-                            if (candidate.isAfter(referenceDate)) {
+                            if (
+                                candidate.isAfter(
+                                    referenceDate
+                                )
+                            ) {
                                 referenceDate
                             } else {
                                 candidate
                             }
                         )
                     },
-                    label = { Text("+ 1 semana") }
+                    label = {
+                        Text(
+                            if (compactHeight) {
+                                "+1 sem"
+                            } else {
+                                "+ 1 semana"
+                            }
+                        )
+                    }
                 )
                 AssistChip(
                     onClick = {
                         onLmpDateChange(
-                            referenceDate.minusWeeks(20)
+                            referenceDate
+                                .minusWeeks(20)
                         )
                     },
-                    label = { Text("Centrar en 20 semanas") }
+                    label = {
+                        Text(
+                            if (compactHeight) {
+                                "20 semanas"
+                            } else {
+                                "Centrar en 20 semanas"
+                            }
+                        )
+                    }
                 )
             }
         }
@@ -3018,7 +3274,7 @@ private fun rememberCombinationDialTick(): () -> Unit {
     val soundPool = remember {
         val attributes = AudioAttributes.Builder()
             .setUsage(
-                AudioAttributes.USAGE_ASSISTANCE_SONIFICATION
+                AudioAttributes.USAGE_MEDIA
             )
             .setContentType(
                 AudioAttributes.CONTENT_TYPE_SONIFICATION
@@ -3026,41 +3282,99 @@ private fun rememberCombinationDialTick(): () -> Unit {
             .build()
 
         SoundPool.Builder()
-            .setMaxStreams(2)
+            .setMaxStreams(3)
             .setAudioAttributes(attributes)
             .build()
     }
 
-    val soundId = remember(
+    var soundId by remember {
+        mutableStateOf(0)
+    }
+    var soundLoaded by remember {
+        mutableStateOf(false)
+    }
+    var pendingPlay by remember {
+        mutableStateOf(false)
+    }
+    var lastPlayAt by remember {
+        mutableStateOf(0L)
+    }
+
+    DisposableEffect(
         soundPool,
         context
     ) {
-        soundPool.load(
+        soundPool.setOnLoadCompleteListener {
+                _,
+                loadedSampleId,
+                status ->
+
+            if (
+                loadedSampleId == soundId &&
+                status == 0
+            ) {
+                soundLoaded = true
+
+                if (pendingPlay) {
+                    soundPool.play(
+                        loadedSampleId,
+                        0.72f,
+                        0.72f,
+                        2,
+                        0,
+                        1f
+                    )
+                    pendingPlay = false
+                    lastPlayAt =
+                        android.os.SystemClock
+                            .elapsedRealtime()
+                }
+            }
+        }
+
+        soundLoaded = false
+        pendingPlay = false
+        soundId = soundPool.load(
             context,
             R.raw.combination_dial_tick,
             1
         )
-    }
 
-    DisposableEffect(soundPool) {
         onDispose {
             soundPool.release()
         }
     }
 
-    return remember(
-        soundPool,
+    val currentSoundId by rememberUpdatedState(
         soundId
-    ) {
+    )
+    val currentSoundLoaded by rememberUpdatedState(
+        soundLoaded
+    )
+
+    return remember(soundPool) {
         {
-            soundPool.play(
-                soundId,
-                0.16f,
-                0.16f,
-                1,
-                0,
-                1f
-            )
+            val now = android.os.SystemClock
+                .elapsedRealtime()
+
+            if (now - lastPlayAt >= 28L) {
+                if (
+                    currentSoundLoaded &&
+                    currentSoundId != 0
+                ) {
+                    soundPool.play(
+                        currentSoundId,
+                        0.72f,
+                        0.72f,
+                        2,
+                        0,
+                        1f
+                    )
+                    lastPlayAt = now
+                } else {
+                    pendingPlay = true
+                }
+            }
         }
     }
 }
@@ -3753,14 +4067,23 @@ private fun GestogramControls(
     days: Long,
     onLmpDate: (LocalDate) -> Unit,
     onReferenceDate: (LocalDate) -> Unit,
+    compactHeight: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement =
+            Arrangement.spacedBy(
+                if (compactHeight) {
+                    8.dp
+                } else {
+                    12.dp
+                }
+            )
     ) {
         EditableDateInput(
-            label = "Fecha de última menstruación",
+            label =
+                "Fecha de última menstruación",
             date = lmpDate,
             onDate = onLmpDate,
             maxDate = referenceDate
@@ -3771,7 +4094,8 @@ private fun GestogramControls(
             date = referenceDate,
             onDate = onReferenceDate,
             minDate = lmpDate,
-            maxDate = LocalDate.now().plusDays(1)
+            maxDate =
+                LocalDate.now().plusDays(1)
         )
 
         GestogramSummaryCard(
@@ -3779,14 +4103,26 @@ private fun GestogramControls(
             dueDate = dueDate,
             referenceDate = referenceDate,
             weeks = weeks,
-            days = days
+            days = days,
+            compactHeight =
+                compactHeight
         )
 
         Text(
-            "La FPP se calcula a 280 días desde la FUM. " +
-                "Confirma o redatá con ultrasonido cuando corresponda.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            if (compactHeight) {
+                "FPP = FUM + 280 días. Confirma con ultrasonido cuando corresponda."
+            } else {
+                (
+                    "La FPP se calcula a 280 días desde la FUM. " +
+                        "Confirma o redatá con ultrasonido cuando corresponda."
+                    )
+            },
+            style =
+                MaterialTheme.typography
+                    .labelSmall,
+            color =
+                MaterialTheme.colorScheme
+                    .onSurfaceVariant
         )
     }
 }
@@ -3797,7 +4133,8 @@ private fun GestogramSummaryCard(
     dueDate: LocalDate,
     referenceDate: LocalDate,
     weeks: Long,
-    days: Long
+    days: Long,
+    compactHeight: Boolean = false
 ) {
     val displayFormatter = remember {
         DateTimeFormatter.ofPattern(
@@ -3807,30 +4144,49 @@ private fun GestogramSummaryCard(
     }
 
     OutlinedCard(
-        colors = CardDefaults.outlinedCardColors(
-            containerColor =
-                MaterialTheme.colorScheme.primaryContainer.copy(
-                    alpha = 0.42f
-                )
-        )
+        colors =
+            CardDefaults.outlinedCardColors(
+                containerColor =
+                    MaterialTheme.colorScheme
+                        .primaryContainer
+                        .copy(alpha = 0.42f)
+            )
     ) {
         Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(
+                    if (compactHeight) {
+                        10.dp
+                    } else {
+                        14.dp
+                    }
+                ),
+            verticalArrangement =
+                Arrangement.spacedBy(
+                    if (compactHeight) {
+                        6.dp
+                    } else {
+                        10.dp
+                    }
+                )
         ) {
             GestogramSummaryRow(
                 label = "FUM",
-                value = lmpDate.format(displayFormatter)
+                value = lmpDate.format(
+                    displayFormatter
+                )
             )
             GestogramSummaryRow(
                 label = "Parto",
-                value = dueDate.format(displayFormatter)
+                value = dueDate.format(
+                    displayFormatter
+                )
             )
             GestogramSummaryRow(
                 label = "Tienes",
-                value = "$weeks semanas + $days días",
+                value =
+                    "$weeks semanas + $days días",
                 emphasize = true
             )
             GestogramSummaryRow(

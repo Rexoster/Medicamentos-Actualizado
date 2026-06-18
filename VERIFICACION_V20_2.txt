@@ -1,0 +1,14 @@
+VERIFICACIÓN V20.2
+
+- Orientación detectada con LocalConfiguration: correcta.
+- Gestograma en dos columnas al rotar: correcto.
+- Tamaño de rueda basado en ancho y altura: correcto.
+- Modo compacto para poca altura: correcto.
+- Controles FUM compactos: correctos.
+- Resumen FUM compacto: correcto.
+- Submenú Gineco-OB desplazable: correcto.
+- Sonido mecánico v20.1 conservado: correcto.
+- Calendario de selección FUM v20 conservado: correcto.
+- Preflight: correcto.
+
+GitHub Actions realizará la compilación Android definitiva.

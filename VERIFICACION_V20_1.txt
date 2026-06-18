@@ -1,0 +1,14 @@
+VERIFICACIÓN V20.1
+
+- Espera de carga de SoundPool: correcta.
+- Reproducción pendiente: incluida.
+- Canal multimedia: correcto.
+- Volumen: 0.72.
+- Intervalo mínimo entre clics: 28 ms.
+- WAV mono PCM de 16 bits: correcto.
+- Frecuencia: 44100 Hz.
+- Duración: 0.078 segundos.
+- Tamaño: 6922 bytes.
+- Preflight: correcto.
+
+GitHub Actions realizará la compilación Android definitiva.

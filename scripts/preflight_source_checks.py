@@ -144,6 +144,12 @@ for token in (
     "wideCompactLayout",
     "verticalScroll(",
     "private fun rememberCombinationDialTick()",
+    "AudioAttributes.USAGE_MEDIA",
+    "setOnLoadCompleteListener",
+    "soundLoaded",
+    "pendingPlay",
+    "currentSoundLoaded",
+    "0.72f",
     "R.raw.combination_dial_tick",
     "val landscape =",
     "Cada avance produce un clic mecánico discreto.",
@@ -179,6 +185,13 @@ for token in (
     "Dosis interactiva por rango",
     "private fun GestogramWheel(",
     "private fun GestogramWheelPanel(",
+    "LocalConfiguration.current",
+    "screenIsLandscape",
+    "compactHeight",
+    "heightBudget",
+    "availableSize",
+    "landscape: Boolean = false",
+    "compactHeight: Boolean = false",
     "private fun EditableDateInput(",
     "private fun GestogramSummaryCard(",
     "Desliza en círculo para modificar la FUM",
@@ -230,6 +243,14 @@ if not DIAL_SOUND_PATH.exists():
 elif DIAL_SOUND_PATH.stat().st_size < 500:
     errors.append(
         "El sonido local de la rueda parece estar vacío."
+    )
+
+if "val wheelSize = maxWidth" in app[
+    app.find("private fun GestogramWheelPanel("):
+    app.find("private fun rememberCombinationDialTick()")
+]:
+    errors.append(
+        "GestogramWheelPanel todavía calcula la rueda solo con el ancho."
     )
 
 if "Modifier.height(500.dp)" in app:
