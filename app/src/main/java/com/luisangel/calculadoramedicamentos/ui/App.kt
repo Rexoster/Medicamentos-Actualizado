@@ -1957,10 +1957,7 @@ private val medicationColumns = listOf(
     MedicationColumn("Dosis calculada", 170.dp),
     MedicationColumn("Uso por día", 190.dp),
     MedicationColumn("Días", 90.dp),
-    MedicationColumn("Familia", 190.dp),
-    MedicationColumn("Subgrupo", 170.dp),
-    MedicationColumn("Especialidades", 300.dp),
-    MedicationColumn("Notas", 330.dp),
+    MedicationColumn("Notas", 360.dp),
     MedicationColumn("Opciones", 90.dp)
 )
 
@@ -2017,7 +2014,7 @@ private fun MedicationTable(
                             FontWeight.Bold
                     )
                     Text(
-                        "Los encabezados permanecen visibles mientras bajas. Desliza horizontalmente para consultar las columnas.",
+                        "Los encabezados permanecen visibles mientras bajas. La tabla muestra solo datos clínicos; familia, subgrupo y especialidades siguen disponibles en filtros.",
                         style =
                             MaterialTheme.typography
                                 .labelSmall,
@@ -2594,50 +2591,18 @@ private fun MedicationDataRow(
         )
 
         TableTextCell(
-            text = record.family,
-            width =
-                medicationColumns[6].width,
-            dialogTitle =
-                "${record.name} · Familia"
-        )
-
-        TableTextCell(
-            text =
-                record.subgroup.ifBlank {
-                    "—"
-                },
-            width =
-                medicationColumns[7].width,
-            dialogTitle =
-                "${record.name} · Subgrupo"
-        )
-
-        TableTextCell(
-            text = record.specialties
-                .joinToString(", ")
-                .ifBlank {
-                    "—"
-                },
-            width =
-                medicationColumns[8].width,
-            dialogTitle =
-                "${record.name} · Especialidades",
-            maxLines = 3
-        )
-
-        TableTextCell(
             text = record.notes.ifBlank {
                 "—"
             },
             width =
-                medicationColumns[9].width,
+                medicationColumns[6].width,
             dialogTitle =
                 "${record.name} · Notas",
             maxLines = 2
         )
 
         TableCell(
-            medicationColumns[10].width,
+            medicationColumns[7].width,
             contentAlignment =
                 Alignment.Center
         ) {

@@ -179,7 +179,7 @@ for token in (
     "· Unidad:",
     "private fun TableCellDetailsDialog(",
     "hasVisualOverflow",
-    "Los encabezados permanecen visibles mientras bajas.",
+    "La tabla muestra solo datos clínicos",
     "private fun TableTextCell(",
     "private fun EditableSuggestionField(",
     "PopupProperties(",
@@ -246,6 +246,56 @@ for token in (
     "fourParameterHadlockProducesCompositeSecondTrimesterAge",
 ):
     require(ultrasound_test, token, "UltrasoundDatingTest.kt")
+
+table_columns_start = app.find("private val medicationColumns = listOf(")
+table_columns_end = app.find(")\n\n@Composable\nprivate fun MedicationTable(", table_columns_start)
+
+if table_columns_start == -1 or table_columns_end == -1:
+    errors.append("No se encontró medicationColumns.")
+else:
+    medication_columns_block = app[table_columns_start:table_columns_end]
+    for removed_column in (
+        'MedicationColumn("Familia"',
+        'MedicationColumn("Subgrupo"',
+        'MedicationColumn("Especialidades"',
+    ):
+        if removed_column in medication_columns_block:
+            errors.append(
+                f"La tabla todavía contiene columna no necesaria: {removed_column}"
+            )
+
+    expected_visible_columns = (
+        'MedicationColumn("Medicamento"',
+        'MedicationColumn("Presentación"',
+        'MedicationColumn("Dosis"',
+        'MedicationColumn("Dosis calculada"',
+        'MedicationColumn("Uso por día"',
+        'MedicationColumn("Días"',
+        'MedicationColumn("Notas"',
+        'MedicationColumn("Opciones"',
+    )
+    for visible_column in expected_visible_columns:
+        if visible_column not in medication_columns_block:
+            errors.append(
+                f"Falta columna visible esperada: {visible_column}"
+            )
+
+row_start = app.find("private fun MedicationDataRow(")
+row_end = app.find("private fun TableCell(", row_start)
+
+if row_start == -1 or row_end == -1:
+    errors.append("No se encontró MedicationDataRow para revisar la tabla.")
+else:
+    medication_row_block = app[row_start:row_end]
+    for removed_dialog in (
+        "· Familia",
+        "· Subgrupo",
+        "· Especialidades",
+    ):
+        if removed_dialog in medication_row_block:
+            errors.append(
+                f"MedicationDataRow todavía pinta campo de filtro: {removed_dialog}"
+            )
 
 if 'item(key = "medication-header")' in app:
     errors.append(

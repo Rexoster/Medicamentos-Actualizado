@@ -1,0 +1,15 @@
+VERIFICACIÓN V22.1
+
+- Familia retirada de columnas visibles: correcto.
+- Subgrupo retirado de columnas visibles: correcto.
+- Especialidades retiradas de columnas visibles: correcto.
+- Familia/Subgrupo/Especialidades conservadas para filtros: correcto.
+- Notas ajustada al nuevo índice de columna: correcto.
+- Opciones ajustada al nuevo índice de columna: correcto.
+- Encabezado fijo conservado: correcto.
+- Ver más conservado: correcto.
+- Unidad en dosis conservada: correcto.
+- Actualizaciones in-app conservadas: correcto.
+- Preflight: correcto.
+
+GitHub Actions realizará la compilación Android definitiva.
