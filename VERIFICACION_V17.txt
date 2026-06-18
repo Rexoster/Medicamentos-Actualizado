@@ -1,0 +1,23 @@
+VERIFICACIÓN V17
+
+CALENDARIO
+- Aro exterior independiente para meses: presente.
+- Aro interior independiente para días: presente.
+- Calendario mensual convencional: eliminado.
+- Selección directa de día, mes y año: conservada.
+- Límites mínimos/máximos y botón Hoy: conservados.
+
+FUNCIÓN RENAL
+- CKD-EPI 2021 creatinina: verificada.
+- CKD-EPI 2021 creatinina-cistatina C: verificada.
+- CKD-EPI 2012 cistatina C: incluida.
+- MDRD-4 IDMS de legado: incluida.
+- Cockcroft-Gault e indexación por superficie corporal: verificadas.
+- Categorías G1-G5: verificadas.
+- Categorías A1-A3: verificadas.
+- Riesgo combinado KDIGO: verificado.
+- Albuminuria opcional: verificada.
+- Preflight del repositorio: correcto.
+- Motor renal compilado con kotlinc: correcto.
+
+La compilación Android completa será ejecutada por GitHub Actions.

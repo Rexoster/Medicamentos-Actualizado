@@ -49,8 +49,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
@@ -145,6 +143,16 @@ import com.luisangel.calculadoramedicamentos.growth.NutritionStatus
 import com.luisangel.calculadoramedicamentos.growth.NutritionSummary
 import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundDatingCalculator
 import com.luisangel.calculadoramedicamentos.obstetrics.UltrasoundTrimester
+import com.luisangel.calculadoramedicamentos.renal.AcrUnit
+import com.luisangel.calculadoramedicamentos.renal.AlbuminuriaCategory
+import com.luisangel.calculadoramedicamentos.renal.CkdRiskLevel
+import com.luisangel.calculadoramedicamentos.renal.CreatinineUnit
+import com.luisangel.calculadoramedicamentos.renal.GfrCategory
+import com.luisangel.calculadoramedicamentos.renal.RenalCalculator
+import com.luisangel.calculadoramedicamentos.renal.RenalInput
+import com.luisangel.calculadoramedicamentos.renal.RenalMethod
+import com.luisangel.calculadoramedicamentos.renal.RenalResult
+import com.luisangel.calculadoramedicamentos.renal.RenalSex
 import com.luisangel.calculadoramedicamentos.model.FilterState
 import com.luisangel.calculadoramedicamentos.model.MedicationDraft
 import com.luisangel.calculadoramedicamentos.model.MedicationRecord
@@ -164,7 +172,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
@@ -266,6 +273,58 @@ private fun percentileClinicalInfo() = ClinicalInfoContent(
         "Un percentil aislado no establece diagnóstico ni sustituye la trayectoria longitudinal.",
         "La postura de medición, prematuridad, síndromes y enfermedades crónicas pueden requerir otras referencias.",
         "Los datos introducidos del niño no se guardan."
+    )
+)
+
+private fun renalClinicalInfo() = ClinicalInfoContent(
+    title = "Función renal · información y referencias",
+    purpose = (
+        "Estima función renal en adultos mediante una ecuación seleccionable y " +
+            "clasifica la categoría G de KDIGO. Si se captura ACR, también " +
+            "asigna A1–A3 y el nivel de riesgo combinado."
+        ),
+    method = (
+        "Solo se muestra y calcula un método a la vez. CKD-EPI produce TFGe " +
+            "indexada a 1.73 m². Cockcroft-Gault produce depuración de creatinina " +
+            "en mL/min y la app muestra además una indexación orientativa por superficie corporal."
+        ),
+    references = listOf(
+        ClinicalReferenceItem(
+            source = "KDIGO",
+            citation = "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease. Kidney Int. 2024;105(Suppl 4S):S117–S314.",
+            useInApp = "Categorías G1–G5, A1–A3, matriz de riesgo y requisito de cronicidad."
+        ),
+        ClinicalReferenceItem(
+            source = "Inker LA et al.",
+            citation = "New Creatinine- and Cystatin C-Based Equations to Estimate GFR without Race. N Engl J Med. 2021;385:1737–1749.",
+            useInApp = "Ecuaciones CKD-EPI 2021 de creatinina y creatinina-cistatina C."
+        ),
+        ClinicalReferenceItem(
+            source = "NIDDK",
+            citation = "eGFR Equations for Adults, revisión 2025.",
+            useInApp = "Constantes, unidades y ecuación CKD-EPI 2012 por cistatina C."
+        ),
+        ClinicalReferenceItem(
+            source = "Levey AS et al.",
+            citation = "Using Standardized Serum Creatinine Values in the MDRD Study Equation. Ann Intern Med. 2006;145:247–254.",
+            useInApp = "MDRD-4 IDMS como método de legado."
+        ),
+        ClinicalReferenceItem(
+            source = "Cockcroft DW, Gault MH",
+            citation = "Prediction of Creatinine Clearance from Serum Creatinine. Nephron. 1976;16:31–41.",
+            useInApp = "Depuración estimada de creatinina."
+        ),
+        ClinicalReferenceItem(
+            source = "Sociedad Española de Nefrología",
+            citation = "Calculadora de función renal: Cockcroft-Gault, MDRD y CKD-EPI.",
+            useInApp = "Cotejo funcional y selección de métodos."
+        )
+    ),
+    limitations = listOf(
+        "Las ecuaciones son estimaciones y pueden ser inexactas con masa muscular extrema, amputaciones, embarazo, enfermedad aguda o creatinina inestable.",
+        "Un solo valor anormal no demuestra enfermedad renal crónica; debe documentarse duración mínima de 3 meses o evidencia equivalente.",
+        "Cockcroft-Gault no es una TFGe y su valor para dosificación debe cotejarse con la ficha del medicamento.",
+        "La matriz G-A describe riesgo pronóstico y no constituye por sí sola un diagnóstico ni una indicación terapéutica."
     )
 )
 
@@ -657,7 +716,8 @@ private fun ClinicalInfoSection(
 private enum class MainSection(val label: String) {
     MEDICATIONS("Medicamentos"),
     PERCENTILES("Percentiles"),
-    OBSTETRICS("Gineco-OB")
+    OBSTETRICS("Gineco-OB"),
+    RENAL("Renal")
 }
 
 @Composable
@@ -733,6 +793,9 @@ private fun ApplicationShell(viewModel: MainViewModel, darkTheme: Boolean) {
                 modifier = Modifier.fillMaxSize().padding(padding)
             )
             MainSection.OBSTETRICS -> ObstetricsScreen(
+                modifier = Modifier.fillMaxSize().padding(padding)
+            )
+            MainSection.RENAL -> RenalFunctionScreen(
                 modifier = Modifier.fillMaxSize().padding(padding)
             )
         }
@@ -3835,6 +3898,792 @@ private fun DateField(
 
 
 @Composable
+private fun RenalMethodSelector(
+    selected: RenalMethod,
+    onSelected: (RenalMethod) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    selected.label,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    selected.description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                Icons.Default.ArrowDropDown,
+                contentDescription = "Cambiar método"
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(
+                min = 300.dp,
+                max = 560.dp
+            )
+        ) {
+            RenalMethod.entries.forEach { method ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                method.label,
+                                fontWeight = if (method == selected) {
+                                    FontWeight.Black
+                                } else {
+                                    FontWeight.SemiBold
+                                }
+                            )
+                            Text(
+                                method.description,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelected(method)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenalFunctionScreen(
+    modifier: Modifier = Modifier
+) {
+    var methodName by rememberSaveable {
+        mutableStateOf(
+            RenalMethod.CKD_EPI_2021_CREATININE.name
+        )
+    }
+    val method = remember(methodName) {
+        RenalMethod.valueOf(methodName)
+    }
+    var ageText by rememberSaveable { mutableStateOf("") }
+    var sexName by rememberSaveable {
+        mutableStateOf(RenalSex.MALE.name)
+    }
+    val sex = remember(sexName) {
+        RenalSex.valueOf(sexName)
+    }
+    var creatinineText by rememberSaveable { mutableStateOf("") }
+    var creatinineUnitName by rememberSaveable {
+        mutableStateOf(CreatinineUnit.MG_DL.name)
+    }
+    val creatinineUnit = remember(creatinineUnitName) {
+        CreatinineUnit.valueOf(creatinineUnitName)
+    }
+    var cystatinText by rememberSaveable { mutableStateOf("") }
+    var weightText by rememberSaveable { mutableStateOf("") }
+    var heightText by rememberSaveable { mutableStateOf("") }
+    var includeAcr by rememberSaveable { mutableStateOf(false) }
+    var acrText by rememberSaveable { mutableStateOf("") }
+    var acrUnitName by rememberSaveable {
+        mutableStateOf(AcrUnit.MG_G.name)
+    }
+    val acrUnit = remember(acrUnitName) {
+        AcrUnit.valueOf(acrUnitName)
+    }
+
+    val input = remember(
+        method,
+        ageText,
+        sex,
+        creatinineText,
+        creatinineUnit,
+        cystatinText,
+        weightText,
+        heightText,
+        includeAcr,
+        acrText,
+        acrUnit
+    ) {
+        RenalInput(
+            method = method,
+            ageYears = ageText.toIntOrNull() ?: 0,
+            sex = sex,
+            creatinine = creatinineText
+                .replace(',', '.')
+                .toDoubleOrNull(),
+            creatinineUnit = creatinineUnit,
+            cystatinCmgL = cystatinText
+                .replace(',', '.')
+                .toDoubleOrNull(),
+            weightKg = weightText
+                .replace(',', '.')
+                .toDoubleOrNull(),
+            heightCm = heightText
+                .replace(',', '.')
+                .toDoubleOrNull(),
+            acr = if (includeAcr) {
+                acrText.replace(',', '.')
+                    .toDoubleOrNull()
+            } else {
+                null
+            },
+            acrUnit = acrUnit
+        )
+    }
+
+    val requiredReady = remember(input) {
+        input.ageYears >= 18 &&
+            (!method.requiresCreatinine || input.creatinine != null) &&
+            (!method.requiresCystatinC || input.cystatinCmgL != null) &&
+            (!method.requiresWeight || input.weightKg != null) &&
+            (!method.requiresHeight || input.heightCm != null) &&
+            (!includeAcr || input.acr != null)
+    }
+
+    val calculation = remember(input, requiredReady) {
+        if (requiredReady) {
+            RenalCalculator.calculate(input)
+        } else {
+            null
+        }
+    }
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            OutlinedCard(
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                        alpha = 0.42f
+                    )
+                )
+            ) {
+                Column(
+                    Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "Función renal",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        "Selecciona una ecuación. Solo el método activo aparece y participa en el cálculo.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
+        item {
+            OutlinedCard {
+                Column(
+                    Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Método",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                    RenalMethodSelector(
+                        selected = method,
+                        onSelected = {
+                            methodName = it.name
+                        }
+                    )
+
+                    FormTextField(
+                        label = "Edad",
+                        value = ageText,
+                        onValue = {
+                            ageText = it.filter(Char::isDigit)
+                                .take(3)
+                        },
+                        keyboardType = KeyboardType.Number,
+                        suffix = "años"
+                    )
+
+                    Text(
+                        "Sexo",
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        RenalSex.entries.forEach { option ->
+                            FilterChip(
+                                selected = sex == option,
+                                onClick = {
+                                    sexName = option.name
+                                },
+                                label = { Text(option.label) }
+                            )
+                        }
+                    }
+
+                    if (method.requiresCreatinine) {
+                        Text(
+                            "Creatinina sérica",
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FormTextField(
+                                label = "Creatinina",
+                                value = creatinineText,
+                                onValue = {
+                                    creatinineText = decimalText(it)
+                                },
+                                modifier = Modifier.weight(1f),
+                                keyboardType = KeyboardType.Decimal,
+                                suffix = creatinineUnit.label
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CreatinineUnit.entries.forEach { unit ->
+                                FilterChip(
+                                    selected = creatinineUnit == unit,
+                                    onClick = {
+                                        creatinineUnitName = unit.name
+                                    },
+                                    label = { Text(unit.label) }
+                                )
+                            }
+                        }
+                    }
+
+                    if (method.requiresCystatinC) {
+                        FormTextField(
+                            label = "Cistatina C",
+                            value = cystatinText,
+                            onValue = {
+                                cystatinText = decimalText(it)
+                            },
+                            keyboardType = KeyboardType.Decimal,
+                            suffix = "mg/L"
+                        )
+                    }
+
+                    if (method.requiresWeight) {
+                        FormTextField(
+                            label = "Peso",
+                            value = weightText,
+                            onValue = {
+                                weightText = decimalText(it)
+                            },
+                            keyboardType = KeyboardType.Decimal,
+                            suffix = "kg"
+                        )
+                    }
+
+                    if (method.requiresHeight) {
+                        FormTextField(
+                            label = "Talla",
+                            value = heightText,
+                            onValue = {
+                                heightText = decimalText(it)
+                            },
+                            keyboardType = KeyboardType.Decimal,
+                            suffix = "cm"
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            OutlinedCard {
+                Column(
+                    Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = includeAcr,
+                            onCheckedChange = {
+                                includeAcr = it
+                            }
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Agregar albuminuria",
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                "Opcional. Permite clasificar A1–A3 y el riesgo combinado KDIGO.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (includeAcr) {
+                        FormTextField(
+                            label = "Cociente albúmina/creatinina (ACR)",
+                            value = acrText,
+                            onValue = {
+                                acrText = decimalText(it)
+                            },
+                            keyboardType = KeyboardType.Decimal,
+                            suffix = acrUnit.label
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AcrUnit.entries.forEach { unit ->
+                                FilterChip(
+                                    selected = acrUnit == unit,
+                                    onClick = {
+                                        acrUnitName = unit.name
+                                    },
+                                    label = { Text(unit.label) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            when {
+                !requiredReady -> RenalPendingCard(method, includeAcr)
+                calculation?.isFailure == true -> {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            calculation.exceptionOrNull()?.message
+                                ?: "No fue posible calcular.",
+                            modifier = Modifier.padding(14.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+                calculation?.isSuccess == true -> {
+                    RenalResultCard(
+                        result = calculation.getOrThrow()
+                    )
+                }
+            }
+        }
+
+        calculation?.getOrNull()?.let { result ->
+            item {
+                KidneyRiskGrid(
+                    selectedGfr = result.gfrCategory,
+                    selectedAlbuminuria = result.albuminuriaCategory
+                )
+            }
+        }
+
+        item {
+            ClinicalInfoButton(
+                info = renalClinicalInfo()
+            )
+        }
+    }
+}
+
+@Composable
+private fun RenalPendingCard(
+    method: RenalMethod,
+    includeAcr: Boolean
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(
+                "Completa los datos",
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                buildString {
+                    append("Se requiere edad y sexo")
+                    if (method.requiresCreatinine) append(", creatinina")
+                    if (method.requiresCystatinC) append(", cistatina C")
+                    if (method.requiresWeight) append(", peso")
+                    if (method.requiresHeight) append(" y talla")
+                    if (includeAcr) append(", además del ACR")
+                    append(".")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun RenalResultCard(
+    result: RenalResult
+) {
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                alpha = 0.50f
+            )
+        )
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "Resultado",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                result.method.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "${formatDecimal(result.primaryValue, 1)} ${result.primaryUnit}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                result.primaryLabel,
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            result.indexedValue
+                ?.takeIf {
+                    result.method == RenalMethod.COCKCROFT_GAULT
+                }
+                ?.let { indexedValue ->
+                    HorizontalDivider()
+                    ResultBlock(
+                        title = "Indexación por superficie corporal",
+                        rows = listOf(
+                            "Superficie corporal" to (
+                                result.bodySurfaceArea?.let {
+                                    "${formatDecimal(it, 2)} m²"
+                                } ?: "Pendiente"
+                                ),
+                            "Valor indexado" to (
+                                "${formatDecimal(indexedValue, 1)} mL/min/1.73 m²"
+                                )
+                        )
+                    )
+                }
+
+            result.gfrCategory?.let { category ->
+                HorizontalDivider()
+                Text(
+                    "${category.label} · ${category.description}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    "Intervalo: ${category.rangeLabel} mL/min/1.73 m²",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            result.albuminuriaCategory?.let { category ->
+                Text(
+                    "${category.label} · ${category.description}",
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    category.rangeLabel,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            result.riskLevel?.let { risk ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = renalRiskColor(risk),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        risk.label,
+                        modifier = Modifier.padding(12.dp),
+                        color = renalRiskTextColor(risk),
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            result.warnings.forEach { warning ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        Icons.Default.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        warning,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun renalRiskColor(
+    risk: CkdRiskLevel
+): Color = when (risk) {
+    CkdRiskLevel.LOW -> Color(0xFF9CCC65)
+    CkdRiskLevel.MODERATE -> Color(0xFFFFD54F)
+    CkdRiskLevel.HIGH -> Color(0xFFFFA726)
+    CkdRiskLevel.VERY_HIGH -> Color(0xFFE85C57)
+}
+
+private fun renalRiskTextColor(
+    risk: CkdRiskLevel
+): Color = if (risk == CkdRiskLevel.VERY_HIGH) {
+    Color.White
+} else {
+    Color(0xFF1A1A1A)
+}
+
+@Composable
+private fun KidneyRiskGrid(
+    selectedGfr: GfrCategory?,
+    selectedAlbuminuria: AlbuminuriaCategory?
+) {
+    OutlinedCard {
+        Column(
+            Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Text(
+                "Clasificación KDIGO G × A",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                if (selectedAlbuminuria == null) {
+                    "La fila G está marcada. Agrega ACR para señalar una celda y calcular riesgo combinado."
+                } else {
+                    "La celda resaltada corresponde a la combinación calculada."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(Modifier.fillMaxWidth()) {
+                KidneyGridLabelCell(
+                    text = "GFR",
+                    modifier = Modifier.weight(0.82f)
+                )
+                AlbuminuriaCategory.entries.forEach { category ->
+                    KidneyGridLabelCell(
+                        text = category.label,
+                        subtitle = category.rangeLabel.substringBefore(" · "),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            GfrCategory.entries.forEach { gfr ->
+                Row(Modifier.fillMaxWidth()) {
+                    KidneyGridLabelCell(
+                        text = gfr.label,
+                        subtitle = gfr.rangeLabel,
+                        selected = selectedGfr == gfr,
+                        modifier = Modifier.weight(0.82f)
+                    )
+                    AlbuminuriaCategory.entries.forEach { albuminuria ->
+                        val risk = RenalCalculator.combinedRisk(
+                            gfr,
+                            albuminuria
+                        )
+                        KidneyRiskCell(
+                            risk = risk,
+                            selected = selectedGfr == gfr &&
+                                selectedAlbuminuria == albuminuria,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                CkdRiskLevel.entries.forEach { risk ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = renalRiskColor(risk),
+                            modifier = Modifier.size(14.dp)
+                        ) {}
+                        Text(
+                            risk.label.replace("Riesgo ", ""),
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KidneyGridLabelCell(
+    text: String,
+    modifier: Modifier = Modifier,
+    subtitle: String = "",
+    selected: Boolean = false
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        border = androidx.compose.foundation.BorderStroke(
+            if (selected) 2.dp else 0.5.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            }
+        ),
+        modifier = modifier
+            .padding(2.dp)
+            .height(52.dp)
+    ) {
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text,
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.labelMedium
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun KidneyRiskCell(
+    risk: CkdRiskLevel,
+    selected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = renalRiskColor(risk),
+        border = androidx.compose.foundation.BorderStroke(
+            if (selected) 3.dp else 0.5.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            }
+        ),
+        modifier = modifier
+            .padding(2.dp)
+            .height(52.dp)
+    ) {
+        Box(
+            Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) {
+                Text(
+                    "✓",
+                    color = renalRiskTextColor(risk),
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
+        }
+    }
+}
+
+private enum class DateOrbitRing {
+    NONE,
+    MONTH,
+    DAY
+}
+
+private fun shiftDateMonth(
+    date: LocalDate,
+    months: Int
+): LocalDate {
+    val target = YearMonth.from(date)
+        .plusMonths(months.toLong())
+    return target.atDay(
+        date.dayOfMonth.coerceAtMost(
+            target.lengthOfMonth()
+        )
+    )
+}
+
+private fun shiftDateDayWithinMonth(
+    date: LocalDate,
+    days: Int
+): LocalDate {
+    val length = date.lengthOfMonth()
+    val zeroBased = date.dayOfMonth - 1
+    val wrapped = ((zeroBased + days) % length + length) % length
+    return date.withDayOfMonth(wrapped + 1)
+}
+
+@Composable
 private fun DateOrbitWheel(
     selectedDate: LocalDate,
     minDate: LocalDate?,
@@ -3843,8 +4692,11 @@ private fun DateOrbitWheel(
     modifier: Modifier = Modifier
 ) {
     val currentDate by rememberUpdatedState(selectedDate)
+    var activeRing by remember {
+        mutableStateOf(DateOrbitRing.NONE)
+    }
+
     val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
     val tertiary = MaterialTheme.colorScheme.tertiary
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
@@ -3870,6 +4722,7 @@ private fun DateOrbitWheel(
                 var previousAngle = 0f
                 var accumulatedDegrees = 0f
                 var dragStartDate = currentDate
+                var dragRing = DateOrbitRing.NONE
 
                 fun pointerAngle(position: Offset): Float {
                     val center = Offset(
@@ -3884,6 +4737,16 @@ private fun DateOrbitWheel(
                     ).toFloat()
                 }
 
+                fun pointerRadius(position: Offset): Float {
+                    val dx = position.x - size.width / 2f
+                    val dy = position.y - size.height / 2f
+                    val distance = kotlin.math.sqrt(
+                        dx * dx + dy * dy
+                    )
+                    return distance /
+                        (min(size.width, size.height) / 2f)
+                }
+
                 fun normalizedDelta(
                     current: Float,
                     previous: Float
@@ -3894,45 +4757,74 @@ private fun DateOrbitWheel(
                     return delta
                 }
 
+                fun clamp(date: LocalDate): LocalDate =
+                    clampCalendarDate(
+                        date,
+                        minDate,
+                        maxDate
+                    )
+
                 detectDragGestures(
-                    onDragStart = {
+                    onDragStart = { position ->
                         dragStartDate = currentDate
-                        previousAngle = pointerAngle(it)
+                        previousAngle = pointerAngle(position)
                         accumulatedDegrees = 0f
+                        val radiusRatio = pointerRadius(position)
+                        dragRing = when {
+                            radiusRatio in 0.68f..1.05f ->
+                                DateOrbitRing.MONTH
+                            radiusRatio >= 0.40f && radiusRatio < 0.68f ->
+                                DateOrbitRing.DAY
+                            else -> DateOrbitRing.NONE
+                        }
+                        activeRing = dragRing
+                    },
+                    onDragEnd = {
+                        activeRing = DateOrbitRing.NONE
+                    },
+                    onDragCancel = {
+                        activeRing = DateOrbitRing.NONE
                     }
                 ) { change, _ ->
-                    val angle = pointerAngle(change.position)
-                    accumulatedDegrees += normalizedDelta(
-                        angle,
-                        previousAngle
-                    )
-                    previousAngle = angle
+                    if (dragRing != DateOrbitRing.NONE) {
+                        val angle = pointerAngle(change.position)
+                        accumulatedDegrees += normalizedDelta(
+                            angle,
+                            previousAngle
+                        )
+                        previousAngle = angle
 
-                    val dayShift = (
-                        -accumulatedDegrees / 360f *
-                            365.25f
-                        ).roundToInt()
+                        val candidate = when (dragRing) {
+                            DateOrbitRing.MONTH -> {
+                                val monthShift = (
+                                    -accumulatedDegrees / 30f
+                                ).roundToInt()
+                                shiftDateMonth(
+                                    dragStartDate,
+                                    monthShift
+                                )
+                            }
+                            DateOrbitRing.DAY -> {
+                                val degreesPerDay = 360f /
+                                    dragStartDate.lengthOfMonth()
+                                val dayShift = (
+                                    -accumulatedDegrees /
+                                        degreesPerDay
+                                ).roundToInt()
+                                shiftDateDayWithinMonth(
+                                    dragStartDate,
+                                    dayShift
+                                )
+                            }
+                            DateOrbitRing.NONE -> dragStartDate
+                        }
 
-                    var candidate = dragStartDate.plusDays(
-                        dayShift.toLong()
-                    )
-                    if (
-                        minDate != null &&
-                        candidate.isBefore(minDate)
-                    ) {
-                        candidate = minDate
+                        val clamped = clamp(candidate)
+                        if (clamped != currentDate) {
+                            onDateChange(clamped)
+                        }
+                        change.consume()
                     }
-                    if (
-                        maxDate != null &&
-                        candidate.isAfter(maxDate)
-                    ) {
-                        candidate = maxDate
-                    }
-
-                    if (candidate != currentDate) {
-                        onDateChange(candidate)
-                    }
-                    change.consume()
                 }
             }
             .padding(5.dp)
@@ -3982,10 +4874,8 @@ private fun DateOrbitWheel(
 
         repeat(12) { index ->
             val relative = index - selectedMonthIndex
-            val startAngle = -105f +
-                relative * 30f
-            val (topLeft, arcSize) =
-                ringRect(monthRadius)
+            val startAngle = -105f + relative * 30f
+            val (topLeft, arcSize) = ringRect(monthRadius)
 
             drawArc(
                 color = if (index % 2 == 0) {
@@ -4018,8 +4908,7 @@ private fun DateOrbitWheel(
                 textSize = radius * 0.052f
                 textAlign = AndroidPaint.Align.CENTER
                 isAntiAlias = true
-                isFakeBoldText =
-                    index == selectedMonthIndex
+                isFakeBoldText = index == selectedMonthIndex
             }
 
             drawContext.canvas.nativeCanvas.apply {
@@ -4032,27 +4921,22 @@ private fun DateOrbitWheel(
                 drawText(
                     monthNames[index],
                     labelPoint.x,
-                    labelPoint.y +
-                        radius * 0.018f,
+                    labelPoint.y + radius * 0.018f,
                     paint
                 )
                 restore()
             }
         }
 
-        val daysInMonth = selectedDate
-            .lengthOfMonth()
-        val selectedDayIndex =
-            selectedDate.dayOfMonth - 1
+        val daysInMonth = selectedDate.lengthOfMonth()
+        val selectedDayIndex = selectedDate.dayOfMonth - 1
 
         repeat(daysInMonth) { index ->
             val relative = index - selectedDayIndex
             val sweep = 360f / daysInMonth
-            val startAngle = -90f -
-                sweep / 2f +
+            val startAngle = -90f - sweep / 2f +
                 relative * sweep
-            val (topLeft, arcSize) =
-                ringRect(dayRadius)
+            val (topLeft, arcSize) = ringRect(dayRadius)
 
             drawArc(
                 color = when {
@@ -4080,28 +4964,21 @@ private fun DateOrbitWheel(
                 dayNumber == 1 ||
                 dayNumber % 5 == 0
             ) {
-                val labelAngle = startAngle +
-                    sweep / 2f
-                val point = pointAt(
-                    labelAngle,
-                    dayRadius
-                )
+                val labelAngle = startAngle + sweep / 2f
+                val point = pointAt(labelAngle, dayRadius)
                 val paint = AndroidPaint().apply {
                     color = if (
-                        dayNumber ==
-                            selectedDate.dayOfMonth
+                        dayNumber == selectedDate.dayOfMonth
                     ) {
                         Color.White.toArgb()
                     } else {
                         onSurfaceVariant.toArgb()
                     }
                     textSize = radius * 0.038f
-                    textAlign =
-                        AndroidPaint.Align.CENTER
+                    textAlign = AndroidPaint.Align.CENTER
                     isAntiAlias = true
                     isFakeBoldText =
-                        dayNumber ==
-                            selectedDate.dayOfMonth
+                        dayNumber == selectedDate.dayOfMonth
                 }
                 drawContext.canvas.nativeCanvas.drawText(
                     dayNumber.toString(),
@@ -4110,6 +4987,27 @@ private fun DateOrbitWheel(
                     paint
                 )
             }
+        }
+
+        if (activeRing != DateOrbitRing.NONE) {
+            val activeRadius = if (
+                activeRing == DateOrbitRing.MONTH
+            ) monthRadius else dayRadius
+            val activeStroke = if (
+                activeRing == DateOrbitRing.MONTH
+            ) monthStroke else dayStroke
+            val (topLeft, arcSize) = ringRect(activeRadius)
+            drawArc(
+                color = primary.copy(alpha = 0.82f),
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(
+                    width = activeStroke * 0.12f
+                )
+            )
         }
 
         drawCircle(
@@ -4121,9 +5019,7 @@ private fun DateOrbitWheel(
             color = primaryContainer,
             radius = centerRadius,
             center = center,
-            style = Stroke(
-                width = radius * 0.035f
-            )
+            style = Stroke(width = radius * 0.035f)
         )
 
         val dayPaint = AndroidPaint().apply {
@@ -4180,10 +5076,7 @@ private fun DateOrbitWheel(
         }
 
         val markerPath = Path().apply {
-            moveTo(
-                center.x,
-                center.y - radius * 0.995f
-            )
+            moveTo(center.x, center.y - radius * 0.995f)
             lineTo(
                 center.x - radius * 0.055f,
                 center.y - radius * 0.84f
@@ -4194,21 +5087,12 @@ private fun DateOrbitWheel(
             )
             close()
         }
-        drawPath(
-            path = markerPath,
-            color = tertiary
-        )
+        drawPath(path = markerPath, color = tertiary)
 
         drawLine(
             color = outline,
-            start = pointAt(
-                -90f,
-                radius * 0.68f
-            ),
-            end = pointAt(
-                -90f,
-                radius * 0.97f
-            ),
+            start = pointAt(-90f, radius * 0.68f),
+            end = pointAt(-90f, radius * 0.97f),
             strokeWidth = 2.dp.toPx()
         )
     }
@@ -4366,33 +5250,11 @@ private fun ClinicalCalendarDialog(
     var selectedDateText by rememberSaveable(initialDate) {
         mutableStateOf(initialDate.toString())
     }
-    var visibleMonthText by rememberSaveable(initialDate) {
-        mutableStateOf(
-            YearMonth.from(initialDate).toString()
-        )
-    }
 
     val selectedDate = remember(selectedDateText) {
         LocalDate.parse(selectedDateText)
     }
-    val visibleMonth = remember(visibleMonthText) {
-        YearMonth.parse(visibleMonthText)
-    }
     val today = remember { LocalDate.now() }
-    val monthTitleFormatter = remember {
-        DateTimeFormatter.ofPattern(
-            "MMMM yyyy",
-            Locale("es", "MX")
-        )
-    }
-
-    val minimumMonth = minDate?.let(YearMonth::from)
-    val maximumMonth = maxDate?.let(YearMonth::from)
-    val canGoPrevious = minimumMonth == null ||
-        visibleMonth.isAfter(minimumMonth)
-    val canGoNext = maximumMonth == null ||
-        visibleMonth.isBefore(maximumMonth)
-
     val minimumYear = minDate?.year ?: 1900
     val maximumYear = maxDate?.year ?: (today.year + 10)
 
@@ -4496,10 +5358,7 @@ private fun ClinicalCalendarDialog(
             minDate,
             maxDate
         )
-
         selectedDateText = clamped.toString()
-        visibleMonthText = YearMonth.from(clamped)
-            .toString()
     }
 
     Dialog(
@@ -4557,22 +5416,20 @@ private fun ClinicalCalendarDialog(
                 Column(
                     Modifier
                         .weight(1f)
-                        .verticalScroll(
-                            rememberScrollState()
-                        )
+                        .verticalScroll(rememberScrollState())
                         .padding(
                             horizontal = 16.dp,
                             vertical = 14.dp
                         ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     BoxWithConstraints(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
                         val wheelSize = maxWidth
-                            .coerceAtMost(330.dp)
-                            .coerceAtLeast(245.dp)
+                            .coerceAtMost(360.dp)
+                            .coerceAtLeast(255.dp)
 
                         DateOrbitWheel(
                             selectedDate = selectedDate,
@@ -4580,23 +5437,32 @@ private fun ClinicalCalendarDialog(
                             maxDate = maxDate,
                             onDateChange = {
                                 selectedDateText = it.toString()
-                                visibleMonthText =
-                                    YearMonth.from(it)
-                                        .toString()
                             },
-                            modifier = Modifier.size(
-                                wheelSize
-                            )
+                            modifier = Modifier.size(wheelSize)
                         )
                     }
 
-                    Text(
-                        "Gira la rueda, selecciona día, mes y año o utiliza el calendario mensual.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         modifier = Modifier.fillMaxWidth()
-                    )
+                    ) {
+                        Column(
+                            Modifier.padding(11.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "Dos ruedas independientes",
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                "Gira el aro exterior para cambiar el mes y el aro interior para cambiar el día.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
 
                     Surface(
                         shape = RoundedCornerShape(18.dp),
@@ -4632,7 +5498,7 @@ private fun ClinicalCalendarDialog(
                                         color = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                     Text(
-                                        "Elige año, mes y día sin recorrer el calendario.",
+                                        "Elige año, mes y día sin girar las ruedas.",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(
                                             alpha = 0.78f
@@ -4689,67 +5555,8 @@ private fun ClinicalCalendarDialog(
 
                     Row(
                         Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        IconButton(
-                            onClick = {
-                                visibleMonthText = visibleMonth
-                                    .minusMonths(1)
-                                    .toString()
-                            },
-                            enabled = canGoPrevious
-                        ) {
-                            Icon(
-                                Icons.Default.ChevronLeft,
-                                contentDescription = "Mes anterior"
-                            )
-                        }
-
-                        Text(
-                            visibleMonth.format(
-                                monthTitleFormatter
-                            ).replaceFirstChar {
-                                if (it.isLowerCase()) {
-                                    it.titlecase(Locale("es", "MX"))
-                                } else {
-                                    it.toString()
-                                }
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        IconButton(
-                            onClick = {
-                                visibleMonthText = visibleMonth
-                                    .plusMonths(1)
-                                    .toString()
-                            },
-                            enabled = canGoNext
-                        ) {
-                            Icon(
-                                Icons.Default.ChevronRight,
-                                contentDescription = "Mes siguiente"
-                            )
-                        }
-                    }
-
-                    CalendarWeekHeader()
-                    CalendarMonthGrid(
-                        month = visibleMonth,
-                        selectedDate = selectedDate,
-                        today = today,
-                        minDate = minDate,
-                        maxDate = maxDate,
-                        onSelected = {
-                            selectedDateText = it.toString()
-                        }
-                    )
-
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (
                             (minDate == null || !today.isBefore(minDate)) &&
@@ -4758,8 +5565,6 @@ private fun ClinicalCalendarDialog(
                             AssistChip(
                                 onClick = {
                                     selectedDateText = today.toString()
-                                    visibleMonthText = YearMonth.from(today)
-                                        .toString()
                                 },
                                 label = { Text("Hoy") },
                                 leadingIcon = {
@@ -4790,141 +5595,7 @@ private fun ClinicalCalendarDialog(
     }
 }
 
-@Composable
-private fun CalendarWeekHeader() {
-    val labels = listOf(
-        "L",
-        "M",
-        "X",
-        "J",
-        "V",
-        "S",
-        "D"
-    )
 
-    Row(Modifier.fillMaxWidth()) {
-        labels.forEach { label ->
-            Text(
-                label,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
-
-@Composable
-private fun CalendarMonthGrid(
-    month: YearMonth,
-    selectedDate: LocalDate,
-    today: LocalDate,
-    minDate: LocalDate?,
-    maxDate: LocalDate?,
-    onSelected: (LocalDate) -> Unit
-) {
-    val firstDayOffset = (
-        month.atDay(1).dayOfWeek.value -
-            DayOfWeek.MONDAY.value +
-            7
-        ) % 7
-    Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        repeat(6) { week ->
-            Row(Modifier.fillMaxWidth()) {
-                repeat(7) { weekday ->
-                    val cellIndex = week * 7 + weekday
-                    val dayNumber = cellIndex -
-                        firstDayOffset + 1
-
-                    if (
-                        dayNumber !in 1..month.lengthOfMonth()
-                    ) {
-                        Spacer(
-                            Modifier
-                                .weight(1f)
-                                .height(42.dp)
-                        )
-                    } else {
-                        val date = month.atDay(dayNumber)
-                        val enabled = (
-                            (minDate == null ||
-                                !date.isBefore(minDate)) &&
-                                (maxDate == null ||
-                                    !date.isAfter(maxDate))
-                            )
-                        val selected = date == selectedDate
-                        val isToday = date == today
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(42.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Surface(
-                                onClick = {
-                                    if (enabled) {
-                                        onSelected(date)
-                                    }
-                                },
-                                enabled = enabled,
-                                shape = RoundedCornerShape(14.dp),
-                                color = when {
-                                    selected ->
-                                        MaterialTheme.colorScheme.primary
-                                    isToday ->
-                                        MaterialTheme.colorScheme
-                                            .secondaryContainer
-                                    else -> Color.Transparent
-                                },
-                                contentColor = when {
-                                    selected ->
-                                        MaterialTheme.colorScheme.onPrimary
-                                    isToday ->
-                                        MaterialTheme.colorScheme
-                                            .onSecondaryContainer
-                                    enabled ->
-                                        MaterialTheme.colorScheme.onSurface
-                                    else ->
-                                        MaterialTheme.colorScheme
-                                            .onSurface.copy(alpha = 0.32f)
-                                },
-                                border = if (isToday && !selected) {
-                                    androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.secondary
-                                    )
-                                } else {
-                                    null
-                                }
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(38.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        dayNumber.toString(),
-                                        fontWeight = if (
-                                            selected || isToday
-                                        ) {
-                                            FontWeight.Bold
-                                        } else {
-                                            FontWeight.Medium
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun PercentileResults(

@@ -8,6 +8,8 @@ APP_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/ui/Ap
 GROWTH_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/growth/GrowthEngine.kt"
 ULTRASOUND_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/obstetrics/UltrasoundDating.kt"
 ULTRASOUND_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedicamentos/obstetrics/UltrasoundDatingTest.kt"
+RENAL_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/renal/RenalEngine.kt"
+RENAL_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedicamentos/renal/RenalEngineTest.kt"
 DOSE_RANGE_TEST_PATH = ROOT / "app/src/test/java/com/luisangel/calculadoramedicamentos/model/MedicationDoseRangeTest.kt"
 ENTITY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/MedicationEntity.kt"
 DATABASE_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/AppDatabase.kt"
@@ -66,6 +68,8 @@ app = require_file(APP_PATH)
 growth = require_file(GROWTH_PATH)
 ultrasound = require_file(ULTRASOUND_PATH)
 ultrasound_test = require_file(ULTRASOUND_TEST_PATH)
+renal = require_file(RENAL_PATH)
+renal_test = require_file(RENAL_TEST_PATH)
 dose_range_test = require_file(DOSE_RANGE_TEST_PATH)
 entity = require_file(ENTITY_PATH)
 database = require_file(DATABASE_PATH)
@@ -132,6 +136,11 @@ for token in (
     require(growth, token, "GrowthEngine.kt")
 
 for token in (
+    "MainSection.RENAL",
+    "private fun RenalFunctionScreen(",
+    "private fun KidneyRiskGrid(",
+    "Dos ruedas independientes",
+    "private enum class DateOrbitRing",
     "contentType = { _, _ ->",
     "private fun TableCell(",
     "private fun TableTextCell(",
@@ -144,7 +153,6 @@ for token in (
     "Info y referencias",
     "Referencias usadas",
     "private fun DateOrbitWheel(",
-    "Gira la rueda, selecciona día, mes y año",
     "private fun InteractiveDoseWheel(",
     "Dosis interactiva por rango",
     "private fun GestogramWheel(",
@@ -162,7 +170,6 @@ for token in (
     "ULTRASOUND_DATING",
     "private fun UltrasoundGestationalAgeCalculator",
     "private fun ClinicalCalendarDialog",
-    "private fun CalendarMonthGrid",
     "itemsIndexed(",
     "rememberCoroutineScope()",
     "withContext(Dispatchers.Default)",
@@ -313,8 +320,30 @@ for workflow_name, workflow_text in (
             f"{workflow_name} todavía usa --parallel."
         )
 
+for token in (
+    "enum class RenalMethod",
+    "CKD_EPI_2021_CREATININE",
+    "COCKCROFT_GAULT",
+    "fun classifyGfr(",
+    "fun classifyAlbuminuria(",
+    "fun combinedRisk(",
+):
+    require(renal, token, "RenalEngine.kt")
+
+for token in (
+    "ckdEpi2021CreatinineMatchesReferenceExample",
+    "cockcroftGaultProducesRawAndIndexedValues",
+    "kdigoCategoriesAndRiskMatrixAreClassified",
+):
+    require(renal_test, token, "RenalEngineTest.kt")
+
+if "CalendarMonthGrid(" in app or "CalendarWeekHeader(" in app:
+    errors.append(
+        "App.kt todavía contiene el calendario mensual convencional."
+    )
+
 # La variante debe seguir siendo local.
-combined = app + growth + ultrasound + models + manifest
+combined = app + growth + ultrasound + models + renal + manifest
 for forbidden in (
     "android.webkit.WebView",
     "supabase",
