@@ -1,0 +1,14 @@
+VERIFICACIÓN V22
+
+- Apartado Actualizaciones: correcto.
+- BuildConfig UPDATE_REPOSITORY/UPDATE_MANIFEST_URL: correcto.
+- Workflow genera update.json: correcto.
+- Workflow publica update.json en Release: correcto.
+- Descarga APK firmada desde la app: incluida.
+- FileProvider para instalar APK: correcto.
+- Permiso INTERNET: limitado a actualizaciones.
+- REQUEST_INSTALL_PACKAGES: incluido.
+- Sin WebView ni Supabase: correcto.
+- Preflight: correcto.
+
+GitHub Actions realizará la compilación Android definitiva.

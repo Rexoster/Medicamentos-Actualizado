@@ -940,6 +940,11 @@ private enum class MainSection(
         label = "Renal",
         description = "Cálculos y fórmulas renales",
         icon = Icons.Default.WaterDrop
+    ),
+    UPDATES(
+        label = "Actualizaciones",
+        description = "Buscar e instalar una versión nueva",
+        icon = Icons.Default.Download
     )
 }
 
@@ -1077,6 +1082,12 @@ private fun ApplicationShell(
 
                         MainSection.RENAL ->
                             RenalFunctionScreen(
+                                modifier =
+                                    Modifier.fillMaxSize()
+                            )
+
+                        MainSection.UPDATES ->
+                            AppUpdateScreen(
                                 modifier =
                                     Modifier.fillMaxSize()
                             )

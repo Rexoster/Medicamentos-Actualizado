@@ -25,6 +25,9 @@ MAIN_ACTIVITY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicame
 APPLICATION_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/CalculatorApplication.kt"
 REPOSITORY_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/data/MedicationRepository.kt"
 DIAL_SOUND_PATH = ROOT / "app/src/main/res/raw/combination_dial_tick.wav"
+UPDATER_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/update/AppUpdateManager.kt"
+UPDATE_SCREEN_PATH = ROOT / "app/src/main/java/com/luisangel/calculadoramedicamentos/ui/AppUpdateScreen.kt"
+FILE_PATHS_PATH = ROOT / "app/src/main/res/xml/file_paths.xml"
 
 errors = []
 
@@ -85,6 +88,9 @@ view_model = require_file(VIEW_MODEL_PATH)
 main_activity = require_file(MAIN_ACTIVITY_PATH)
 application = require_file(APPLICATION_PATH)
 repository = require_file(REPOSITORY_PATH)
+updater = require_file(UPDATER_PATH)
+update_screen = require_file(UPDATE_SCREEN_PATH)
+file_paths = require_file(FILE_PATHS_PATH)
 
 balanced(app, "App.kt")
 balanced(growth, "GrowthEngine.kt")
@@ -138,6 +144,8 @@ for token in (
 
 for token in (
     "MainSection.RENAL",
+    "MainSection.UPDATES",
+    "AppUpdateScreen(",
     "mutableStateOf<MainSection?>(null)",
     "private fun SectionNavigationMenu(",
     "maxPanelHeight: Dp",
@@ -468,12 +476,60 @@ if 'var section by rememberSaveable { mutableStateOf(MainSection.MEDICATIONS) }'
         "La aplicación todavía inicia directamente en Medicamentos."
     )
 
-# La variante debe seguir siendo local.
-combined = app + growth + ultrasound + models + renal + manifest
+balanced(updater, "AppUpdateManager.kt")
+balanced(update_screen, "AppUpdateScreen.kt")
+
+for token in (
+    "class AppUpdateManager(",
+    "UpdateManifest",
+    "UPDATE_MANIFEST_URL",
+    "downloadApk(",
+    "installApk(",
+    "FileProvider.getUriForFile",
+    "Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES",
+):
+    require(updater, token, "AppUpdateManager.kt")
+
+for token in (
+    "fun AppUpdateScreen(",
+    "Buscar",
+    "Descargar e instalar",
+    "Permiso instalación",
+    "BuildConfig.UPDATE_MANIFEST_URL",
+):
+    require(update_screen, token, "AppUpdateScreen.kt")
+
+for token in (
+    "android.permission.INTERNET",
+    "android.permission.REQUEST_INSTALL_PACKAGES",
+    "androidx.core.content.FileProvider",
+    "@xml/file_paths",
+):
+    require(manifest, token, "AndroidManifest.xml")
+
+for token in (
+    "UPDATE_REPOSITORY",
+    "UPDATE_MANIFEST_URL",
+    "buildConfigField(",
+):
+    require(app_gradle, token, "app/build.gradle.kts")
+
+for token in (
+    "update.json",
+    "APP_UPDATE_REPOSITORY",
+    "releases/download",
+):
+    require(release_workflow, token, "build-release.yml")
+
+require(file_paths, "<cache-path", "file_paths.xml")
+require(file_paths, "updates/", "file_paths.xml")
+
+# La variante sigue siendo local en datos clínicos:
+# se permite INTERNET únicamente para buscar/descargar actualizaciones.
+combined = app + growth + ultrasound + models + renal + manifest + updater + update_screen
 for forbidden in (
     "android.webkit.WebView",
     "supabase",
-    "android.permission.INTERNET",
 ):
     if forbidden.lower() in combined.lower():
         errors.append(f"Referencia prohibida en variante local: {forbidden}")
@@ -492,4 +548,4 @@ if errors:
 print("PRECHECK CORRECTO")
 print(f"Llamadas FormTextField con sufijo: {suffix_calls}")
 print("Contratos App/GrowthEngine: correctos")
-print("Estructura local sin WebView, Supabase ni permiso INTERNET")
+print("Estructura local sin WebView/Supabase; INTERNET solo para actualizaciones")

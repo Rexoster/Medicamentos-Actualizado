@@ -22,6 +22,28 @@ val fallbackVersionCode = appVersionProperties
 val fallbackVersionName = appVersionProperties
     .getProperty("VERSION_NAME", "3.1.0-native")
 
+fun String.asBuildConfigString(): String =
+    replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+
+val updateRepository = System.getenv("APP_UPDATE_REPOSITORY")
+    ?.takeIf { it.isNotBlank() }
+    ?: System.getenv("GITHUB_REPOSITORY")
+        ?.takeIf { it.isNotBlank() }
+    ?: appVersionProperties
+        .getProperty("UPDATE_REPOSITORY", "")
+        .takeIf { it.isNotBlank() }
+    ?: ""
+
+val updateManifestUrl = appVersionProperties
+    .getProperty("UPDATE_MANIFEST_URL", "")
+    .takeIf { it.isNotBlank() }
+    ?: if (updateRepository.isNotBlank()) {
+        "https://github.com/$updateRepository/releases/latest/download/update.json"
+    } else {
+        ""
+    }
+
 
 android {
     namespace = "com.luisangel.calculadoramedicamentos"
@@ -38,6 +60,17 @@ android {
             ?.takeIf(String::isNotBlank)
             ?: fallbackVersionName
         multiDexEnabled = true
+
+        buildConfigField(
+            "String",
+            "UPDATE_REPOSITORY",
+            "\"${updateRepository.asBuildConfigString()}\""
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_MANIFEST_URL",
+            "\"${updateManifestUrl.asBuildConfigString()}\""
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
