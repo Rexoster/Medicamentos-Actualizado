@@ -190,6 +190,7 @@ import com.luisangel.calculadoramedicamentos.model.interactiveDoseStart
 import com.luisangel.calculadoramedicamentos.model.toDraft
 import com.luisangel.calculadoramedicamentos.model.toRecord
 import com.luisangel.calculadoramedicamentos.model.validationError
+import com.luisangel.calculadoramedicamentos.ui.ecg.EcgScreen
 import com.luisangel.calculadoramedicamentos.ui.theme.CalculatorTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -941,6 +942,11 @@ private enum class MainSection(
         description = "Cálculos y fórmulas renales",
         icon = Icons.Default.WaterDrop
     ),
+    ECG(
+        label = "ECG",
+        description = "Analizador y calculadoras ECG",
+        icon = Icons.Default.Insights
+    ),
     UPDATES(
         label = "Actualizaciones",
         description = "Buscar e instalar una versión nueva",
@@ -1082,6 +1088,12 @@ private fun ApplicationShell(
 
                         MainSection.RENAL ->
                             RenalFunctionScreen(
+                                modifier =
+                                    Modifier.fillMaxSize()
+                            )
+
+                        MainSection.ECG ->
+                            EcgScreen(
                                 modifier =
                                     Modifier.fillMaxSize()
                             )
