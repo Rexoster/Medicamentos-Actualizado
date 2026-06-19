@@ -1,7 +1,11 @@
 package com.luisangel.calculadoramedicamentos.ui.ecg
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -9,17 +13,29 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
@@ -28,13 +44,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,12 +59,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.luisangel.calculadoramedicamentos.ecg.AxisResult
 import com.luisangel.calculadoramedicamentos.ecg.EcgAxisMethod
 import com.luisangel.calculadoramedicamentos.ecg.EcgCalculator
@@ -62,50 +82,609 @@ import com.luisangel.calculadoramedicamentos.ecg.QtcResult
 import com.luisangel.calculadoramedicamentos.ecg.StElevationResult
 import kotlin.math.roundToInt
 
-private enum class EcgTab(val label: String) {
-    ANALYZER("Analizador"),
-    RATE("FC/RR"),
-    QTC("QTc"),
-    AXIS("Eje"),
-    LVH("HVI"),
-    ST("ST")
+private enum class EcgTool(
+    val label: String,
+    val shortLabel: String,
+    val description: String,
+    val icon: ImageVector
+) {
+    ANALYZER(
+        label = "Analizador guiado",
+        shortLabel = "Analizador",
+        description = "Integra ritmo, intervalos, eje, ST y HVI en un resumen copiable.",
+        icon = Icons.Default.MonitorHeart
+    ),
+    RATE(
+        label = "Frecuencia y RR",
+        shortLabel = "FC/RR",
+        description = "Calcula frecuencia por RR, cuadros o tira de 10 segundos.",
+        icon = Icons.Default.Speed
+    ),
+    QTC(
+        label = "QT corregido",
+        shortLabel = "QTc",
+        description = "Bazett, Fridericia, Framingham y Hodges.",
+        icon = Icons.Default.Calculate
+    ),
+    AXIS(
+        label = "Eje eléctrico",
+        shortLabel = "Eje",
+        description = "Cálculo vectorial con DI+aVF o DI+DIII.",
+        icon = Icons.Default.Timeline
+    ),
+    LVH(
+        label = "Hipertrofia VI",
+        shortLabel = "HVI",
+        description = "Sokolow-Lyon, Cornell voltaje y Cornell producto.",
+        icon = Icons.Default.Favorite
+    ),
+    ST(
+        label = "Elevación del ST",
+        shortLabel = "ST",
+        description = "Umbrales por edad, sexo y derivaciones contiguas.",
+        icon = Icons.Default.WarningAmber
+    )
 }
+
+private data class EcgReferenceItem(
+    val source: String,
+    val citation: String,
+    val useInApp: String
+)
+
+private data class EcgInfoContent(
+    val title: String,
+    val purpose: String,
+    val method: String,
+    val references: List<EcgReferenceItem>,
+    val limitations: List<String>,
+    val reviewedOn: String = "19 de junio de 2026"
+)
 
 @Composable
 fun EcgScreen(modifier: Modifier = Modifier) {
-    var selectedTabName by rememberSaveable { mutableStateOf(EcgTab.ANALYZER.name) }
-    val selectedTab = remember(selectedTabName) { EcgTab.valueOf(selectedTabName) }
+    var selectedName by rememberSaveable { mutableStateOf(EcgTool.ANALYZER.name) }
+    val selected = remember(selectedName) { EcgTool.valueOf(selectedName) }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = selectedTab.ordinal) {
-            EcgTab.entries.forEach { tab ->
-                Tab(
-                    selected = selectedTab == tab,
-                    onClick = { selectedTabName = tab.name },
-                    text = {
-                        Text(
-                            tab.label,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+    BoxWithConstraints(modifier = modifier) {
+        val landscape = maxWidth >= 840.dp
+        val compactHeight = maxHeight < 520.dp
+        val padding = if (compactHeight) 8.dp else 14.dp
+
+        if (landscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                horizontalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 14.dp)
+            ) {
+                EcgToolMenu(
+                    selected = selected,
+                    onSelected = { selectedName = it.name },
+                    compact = compactHeight,
+                    modifier = Modifier
+                        .widthIn(min = 250.dp, max = if (compactHeight) 290.dp else 340.dp)
+                        .fillMaxHeight()
+                )
+                EcgToolBody(
+                    selected = selected,
+                    compact = compactHeight,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else {
+            EcgToolBody(
+                selected = selected,
+                compact = compactHeight,
+                contentPadding = PaddingValues(padding),
+                modifier = Modifier.fillMaxSize(),
+                menu = {
+                    EcgToolGrid(
+                        selected = selected,
+                        onSelected = { selectedName = it.name },
+                        compact = compactHeight,
+                        availableWidth = maxWidth
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun EcgToolBody(
+    selected: EcgTool,
+    compact: Boolean,
+    contentPadding: PaddingValues,
+    modifier: Modifier = Modifier,
+    menu: (@Composable () -> Unit)? = null
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp)
+    ) {
+        item { EcgHeaderCard(selected, compact) }
+        if (menu != null) {
+            item { menu() }
+        }
+        item { EcgInfoButton(info = selected.info()) }
+        item { EcgCalculatorContent(selected) }
+    }
+}
+
+@Composable
+private fun EcgToolMenu(
+    selected: EcgTool,
+    onSelected: (EcgTool) -> Unit,
+    compact: Boolean,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (compact) 8.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 8.dp)
+        ) {
+            Text(
+                "Menú ECG",
+                style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 8.dp)
+            ) {
+                items(EcgTool.entries.size) { index ->
+                    val tool = EcgTool.entries[index]
+                    EcgToolListItem(
+                        tool = tool,
+                        selected = selected == tool,
+                        compact = compact,
+                        onClick = { onSelected(tool) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EcgToolListItem(
+    tool: EcgTool,
+    selected: Boolean,
+    compact: Boolean,
+    onClick: () -> Unit
+) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        shape = RoundedCornerShape(if (compact) 14.dp else 16.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        border = BorderStroke(
+            width = if (selected) 1.6.dp else 0.8.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        tonalElevation = if (selected) 4.dp else 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(if (compact) 9.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Icon(
+                    imageVector = tool.icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(7.dp).size(if (compact) 19.dp else 22.dp)
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(tool.shortLabel, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    tool.description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor.copy(alpha = 0.74f),
+                    maxLines = if (compact) 1 else 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun EcgToolGrid(
+    selected: EcgTool,
+    onSelected: (EcgTool) -> Unit,
+    compact: Boolean,
+    availableWidth: Dp
+) {
+    val columnCount = when {
+        availableWidth >= 700.dp -> 3
+        else -> 2
+    }
+
+    OutlinedCard {
+        Column(
+            modifier = Modifier.padding(if (compact) 9.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)
+        ) {
+            Text(
+                "Menú ECG",
+                style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            EcgTool.entries.chunked(columnCount).forEach { rowTools ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 10.dp)
+                ) {
+                    rowTools.forEach { tool ->
+                        EcgToolGridTile(
+                            tool = tool,
+                            selected = selected == tool,
+                            compact = compact,
+                            onClick = { onSelected(tool) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
+                    repeat(columnCount - rowTools.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EcgToolGridTile(
+    tool: EcgTool,
+    selected: Boolean,
+    compact: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        shape = RoundedCornerShape(if (compact) 16.dp else 19.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        border = BorderStroke(
+            if (selected) 1.7.dp else 0.8.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        tonalElevation = if (selected) 5.dp else 1.dp,
+        modifier = modifier
+            .height(if (compact) 102.dp else 128.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (compact) 8.dp else 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Icon(
+                    imageVector = tool.icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(if (compact) 6.dp else 8.dp).size(if (compact) 20.dp else 25.dp)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    tool.shortLabel,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    tool.description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor.copy(alpha = 0.74f),
+                    textAlign = TextAlign.Center,
+                    maxLines = if (compact) 1 else 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(if (compact) 15.dp else 18.dp))
+        }
+    }
+}
+
+@Composable
+private fun EcgHeaderCard(selected: EcgTool, compact: Boolean) {
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(if (compact) 12.dp else 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(
+                    imageVector = selected.icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(if (compact) 8.dp else 10.dp).size(if (compact) 24.dp else 30.dp)
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    "Electrocardiograma",
+                    style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "${selected.label}: ${selected.description}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.86f)
+                )
+                Text(
+                    "Captura mediciones del trazo; esta versión no interpreta imágenes del ECG.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.74f)
                 )
             }
         }
-        when (selectedTab) {
-            EcgTab.ANALYZER -> EcgAnalyzerScreen(Modifier.fillMaxSize())
-            EcgTab.RATE -> EcgRateScreen(Modifier.fillMaxSize())
-            EcgTab.QTC -> QtcCalculatorScreen(Modifier.fillMaxSize())
-            EcgTab.AXIS -> AxisCalculatorScreen(Modifier.fillMaxSize())
-            EcgTab.LVH -> LvhCalculatorScreen(Modifier.fillMaxSize())
-            EcgTab.ST -> StElevationScreen(Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+private fun EcgInfoButton(
+    info: EcgInfoContent,
+    modifier: Modifier = Modifier
+) {
+    var showDialog by rememberSaveable(info.title) { mutableStateOf(false) }
+
+    OutlinedButton(
+        onClick = { showDialog = true },
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Icon(Icons.Default.Info, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("Info y referencias", fontWeight = FontWeight.Bold)
+    }
+
+    if (showDialog) {
+        EcgReferencesDialog(info = info, onDismiss = { showDialog = false })
+    }
+}
+
+@Composable
+private fun EcgReferencesDialog(
+    info: EcgInfoContent,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val compactHeight = maxHeight < 520.dp
+            val landscape = maxWidth > maxHeight
+            Surface(
+                shape = RoundedCornerShape(if (compactHeight) 18.dp else 24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .widthIn(max = if (landscape) 1050.dp else 720.dp)
+                    .fillMaxWidth()
+                    .fillMaxHeight(if (compactHeight) 0.98f else 0.92f)
+                    .padding(if (compactHeight) 5.dp else 16.dp)
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(if (compactHeight) 9.dp else 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.padding(if (compactHeight) 6.dp else 9.dp)
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                info.title,
+                                style = if (compactHeight) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "Revisión: ${info.reviewedOn}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                        }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(if (compactHeight) 10.dp else 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (compactHeight) 9.dp else 14.dp)
+                    ) {
+                        item { EcgInfoSection("Qué hace", info.purpose) }
+                        item { EcgInfoSection("Método utilizado", info.method) }
+                        item {
+                            Text(
+                                "Referencias usadas",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        items(info.references.size) { index ->
+                            val reference = info.references[index]
+                            OutlinedCard(
+                                colors = CardDefaults.outlinedCardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                )
+                            ) {
+                                Column(
+                                    Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Text(
+                                        "${index + 1}. ${reference.source}",
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(reference.citation, style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        "Uso en la app: ${reference.useInApp}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Text(
+                                "Limitaciones",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        items(info.limitations.size) { index ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text("•", color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Black)
+                                Text(
+                                    info.limitations[index],
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    "Herramienta de apoyo. No sustituye guías vigentes, juicio clínico, interpretación especializada ni valoración individual.",
+                                    modifier = Modifier.padding(12.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider()
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(if (compactHeight) 8.dp else 14.dp)
+                    ) {
+                        Text("Cerrar")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EcgInfoSection(title: String, text: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun EcgCalculatorContent(tool: EcgTool) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        when (tool) {
+            EcgTool.ANALYZER -> EcgAnalyzerContent()
+            EcgTool.RATE -> EcgRateContent()
+            EcgTool.QTC -> QtcCalculatorContent()
+            EcgTool.AXIS -> AxisCalculatorContent()
+            EcgTool.LVH -> LvhCalculatorContent()
+            EcgTool.ST -> StElevationContent()
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EcgAnalyzerScreen(modifier: Modifier = Modifier) {
+private fun EcgAnalyzerContent() {
     val clipboard = LocalClipboardManager.current
     var ageText by rememberSaveable { mutableStateOf("") }
     var sexName by rememberSaveable { mutableStateOf(EcgSex.MALE.name) }
@@ -177,94 +756,79 @@ private fun EcgAnalyzerScreen(modifier: Modifier = Modifier) {
         )
     )
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    EcgCard(
+        title = "Datos básicos",
+        note = "Captura los datos medidos en el ECG. La app redacta una interpretación preliminar, no una sentencia divina tallada en piedra."
     ) {
-        item { EcgHeaderCard() }
-        item {
-            EcgCard(
-                title = "Datos básicos",
-                note = "Captura los datos medidos en el ECG. La app calcula y redacta una interpretación preliminar, no una sentencia divina tallada en piedra."
-            ) {
-                ResponsiveFields {
-                    NumericField("Edad", ageText, { ageText = it.onlyDigits() }, suffix = "años")
-                    EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
-                    NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
-                    NumericField("PR", prText, { prText = it.decimalInput() }, suffix = "ms")
-                    NumericField("QRS", qrsText, { qrsText = it.decimalInput() }, suffix = "ms")
-                    NumericField("QT", qtText, { qtText = it.decimalInput() }, suffix = "ms")
-                    NumericField("Eje eléctrico", axisText, { axisText = it.signedDecimalInput() }, suffix = "°")
-                }
-                CheckRow("Ritmo sinusal", sinusRhythm) { sinusRhythm = it }
-                CheckRow("Ritmo regular", regularRhythm) { regularRhythm = it }
-            }
+        ResponsiveFields {
+            NumericField("Edad", ageText, { ageText = it.onlyDigits() }, suffix = "años")
+            EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
+            NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
+            NumericField("PR", prText, { prText = it.decimalInput() }, suffix = "ms")
+            NumericField("QRS", qrsText, { qrsText = it.decimalInput() }, suffix = "ms")
+            NumericField("QT", qtText, { qtText = it.decimalInput() }, suffix = "ms")
+            NumericField("Eje eléctrico", axisText, { axisText = it.signedDecimalInput() }, suffix = "°")
         }
-        item {
-            EcgCard(
-                title = "Hallazgos opcionales",
-                note = "Agrega criterios de ST o HVI cuando tengas los datos medidos."
-            ) {
-                CheckRow("Evaluar elevación del ST", includeSt) { includeSt = it }
-                if (includeSt) {
-                    ResponsiveFields {
-                        EnumDropdown(
-                            "Grupo de derivaciones",
-                            stLeadGroupName,
-                            { stLeadGroupName = it },
-                            EcgLeadGroup.entries.associate { it.name to it.label }
-                        )
-                        NumericField("Elevación máxima", stElevationText, { stElevationText = it.decimalInput() }, suffix = "mm")
-                    }
-                    CheckRow("Presente en ≥2 derivaciones contiguas", stContiguous) { stContiguous = it }
-                    stResult?.let { StResultCard(it) }
-                }
-                HorizontalDivider()
-                CheckRow("Evaluar HVI", includeLvh) { includeLvh = it }
-                if (includeLvh) {
-                    ResponsiveFields {
-                        NumericField("S en V1", sV1Text, { sV1Text = it.decimalInput() }, suffix = "mm")
-                        NumericField("R en V5", rV5Text, { rV5Text = it.decimalInput() }, suffix = "mm")
-                        NumericField("R en V6", rV6Text, { rV6Text = it.decimalInput() }, suffix = "mm")
-                        NumericField("R en aVL", rAvlText, { rAvlText = it.decimalInput() }, suffix = "mm")
-                        NumericField("S en V3", sV3Text, { sV3Text = it.decimalInput() }, suffix = "mm")
-                    }
-                    lvhResult?.let { LvhResultCard(it) }
-                }
+        CheckRow("Ritmo sinusal", sinusRhythm) { sinusRhythm = it }
+        CheckRow("Ritmo regular", regularRhythm) { regularRhythm = it }
+    }
+
+    EcgCard(
+        title = "Hallazgos opcionales",
+        note = "Agrega criterios de ST o HVI cuando tengas los datos medidos. Vacío no significa normal: significa no capturado. Vaya revelación."
+    ) {
+        CheckRow("Evaluar elevación del ST", includeSt) { includeSt = it }
+        if (includeSt) {
+            ResponsiveFields {
+                EnumDropdown(
+                    "Grupo de derivaciones",
+                    stLeadGroupName,
+                    { stLeadGroupName = it },
+                    EcgLeadGroup.entries.associate { it.name to it.label }
+                )
+                NumericField("Elevación máxima", stElevationText, { stElevationText = it.decimalInput() }, suffix = "mm")
             }
+            CheckRow("Presente en ≥2 derivaciones contiguas", stContiguous) { stContiguous = it }
+            stResult?.let { StResultCard(it) }
         }
-        item {
-            EcgCard(
-                title = "Resumen generado",
-                note = "Puedes copiarlo para nota clínica, pase o comentario rápido."
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        summary,
-                        modifier = Modifier.padding(14.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                Button(
-                    onClick = { clipboard.setText(AnnotatedString(summary)) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Copiar resumen")
-                }
+        HorizontalDivider()
+        CheckRow("Evaluar HVI", includeLvh) { includeLvh = it }
+        if (includeLvh) {
+            ResponsiveFields {
+                NumericField("S en V1", sV1Text, { sV1Text = it.decimalInput() }, suffix = "mm")
+                NumericField("R en V5", rV5Text, { rV5Text = it.decimalInput() }, suffix = "mm")
+                NumericField("R en V6", rV6Text, { rV6Text = it.decimalInput() }, suffix = "mm")
+                NumericField("R en aVL", rAvlText, { rAvlText = it.decimalInput() }, suffix = "mm")
+                NumericField("S en V3", sV3Text, { sV3Text = it.decimalInput() }, suffix = "mm")
             }
+            lvhResult?.let { LvhResultCard(it) }
+        }
+    }
+
+    EcgCard(
+        title = "Resumen generado",
+        note = "Puedes copiarlo para nota clínica, pase o comentario rápido. Lo sé, copiar y pegar también salvó más tiempo que muchas juntas."
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(summary, modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+        }
+        Button(
+            onClick = { clipboard.setText(AnnotatedString(summary)) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.ContentCopy, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Copiar resumen")
         }
     }
 }
 
 @Composable
-private fun EcgRateScreen(modifier: Modifier = Modifier) {
+private fun EcgRateContent() {
     var paperSpeedName by rememberSaveable { mutableStateOf(EcgPaperSpeed.SPEED_25.name) }
     val paperSpeed = EcgPaperSpeed.valueOf(paperSpeedName)
     var rrMsText by rememberSaveable { mutableStateOf("") }
@@ -281,66 +845,56 @@ private fun EcgRateScreen(modifier: Modifier = Modifier) {
     val stripResult = qrsCountText.toIntOrNull()?.let { EcgCalculator.rateFromTenSecondStrip(it).getOrNull() }
     val rrFromHr = heartRateText.toDecimalOrNull()?.let { EcgCalculator.rrMsFromHeartRate(it).getOrNull() }
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    EcgCard(
+        title = "Frecuencia cardiaca e intervalo RR",
+        note = "A 25 mm/s: 1 cuadro pequeño = 40 ms, 1 cuadro grande = 200 ms, 300/cuadros grandes y 1500/cuadros pequeños. La humanidad sobrevivió siglos para acabar dividiendo cuadritos, pero funciona."
     ) {
-        item {
-            EcgCard(
-                title = "Frecuencia cardiaca e intervalo RR",
-                note = "A 25 mm/s: 1 cuadro pequeño = 40 ms, 1 cuadro grande = 200 ms, 300/cuadros grandes y 1500/cuadros pequeños. La humanidad sobrevivió siglos para acabar dividiendo cuadritos, pero funciona."
-            ) {
-                EnumDropdown("Velocidad del papel", paperSpeedName, { paperSpeedName = it }, EcgPaperSpeed.entries.associate { it.name to it.label })
+        EnumDropdown("Velocidad del papel", paperSpeedName, { paperSpeedName = it }, EcgPaperSpeed.entries.associate { it.name to it.label })
+        ResultGrid(
+            listOf(
+                "1 cuadro pequeño" to "${EcgCalculator.smallSquareMs(paperSpeed).roundClean()} ms",
+                "1 cuadro grande" to "${EcgCalculator.largeSquareMs(paperSpeed).roundClean()} ms"
+            )
+        )
+    }
+
+    EcgCard("Calcular FC", "Usa el dato que tengas disponible.") {
+        ResponsiveFields {
+            NumericField("RR", rrMsText, { rrMsText = it.decimalInput() }, suffix = "ms")
+            NumericField("RR", rrSecText, { rrSecText = it.decimalInput() }, suffix = "s")
+            NumericField("Cuadros grandes", largeSquaresText, { largeSquaresText = it.decimalInput() })
+            NumericField("Cuadros pequeños", smallSquaresText, { smallSquaresText = it.decimalInput() })
+            NumericField("QRS en tira de 10 s", qrsCountText, { qrsCountText = it.onlyDigits() })
+        }
+        listOf(
+            "Por RR en ms" to rrMsResult,
+            "Por RR en s" to rrSecResult,
+            "Por cuadros grandes" to largeResult,
+            "Por cuadros pequeños" to smallResult,
+            "Por tira de 10 s" to stripResult
+        ).forEach { (label, result) ->
+            result?.let {
                 ResultGrid(
                     listOf(
-                        "1 cuadro pequeño" to "${EcgCalculator.smallSquareMs(paperSpeed).roundClean()} ms",
-                        "1 cuadro grande" to "${EcgCalculator.largeSquareMs(paperSpeed).roundClean()} ms"
+                        label to "${it.bpm.roundClean()} lpm",
+                        "RR estimado" to "${it.rrMs.roundClean()} ms",
+                        "Lectura" to it.interpretation
                     )
                 )
             }
         }
-        item {
-            EcgCard("Calcular FC", "Usa el dato que tengas disponible.") {
-                ResponsiveFields {
-                    NumericField("RR", rrMsText, { rrMsText = it.decimalInput() }, suffix = "ms")
-                    NumericField("RR", rrSecText, { rrSecText = it.decimalInput() }, suffix = "s")
-                    NumericField("Cuadros grandes", largeSquaresText, { largeSquaresText = it.decimalInput() })
-                    NumericField("Cuadros pequeños", smallSquaresText, { smallSquaresText = it.decimalInput() })
-                    NumericField("QRS en tira de 10 s", qrsCountText, { qrsCountText = it.onlyDigits() })
-                }
-                listOf(
-                    "Por RR en ms" to rrMsResult,
-                    "Por RR en s" to rrSecResult,
-                    "Por cuadros grandes" to largeResult,
-                    "Por cuadros pequeños" to smallResult,
-                    "Por tira de 10 s" to stripResult
-                ).forEach { (label, result) ->
-                    result?.let {
-                        ResultGrid(
-                            listOf(
-                                label to "${it.bpm.roundClean()} lpm",
-                                "RR estimado" to "${it.rrMs.roundClean()} ms",
-                                "Lectura" to it.interpretation
-                            )
-                        )
-                    }
-                }
-            }
-        }
-        item {
-            EcgCard("Calcular RR desde FC", "Útil para QTc y para revisar coherencia de mediciones.") {
-                NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
-                rrFromHr?.let {
-                    ResultGrid(listOf("RR" to "${it.roundClean()} ms", "RR" to "${(it / 1000.0).format(3)} s"))
-                }
-            }
+    }
+
+    EcgCard("Calcular RR desde FC", "Útil para QTc y para revisar coherencia de mediciones.") {
+        NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
+        rrFromHr?.let {
+            ResultGrid(listOf("RR" to "${it.roundClean()} ms", "RR" to "${(it / 1000.0).format(3)} s"))
         }
     }
 }
 
 @Composable
-private fun QtcCalculatorScreen(modifier: Modifier = Modifier) {
+private fun QtcCalculatorContent() {
     var qtText by rememberSaveable { mutableStateOf("") }
     var heartRateText by rememberSaveable { mutableStateOf("") }
     var rrText by rememberSaveable { mutableStateOf("") }
@@ -357,65 +911,49 @@ private fun QtcCalculatorScreen(modifier: Modifier = Modifier) {
         null
     }
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    EcgCard(
+        title = "QT corregido",
+        note = "Calcula Bazett, Fridericia, Framingham y Hodges. En frecuencias muy altas o bajas conviene mirar más allá de Bazett, porque una fórmula también puede ponerse dramática."
     ) {
-        item {
-            EcgCard(
-                title = "QT corregido",
-                note = "Calcula Bazett, Fridericia, Framingham y Hodges. En frecuencias muy altas o bajas conviene mirar más allá de Bazett, porque una fórmula también puede ponerse dramática."
-            ) {
-                NumericField("QT medido", qtText, { qtText = it.decimalInput() }, suffix = "ms")
-                CheckRow("Usar RR en lugar de FC", useRr) { useRr = it }
-                if (useRr) {
-                    NumericField("RR", rrText, { rrText = it.decimalInput() }, suffix = "ms")
-                } else {
-                    NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
-                }
-                result?.let { QtcResultCard(it) }
-            }
+        NumericField("QT medido", qtText, { qtText = it.decimalInput() }, suffix = "ms")
+        CheckRow("Usar RR en lugar de FC", useRr) { useRr = it }
+        if (useRr) {
+            NumericField("RR", rrText, { rrText = it.decimalInput() }, suffix = "ms")
+        } else {
+            NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
         }
+        result?.let { QtcResultCard(it) }
     }
 }
 
 @Composable
-private fun AxisCalculatorScreen(modifier: Modifier = Modifier) {
+private fun AxisCalculatorContent() {
     var methodName by rememberSaveable { mutableStateOf(EcgAxisMethod.LEAD_I_AVF.name) }
     val method = EcgAxisMethod.valueOf(methodName)
     var firstText by rememberSaveable { mutableStateOf("") }
     var secondText by rememberSaveable { mutableStateOf("") }
 
-    val firstLabel = if (method == EcgAxisMethod.LEAD_I_AVF) "QRS neto en DI" else "QRS neto en DI"
+    val firstLabel = "QRS neto en DI"
     val secondLabel = if (method == EcgAxisMethod.LEAD_I_AVF) "QRS neto en aVF" else "QRS neto en DIII"
     val result = firstText.toDecimalOrNull()?.let { first ->
         secondText.toDecimalOrNull()?.let { second -> EcgCalculator.calculateAxis(method, first, second) }
     }
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    EcgCard(
+        title = "Eje eléctrico",
+        note = "Introduce amplitudes netas del QRS en mm: R positiva menos Q/S negativas. DI+aVF es práctico; DI+DIII replica la idea de calculadoras clásicas como My EKG."
     ) {
-        item {
-            EcgCard(
-                title = "Eje eléctrico",
-                note = "Introduce amplitudes netas del QRS en mm: R positiva menos Q/S negativas. El cálculo con DI+aVF es el más práctico; DI+DIII replica la idea de calculadoras clásicas como My EKG."
-            ) {
-                EnumDropdown("Método", methodName, { methodName = it }, EcgAxisMethod.entries.associate { it.name to it.label })
-                ResponsiveFields {
-                    NumericField(firstLabel, firstText, { firstText = it.signedDecimalInput() }, suffix = "mm")
-                    NumericField(secondLabel, secondText, { secondText = it.signedDecimalInput() }, suffix = "mm")
-                }
-                result?.let { AxisResultCard(it) }
-            }
+        EnumDropdown("Método", methodName, { methodName = it }, EcgAxisMethod.entries.associate { it.name to it.label })
+        ResponsiveFields {
+            NumericField(firstLabel, firstText, { firstText = it.signedDecimalInput() }, suffix = "mm")
+            NumericField(secondLabel, secondText, { secondText = it.signedDecimalInput() }, suffix = "mm")
         }
+        result?.let { AxisResultCard(it) }
     }
 }
 
 @Composable
-private fun LvhCalculatorScreen(modifier: Modifier = Modifier) {
+private fun LvhCalculatorContent() {
     var sexName by rememberSaveable { mutableStateOf(EcgSex.MALE.name) }
     val sex = EcgSex.valueOf(sexName)
     var sV1Text by rememberSaveable { mutableStateOf("") }
@@ -435,33 +973,25 @@ private fun LvhCalculatorScreen(modifier: Modifier = Modifier) {
         qrsDurationMs = qrsText.toDecimalOrNull()
     )
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    EcgCard(
+        title = "Hipertrofia ventricular izquierda",
+        note = "Incluye Sokolow-Lyon, Cornell voltaje y Cornell producto. Son criterios eléctricos, no ecocardiograma disfrazado de app."
     ) {
-        item {
-            EcgCard(
-                title = "Hipertrofia ventricular izquierda",
-                note = "Incluye Sokolow-Lyon, Cornell voltaje y Cornell producto. Son criterios eléctricos, no ecocardiograma disfrazado de app."
-            ) {
-                EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
-                ResponsiveFields {
-                    NumericField("S en V1", sV1Text, { sV1Text = it.decimalInput() }, suffix = "mm")
-                    NumericField("R en V5", rV5Text, { rV5Text = it.decimalInput() }, suffix = "mm")
-                    NumericField("R en V6", rV6Text, { rV6Text = it.decimalInput() }, suffix = "mm")
-                    NumericField("R en aVL", rAvlText, { rAvlText = it.decimalInput() }, suffix = "mm")
-                    NumericField("S en V3", sV3Text, { sV3Text = it.decimalInput() }, suffix = "mm")
-                    NumericField("QRS", qrsText, { qrsText = it.decimalInput() }, suffix = "ms")
-                }
-                LvhResultCard(result)
-            }
+        EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
+        ResponsiveFields {
+            NumericField("S en V1", sV1Text, { sV1Text = it.decimalInput() }, suffix = "mm")
+            NumericField("R en V5", rV5Text, { rV5Text = it.decimalInput() }, suffix = "mm")
+            NumericField("R en V6", rV6Text, { rV6Text = it.decimalInput() }, suffix = "mm")
+            NumericField("R en aVL", rAvlText, { rAvlText = it.decimalInput() }, suffix = "mm")
+            NumericField("S en V3", sV3Text, { sV3Text = it.decimalInput() }, suffix = "mm")
+            NumericField("QRS", qrsText, { qrsText = it.decimalInput() }, suffix = "ms")
         }
+        LvhResultCard(result)
     }
 }
 
 @Composable
-private fun StElevationScreen(modifier: Modifier = Modifier) {
+private fun StElevationContent() {
     var ageText by rememberSaveable { mutableStateOf("") }
     var sexName by rememberSaveable { mutableStateOf(EcgSex.MALE.name) }
     val sex = EcgSex.valueOf(sexName)
@@ -480,56 +1010,18 @@ private fun StElevationScreen(modifier: Modifier = Modifier) {
         ).getOrNull()
     }
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    EcgCard(
+        title = "Criterios de elevación del ST",
+        note = "Evalúa el umbral en punto J para derivaciones contiguas. Si hay dolor torácico, inestabilidad o equivalente isquémico, esto no es juego de llenar casillas: requiere protocolo clínico."
     ) {
-        item {
-            EcgCard(
-                title = "Criterios de elevación del ST",
-                note = "Evalúa el umbral en punto J para derivaciones contiguas. Si hay dolor torácico, inestabilidad o equivalente isquémico, esto no es juego de llenar casillas: requiere protocolo clínico."
-            ) {
-                ResponsiveFields {
-                    NumericField("Edad", ageText, { ageText = it.onlyDigits() }, suffix = "años")
-                    EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
-                    EnumDropdown("Grupo", leadGroupName, { leadGroupName = it }, EcgLeadGroup.entries.associate { it.name to it.label })
-                    NumericField("Elevación máxima", elevationText, { elevationText = it.decimalInput() }, suffix = "mm")
-                }
-                CheckRow("Está en ≥2 derivaciones contiguas", contiguous) { contiguous = it }
-                result?.let { StResultCard(it) }
-            }
+        ResponsiveFields {
+            NumericField("Edad", ageText, { ageText = it.onlyDigits() }, suffix = "años")
+            EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
+            EnumDropdown("Grupo", leadGroupName, { leadGroupName = it }, EcgLeadGroup.entries.associate { it.name to it.label })
+            NumericField("Elevación máxima", elevationText, { elevationText = it.decimalInput() }, suffix = "mm")
         }
-    }
-}
-
-@Composable
-private fun EcgHeaderCard() {
-    OutlinedCard(
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Info, contentDescription = null)
-                Text(
-                    "Analizador de ECG",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Black
-                )
-            }
-            Text(
-                "Módulo de apoyo para frecuencia, RR, QTc, eje eléctrico, criterios de HVI y elevación del ST. No interpreta imágenes del trazo todavía: aquí se capturan mediciones, como adultos responsables con regla y criterio clínico.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
+        CheckRow("Está en ≥2 derivaciones contiguas", contiguous) { contiguous = it }
+        result?.let { StResultCard(it) }
     }
 }
 
@@ -546,16 +1038,8 @@ private fun EcgCard(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Black
-            )
-            Text(
-                note,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             content()
             SafetyNote()
         }
@@ -569,11 +1053,7 @@ private fun SafetyNote() {
         verticalAlignment = Alignment.Top,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Icon(
-            Icons.Default.WarningAmber,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.tertiary
-        )
+        Icon(Icons.Default.WarningAmber, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
         Text(
             "Uso educativo y de apoyo clínico. Correlacionar con síntomas, exploración, ECG completo, troponinas/biomarcadores y guías locales cuando aplique.",
             style = MaterialTheme.typography.labelSmall,
@@ -624,30 +1104,13 @@ private fun EnumDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    options[selectedKey].orEmpty(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(options[selectedKey].orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { (key, text) ->
                 DropdownMenuItem(
                     text = { Text(text) },
@@ -701,17 +1164,8 @@ private fun ResultGrid(rows: List<Pair<String, String>>) {
                     modifier = Modifier.padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        value,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
         }
@@ -773,21 +1227,177 @@ private fun WarningText(text: String) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Icon(
-            Icons.Default.WarningAmber,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.tertiary
-        )
-        Text(
-            text,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f)
-        )
+        Icon(Icons.Default.WarningAmber, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+        Text(text, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
     }
 }
 
-private fun String.toDecimalOrNull(): Double? =
-    replace(',', '.').toDoubleOrNull()
+private fun EcgTool.info(): EcgInfoContent = when (this) {
+    EcgTool.ANALYZER -> EcgInfoContent(
+        title = "Analizador ECG · información y referencias",
+        purpose = "Genera una interpretación preliminar a partir de datos medidos manualmente del ECG: frecuencia, ritmo, intervalos, eje, ST e HVI.",
+        method = "No analiza imágenes. Usa reglas determinísticas del motor ECG: clasificación de FC, intervalos PR/QRS, QTc si se captura QT y FC, eje frontal, criterios de ST y criterios eléctricos de HVI cuando se capturan.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Part IV: ST segment, T and U waves, and QT interval. J Am Coll Cardiol. 2009;53:982–991.",
+                useInApp = "Marco de medición e interpretación de ST, T/U y QT."
+            ),
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Part V: cardiac chamber hypertrophy. J Am Coll Cardiol. 2009;53:992–1002.",
+                useInApp = "Contexto para criterios eléctricos de hipertrofia."
+            ),
+            EcgReferenceItem(
+                source = "My EKG",
+                citation = "Calculadoras del EKG: frecuencia cardiaca, eje, QT corregido, RR e hipertrofia ventricular izquierda.",
+                useInApp = "Referencia funcional para organizar el menú de calculadoras."
+            )
+        ),
+        limitations = listOf(
+            "El resumen depende por completo de mediciones introducidas por el usuario.",
+            "No sustituye lectura médica del ECG de 12 derivaciones ni evaluación de síntomas.",
+            "No detecta arritmias complejas, patrones equivalentes de IAMCEST ni cambios dinámicos si no se capturan."
+        )
+    )
+
+    EcgTool.RATE -> EcgInfoContent(
+        title = "Frecuencia y RR · referencias",
+        purpose = "Calcula frecuencia cardiaca o RR usando mediciones del papel ECG.",
+        method = "A 25 mm/s: 1 cuadro pequeño = 40 ms y 1 cuadro grande = 200 ms. FC = 300/cuadros grandes, 1500/cuadros pequeños o QRS×6 en tira de 10 segundos. A 50 mm/s se recalculan los milisegundos por cuadro.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "Life in the Fast Lane",
+                citation = "ECG Rate Interpretation. Papel estándar de 25 mm/s, reglas 300/1500 y tira de 10 segundos.",
+                useInApp = "Conversión cuadros-tiempo y cálculo de frecuencia."
+            ),
+            EcgReferenceItem(
+                source = "My EKG",
+                citation = "Calculadoras de frecuencia cardiaca e intervalo RR del EKG.",
+                useInApp = "Referencia funcional para entradas de RR, cuadros y frecuencia."
+            )
+        ),
+        limitations = listOf(
+            "Las reglas por cuadros grandes/pequeños son más fiables en ritmo regular.",
+            "En ritmo irregular conviene usar una tira más larga y promediar varios ciclos.",
+            "Debe confirmarse la velocidad real del papel: 25 mm/s o 50 mm/s."
+        )
+    )
+
+    EcgTool.QTC -> EcgInfoContent(
+        title = "QT corregido · referencias",
+        purpose = "Corrige QT por frecuencia cardiaca con varias fórmulas para comparación clínica.",
+        method = "Calcula RR desde FC o lo toma en milisegundos. Fórmulas: Bazett = QT/√RR, Fridericia = QT/RR^(1/3), Framingham = QT + 0.154(1−RR) y Hodges = QT + 1.75(FC−60). RR se usa en segundos.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Part IV: ST segment, T and U waves, and QT interval. J Am Coll Cardiol. 2009;53:982–991.",
+                useInApp = "Marco clínico de medición e interpretación del QT."
+            ),
+            EcgReferenceItem(
+                source = "Life in the Fast Lane",
+                citation = "QT Interval. Fórmulas Bazett, Fridericia, Framingham y Hodges; advertencia sobre Bazett fuera de 60–100 lpm.",
+                useInApp = "Fórmulas implementadas y nota de cautela sobre Bazett."
+            ),
+            EcgReferenceItem(
+                source = "European Society of Cardiology",
+                citation = "How to measure the QT interval. Cardiogenomics Insights, 2024.",
+                useInApp = "Cotejo de medición de QT y corrección por frecuencia."
+            )
+        ),
+        limitations = listOf(
+            "No debe incluir onda U dentro del QT medido.",
+            "Bazett puede sobrecorregir con FC alta y subcorregir con FC baja.",
+            "QTc prolongado requiere valorar fármacos, electrolitos, QRS ancho, contexto y riesgo clínico."
+        )
+    )
+
+    EcgTool.AXIS -> EcgInfoContent(
+        title = "Eje eléctrico · referencias",
+        purpose = "Calcula y clasifica el eje frontal del QRS.",
+        method = "Permite DI+aVF como método vectorial práctico o DI+DIII usando relación de Einthoven. Clasifica normal, desviación izquierda, derecha o eje extremo.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "Life in the Fast Lane",
+                citation = "ECG Axis Interpretation. Método de cuadrantes con DI y aVF; rangos de eje normal y desviaciones.",
+                useInApp = "Clasificación del eje y método práctico."
+            ),
+            EcgReferenceItem(
+                source = "My EKG",
+                citation = "Heart Axis Calculator. Uso de DI y DIII para aproximar el eje cardiaco.",
+                useInApp = "Referencia funcional para el método DI+DIII."
+            ),
+            EcgReferenceItem(
+                source = "StatPearls / NCBI Bookshelf",
+                citation = "Electrical Right and Left Axis Deviation, actualización 2024.",
+                useInApp = "Cotejo de rangos normal, desviación izquierda, derecha y eje extremo."
+            )
+        ),
+        limitations = listOf(
+            "Debe capturarse la deflexión neta del QRS, no solo la onda R.",
+            "La clasificación por eje no diagnostica por sí sola bloqueo fascicular, hipertrofia o sobrecarga.",
+            "Errores de colocación de electrodos pueden alterar el resultado."
+        )
+    )
+
+    EcgTool.LVH -> EcgInfoContent(
+        title = "Hipertrofia ventricular izquierda · referencias",
+        purpose = "Evalúa criterios eléctricos de HVI por voltaje y producto voltaje-duración.",
+        method = "Sokolow-Lyon: S en V1 + R mayor de V5/V6 ≥35 mm. Cornell voltaje: R en aVL + S en V3, con umbral >28 mm en hombres y >20 mm en mujeres. Cornell producto: Cornell ajustado por sexo × QRS, positivo si >2440 mm·ms.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Part V: ECG changes associated with cardiac chamber hypertrophy. J Am Coll Cardiol. 2009;53:992–1002.",
+                useInApp = "Marco de criterios electrocardiográficos de hipertrofia."
+            ),
+            EcgReferenceItem(
+                source = "MSD Manual Professional",
+                citation = "Criteria for ECG Diagnosis of Left Ventricular Hypertrophy.",
+                useInApp = "Cotejo de Sokolow-Lyon, Cornell voltaje y Cornell producto."
+            ),
+            EcgReferenceItem(
+                source = "My EKG",
+                citation = "Calculadoras y criterios de hipertrofia ventricular izquierda.",
+                useInApp = "Referencia funcional del apartado de HVI."
+            )
+        ),
+        limitations = listOf(
+            "Los criterios eléctricos tienen sensibilidad limitada y no reemplazan ecocardiograma o imagen.",
+            "Bloqueos de rama, fasciculares, obesidad, edad y técnica pueden modificar voltajes.",
+            "Un criterio positivo debe correlacionarse con clínica, presión arterial e imagen cuando aplique."
+        )
+    )
+
+    EcgTool.ST -> EcgInfoContent(
+        title = "Elevación del ST · referencias",
+        purpose = "Evalúa si la elevación del ST alcanza umbrales electrocardiográficos por derivaciones contiguas.",
+        method = "Usa elevación del ST en punto J. Requiere ≥2 derivaciones contiguas. En V2–V3: hombres <40 años ≥2.5 mm, hombres ≥40 años ≥2.0 mm, mujeres ≥1.5 mm. En otras derivaciones contiguas: ≥1.0 mm.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "Fourth Universal Definition of Myocardial Infarction",
+                citation = "Thygesen K, Alpert JS, Jaffe AS, et al. Circulation. 2018;138:e618–e651.",
+                useInApp = "Umbrales de elevación del ST por derivación, sexo y edad."
+            ),
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Part IV: ST segment, T and U waves, and QT interval. J Am Coll Cardiol. 2009;53:982–991.",
+                useInApp = "Contexto técnico para medición del ST."
+            ),
+            EcgReferenceItem(
+                source = "Life in the Fast Lane",
+                citation = "ST Segment ECG Library Basics.",
+                useInApp = "Referencia educativa complementaria sobre punto J y segmento ST."
+            )
+        ),
+        limitations = listOf(
+            "No identifica automáticamente equivalentes de IAMCEST ni patrones sutiles.",
+            "No sustituye protocolo de dolor torácico, ECG seriados, biomarcadores ni valoración urgente.",
+            "El contexto clínico pesa más que una casilla aislada. Trágico, pero cierto."
+        )
+    )
+}
+
+private fun String.toDecimalOrNull(): Double? = replace(',', '.').toDoubleOrNull()
 
 private fun String.decimalInput(): String =
     filter { it.isDigit() || it == '.' || it == ',' }
