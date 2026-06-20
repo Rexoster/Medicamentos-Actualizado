@@ -1,0 +1,5 @@
+VERIFICACION V23.9
+- Menú Pediatría con icono animado feto -> bebé.
+- Menú Gineco-OB convertido a desplegable con icono animado mórula -> feto.
+- No se modificaron cálculos clínicos.
+- Revisión local de estructura y empaquetado: OK.

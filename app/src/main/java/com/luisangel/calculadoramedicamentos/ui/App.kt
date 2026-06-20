@@ -2991,50 +2991,36 @@ private enum class ObstetricCalculator(
 @Composable
 private fun ObstetricsScreen(modifier: Modifier = Modifier) {
     var selected by rememberSaveable { mutableStateOf(ObstetricCalculator.GESTATIONAL_AGE) }
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
 
     BoxWithConstraints(modifier) {
-        val expanded = maxWidth >= 840.dp
+        val compactHeight = maxHeight < 560.dp
+        val landscape = maxWidth > maxHeight
+        val menuSpacing = if (compactHeight) 6.dp else 10.dp
 
-        if (expanded) {
-            Row(
-                Modifier.fillMaxSize().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                ObstetricCalculatorMenu(
-                    selected = selected,
-                    onSelected = { selected = it },
-                    modifier = Modifier.widthIn(min = 260.dp, max = 330.dp).fillMaxHeight()
-                )
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 32.dp)
-                ) {
-                    item { ObstetricHeaderCard() }
-                    item { ObstetricCalculatorContent(selected) }
-                }
-            }
-        } else {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(menuSpacing)
+        ) {
+            ObstetricCollapsibleMenu(
+                expanded = menuExpanded,
+                selected = selected,
+                onToggle = { menuExpanded = !menuExpanded },
+                onSelected = {
+                    selected = it
+                    menuExpanded = false
+                },
+                compactHeight = compactHeight,
+                landscape = landscape,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(12.dp, 12.dp, 12.dp, 40.dp)
+                contentPadding = PaddingValues(12.dp, 0.dp, 12.dp, 40.dp)
             ) {
                 item { ObstetricHeaderCard() }
-                item {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ObstetricCalculator.entries.forEach { calculator ->
-                            FilterChip(
-                                selected = selected == calculator,
-                                onClick = { selected = calculator },
-                                label = { Text(calculator.shortLabel) }
-                            )
-                        }
-                    }
-                }
                 item { ObstetricCalculatorContent(selected) }
             }
         }
@@ -3068,66 +3054,178 @@ private fun ObstetricHeaderCard() {
 }
 
 @Composable
-private fun ObstetricCalculatorMenu(
+private fun ObstetricCollapsibleMenu(
+    expanded: Boolean,
     selected: ObstetricCalculator,
+    onToggle: () -> Unit,
     onSelected: (ObstetricCalculator) -> Unit,
+    compactHeight: Boolean,
+    landscape: Boolean,
     modifier: Modifier = Modifier
 ) {
-    OutlinedCard(modifier) {
-        Column(
+    val buttonWidth by animateDpAsState(
+        targetValue = if (expanded) {
+            if (compactHeight) 232.dp else 272.dp
+        } else {
+            if (compactHeight) 58.dp else 64.dp
+        },
+        label = "obMenuButtonWidth"
+    )
+    val buttonHeight = if (compactHeight) 46.dp else 54.dp
+    val panelMaxHeight = if (landscape) 290.dp else 420.dp
+    val columnCount = if (landscape) 2 else 1
+
+    Column(
+        modifier = modifier.animateContentSize(),
+        verticalArrangement = Arrangement.spacedBy(if (compactHeight) 5.dp else 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            onClick = onToggle,
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(
-                    rememberScrollState()
-                )
-                .padding(10.dp),
-            verticalArrangement =
-                Arrangement.spacedBy(8.dp)
+                .width(buttonWidth)
+                .height(buttonHeight),
+            shape = RoundedCornerShape(if (compactHeight) 17.dp else 20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.primary,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.4.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+            ),
+            tonalElevation = if (expanded) 5.dp else 2.dp
         ) {
-            Text(
-                "Menú",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-            )
-            ObstetricCalculator.entries.forEach { calculator ->
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (selected == calculator) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (selected == calculator) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant
-                        }
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelected(calculator) }
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (compactHeight) 10.dp else 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                MorulaToFetusMenuIcon(
+                    expanded = expanded,
+                    compact = compactHeight,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(if (compactHeight) 24.dp else 28.dp)
+                )
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = fadeIn(),
+                    exit = fadeOut()
                 ) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(8.dp))
                         Text(
-                            calculator.label,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selected == calculator) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
-                        )
-                        Text(
-                            calculator.description,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            "Gineco-OB",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black
                         )
                     }
                 }
             }
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (compactHeight) 8.dp else 14.dp)
+                    .heightIn(max = panelMaxHeight)
+                    .verticalScroll(rememberScrollState()),
+                shape = RoundedCornerShape(if (compactHeight) 20.dp else 26.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                ),
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(if (compactHeight) 10.dp else 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 12.dp)
+                ) {
+                    Text(
+                        "Herramientas gineco-obstétricas",
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                    ObstetricCalculator.entries.chunked(columnCount).forEach { rowTools ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 12.dp)
+                        ) {
+                            rowTools.forEach { calculator ->
+                                ObstetricToolTile(
+                                    calculator = calculator,
+                                    selected = selected == calculator,
+                                    compact = compactHeight,
+                                    onClick = { onSelected(calculator) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(columnCount - rowTools.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ObstetricToolTile(
+    calculator: ObstetricCalculator,
+    selected: Boolean,
+    compact: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(if (compact) 106.dp else 126.dp),
+        shape = RoundedCornerShape(if (compact) 17.dp else 22.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (selected) 1.8.dp else 0.8.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        tonalElevation = if (selected) 6.dp else 1.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (compact) 10.dp else 13.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            MorulaMiniGlyph(
+                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.88f),
+                modifier = Modifier.size(if (compact) 22.dp else 26.dp)
+            )
+            Text(
+                calculator.shortLabel,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.Black,
+                style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall
+            )
+            Text(
+                calculator.label,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -3145,7 +3243,224 @@ private fun ObstetricCalculatorContent(calculator: ObstetricCalculator) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FetusToBabyMenuIcon(
+    expanded: Boolean,
+    compact: Boolean,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    val progress by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = tween(durationMillis = 700),
+        label = "fetusBabyProgress"
+    )
+    val stroke = if (compact) 2.6f else 3.2f
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val fetusAlpha = 1f - progress
+        val babyAlpha = progress
+        val burst = (progress * 1.2f - 0.12f).coerceIn(0f, 1f)
+        val center = Offset(w * 0.5f, h * 0.52f)
+        val radius = minOf(w, h) * 0.38f
+        if (burst > 0f) {
+            val angles = listOf(-120f, -55f, -10f, 35f, 95f, 145f)
+            angles.forEach { angleDeg ->
+                val angle = Math.toRadians(angleDeg.toDouble())
+                val dir = Offset(kotlin.math.cos(angle).toFloat(), kotlin.math.sin(angle).toFloat())
+                drawLine(
+                    color = tint.copy(alpha = 0.18f + 0.42f * burst),
+                    start = center + Offset(dir.x * (radius * 0.64f), dir.y * (radius * 0.64f)),
+                    end = center + Offset(dir.x * (radius * (0.92f + 0.46f * burst)), dir.y * (radius * (0.92f + 0.46f * burst))),
+                    strokeWidth = stroke * 0.55f,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+        // fetus
+        drawCircle(
+            color = tint.copy(alpha = 0.9f * fetusAlpha),
+            radius = radius * 0.24f,
+            center = Offset(w * 0.58f, h * 0.34f)
+        )
+        val fetusPath = Path().apply {
+            moveTo(w * 0.60f, h * 0.45f)
+            cubicTo(w * 0.40f, h * 0.46f, w * 0.30f, h * 0.70f, w * 0.50f, h * 0.78f)
+            cubicTo(w * 0.72f, h * 0.86f, w * 0.78f, h * 0.62f, w * 0.62f, h * 0.52f)
+        }
+        drawPath(
+            path = fetusPath,
+            color = tint.copy(alpha = 0.86f * fetusAlpha),
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.76f * fetusAlpha),
+            start = Offset(w * 0.46f, h * 0.59f),
+            end = Offset(w * 0.40f, h * 0.64f),
+            strokeWidth = stroke * 0.72f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.76f * fetusAlpha),
+            start = Offset(w * 0.56f, h * 0.70f),
+            end = Offset(w * 0.64f, h * 0.75f),
+            strokeWidth = stroke * 0.72f,
+            cap = StrokeCap.Round
+        )
+        // baby
+        drawCircle(
+            color = tint.copy(alpha = 0.92f * babyAlpha),
+            radius = radius * 0.23f,
+            center = Offset(w * 0.50f, h * 0.30f)
+        )
+        drawCircle(
+            color = tint.copy(alpha = 0.22f * babyAlpha),
+            radius = radius * 0.31f,
+            center = Offset(w * 0.50f, h * 0.59f)
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.92f * babyAlpha),
+            start = Offset(w * 0.50f, h * 0.43f),
+            end = Offset(w * 0.50f, h * 0.72f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.86f * babyAlpha),
+            start = Offset(w * 0.50f, h * 0.54f),
+            end = Offset(w * 0.34f, h * 0.60f),
+            strokeWidth = stroke * 0.84f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.86f * babyAlpha),
+            start = Offset(w * 0.50f, h * 0.54f),
+            end = Offset(w * 0.66f, h * 0.60f),
+            strokeWidth = stroke * 0.84f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.86f * babyAlpha),
+            start = Offset(w * 0.50f, h * 0.72f),
+            end = Offset(w * 0.38f, h * 0.88f),
+            strokeWidth = stroke * 0.84f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.86f * babyAlpha),
+            start = Offset(w * 0.50f, h * 0.72f),
+            end = Offset(w * 0.62f, h * 0.88f),
+            strokeWidth = stroke * 0.84f,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+@Composable
+private fun MorulaToFetusMenuIcon(
+    expanded: Boolean,
+    compact: Boolean,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    val progress by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = tween(durationMillis = 800),
+        label = "morulaFetusProgress"
+    )
+    val stroke = if (compact) 2.4f else 3f
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val center = Offset(w * 0.5f, h * 0.5f)
+        val baseR = minOf(w, h) * 0.11f
+        val morph = (progress - 0.54f).coerceIn(0f, 1f) / 0.46f
+        val cellAlpha = (1f - progress * 0.9f).coerceIn(0f, 1f)
+        val divisions = 4 + (progress * 4f).toInt().coerceIn(0, 4)
+        val outerR = minOf(w, h) * 0.26f
+        for (i in 0 until divisions) {
+            val angle = (Math.PI * 2.0 * i / divisions) - Math.PI / 2.0
+            val cellCenter = Offset(
+                center.x + kotlin.math.cos(angle).toFloat() * outerR * (0.45f + 0.15f * progress),
+                center.y + kotlin.math.sin(angle).toFloat() * outerR * (0.45f + 0.15f * progress)
+            )
+            drawCircle(
+                color = tint.copy(alpha = 0.16f * cellAlpha),
+                radius = baseR * (1.22f - 0.24f * progress),
+                center = cellCenter
+            )
+            drawCircle(
+                color = tint.copy(alpha = 0.95f * cellAlpha),
+                radius = baseR * (1.22f - 0.24f * progress),
+                center = cellCenter,
+                style = Stroke(width = stroke * 0.72f)
+            )
+        }
+        drawCircle(
+            color = tint.copy(alpha = 0.18f * cellAlpha),
+            radius = outerR * 0.42f,
+            center = center
+        )
+        drawCircle(
+            color = tint.copy(alpha = 0.9f * cellAlpha),
+            radius = outerR * 0.42f,
+            center = center,
+            style = Stroke(width = stroke * 0.72f)
+        )
+        // fetus reveal
+        drawCircle(
+            color = tint.copy(alpha = 0.88f * morph),
+            radius = outerR * 0.24f,
+            center = Offset(w * 0.58f, h * 0.32f)
+        )
+        val fetusPath = Path().apply {
+            moveTo(w * 0.60f, h * 0.44f)
+            cubicTo(w * 0.38f, h * 0.46f, w * 0.28f, h * 0.72f, w * 0.48f, h * 0.80f)
+            cubicTo(w * 0.72f, h * 0.88f, w * 0.80f, h * 0.60f, w * 0.63f, h * 0.50f)
+        }
+        drawPath(
+            path = fetusPath,
+            color = tint.copy(alpha = 0.94f * morph),
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.84f * morph),
+            start = Offset(w * 0.46f, h * 0.58f),
+            end = Offset(w * 0.39f, h * 0.64f),
+            strokeWidth = stroke * 0.74f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = tint.copy(alpha = 0.84f * morph),
+            start = Offset(w * 0.56f, h * 0.70f),
+            end = Offset(w * 0.66f, h * 0.77f),
+            strokeWidth = stroke * 0.74f,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+@Composable
+private fun MorulaMiniGlyph(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val r = minOf(size.width, size.height) * 0.13f
+        val outer = minOf(size.width, size.height) * 0.28f
+        for (i in 0 until 6) {
+            val angle = (Math.PI * 2.0 * i / 6) - Math.PI / 2.0
+            val c = Offset(
+                center.x + kotlin.math.cos(angle).toFloat() * outer,
+                center.y + kotlin.math.sin(angle).toFloat() * outer
+            )
+            drawCircle(color = tint.copy(alpha = 0.18f), radius = r * 1.5f, center = c)
+            drawCircle(color = tint, radius = r * 1.5f, center = c, style = Stroke(width = 2.1f))
+        }
+        drawCircle(color = tint.copy(alpha = 0.18f), radius = r * 1.6f, center = center)
+        drawCircle(color = tint, radius = r * 1.6f, center = center, style = Stroke(width = 2.1f))
+    }
+}
+
 @Composable
 private fun GestationalAgeCalculator() {
     var lmp by rememberSaveable {
@@ -5245,9 +5560,10 @@ private fun PediatricToolMenu(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "Menú de pediatría",
+                FetusToBabyMenuIcon(
+                    expanded = expanded,
+                    compact = compactHeight,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(if (compactHeight) 24.dp else 28.dp)
                 )
                 AnimatedVisibility(
