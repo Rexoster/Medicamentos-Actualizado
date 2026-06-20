@@ -192,6 +192,9 @@ import com.luisangel.calculadoramedicamentos.model.toRecord
 import com.luisangel.calculadoramedicamentos.model.validationError
 import com.luisangel.calculadoramedicamentos.ui.ecg.EcgScreen
 import com.luisangel.calculadoramedicamentos.ui.theme.CalculatorTheme
+import com.luisangel.calculadoramedicamentos.update.AppUpdateManager
+import com.luisangel.calculadoramedicamentos.update.UpdateCheckResult
+import com.luisangel.calculadoramedicamentos.update.UpdateManifest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -1066,10 +1069,31 @@ private fun ApplicationShell(
     val snackbarHost = remember {
         SnackbarHostState()
     }
+    val context = LocalContext.current
+    val updateManager = remember {
+        AppUpdateManager(context.applicationContext)
+    }
+    var automaticUpdate by remember {
+        mutableStateOf<UpdateManifest?>(null)
+    }
+    var automaticUpdateDismissed by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collectLatest {
             snackbarHost.showSnackbar(it)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val result = withContext(Dispatchers.IO) {
+            updateManager.checkForUpdates()
+        }
+
+        if (result is UpdateCheckResult.Available) {
+            automaticUpdate = result.manifest
+            automaticUpdateDismissed = false
         }
     }
 
@@ -1229,6 +1253,138 @@ private fun ApplicationShell(
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
             )
+
+            automaticUpdate
+                ?.takeIf { !automaticUpdateDismissed }
+                ?.let { update ->
+                    AutoUpdateAvailableDialog(
+                        update = update,
+                        currentVersion = updateManager.currentVersionLabel(),
+                        onDismiss = {
+                            automaticUpdateDismissed = true
+                        },
+                        onOpenUpdates = {
+                            automaticUpdateDismissed = true
+                            section = MainSection.UPDATES
+                            menuExpanded = false
+                        }
+                    )
+                }
+        }
+    }
+}
+
+@Composable
+private fun AutoUpdateAvailableDialog(
+    update: UpdateManifest,
+    currentVersion: String,
+    onDismiss: () -> Unit,
+    onOpenUpdates: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 420.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 10.dp,
+            shadowElevation = 12.dp,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(13.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(11.dp).size(28.dp)
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Nueva actualización disponible",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            "Hay una versión nueva lista para instalar.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(
+                        "Instalada: $currentVersion",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Disponible: ${update.versionName} (${update.versionCode})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                if (update.notes.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
+                    ) {
+                        Text(
+                            update.notes,
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Text(
+                    "Toca fuera de esta ventana para cerrarla. Volverá a aparecer al abrir de nuevo la app si la actualización sigue disponible.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Después")
+                    }
+                    Button(onClick = onOpenUpdates) {
+                        Icon(Icons.Default.Download, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Actualizar")
+                    }
+                }
+            }
         }
     }
 }
@@ -3252,35 +3408,79 @@ private fun FetusToBabyMenuIcon(
 ) {
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
         label = "fetusBabyProgress"
     )
     val stroke = if (compact) 2.6f else 3.2f
-    Canvas(modifier) {
+    val pop = kotlin.math.sin((progress * Math.PI).toFloat()).coerceAtLeast(0f)
+
+    Canvas(
+        modifier.graphicsLayer {
+            scaleX = 1f + 0.08f * pop
+            scaleY = 1f + 0.08f * pop
+            rotationZ = -8f * (1f - progress) + 4f * pop
+        }
+    ) {
         val w = size.width
         val h = size.height
-        val fetusAlpha = 1f - progress
-        val babyAlpha = progress
-        val burst = (progress * 1.2f - 0.12f).coerceIn(0f, 1f)
+        val fetusAlpha = (1f - progress * 1.08f).coerceIn(0f, 1f)
+        val babyAlpha = ((progress - 0.22f) / 0.78f).coerceIn(0f, 1f)
+        val burst = ((progress - 0.10f) / 0.55f).coerceIn(0f, 1f)
         val center = Offset(w * 0.5f, h * 0.52f)
         val radius = minOf(w, h) * 0.38f
+
+        // Membrana/cascarón que se rompe al abrir.
+        val shellAlpha = (1f - progress * 0.72f).coerceIn(0f, 1f)
+        val shellPath = Path().apply {
+            moveTo(w * 0.50f, h * 0.10f)
+            cubicTo(w * 0.18f, h * 0.16f, w * 0.14f, h * 0.58f, w * 0.38f, h * 0.86f)
+            cubicTo(w * 0.60f, h * 1.02f, w * 0.92f, h * 0.76f, w * 0.82f, h * 0.38f)
+            cubicTo(w * 0.78f, h * 0.20f, w * 0.64f, h * 0.10f, w * 0.50f, h * 0.10f)
+        }
+        drawPath(
+            path = shellPath,
+            color = tint.copy(alpha = 0.30f * shellAlpha),
+            style = Stroke(width = stroke * 0.72f, cap = StrokeCap.Round)
+        )
+
         if (burst > 0f) {
-            val angles = listOf(-120f, -55f, -10f, 35f, 95f, 145f)
-            angles.forEach { angleDeg ->
+            val cracks = listOf(
+                Pair(-125f, 0.55f), Pair(-72f, 0.82f), Pair(-18f, 0.70f),
+                Pair(34f, 0.64f), Pair(95f, 0.78f), Pair(150f, 0.58f)
+            )
+            cracks.forEach { (angleDeg, lengthFactor) ->
                 val angle = Math.toRadians(angleDeg.toDouble())
                 val dir = Offset(kotlin.math.cos(angle).toFloat(), kotlin.math.sin(angle).toFloat())
+                val start = center + Offset(dir.x * radius * 0.50f, dir.y * radius * 0.50f)
+                val end = center + Offset(
+                    dir.x * radius * (0.82f + burst * 0.46f * lengthFactor),
+                    dir.y * radius * (0.82f + burst * 0.46f * lengthFactor)
+                )
                 drawLine(
-                    color = tint.copy(alpha = 0.18f + 0.42f * burst),
-                    start = center + Offset(dir.x * (radius * 0.64f), dir.y * (radius * 0.64f)),
-                    end = center + Offset(dir.x * (radius * (0.92f + 0.46f * burst)), dir.y * (radius * (0.92f + 0.46f * burst))),
-                    strokeWidth = stroke * 0.55f,
+                    color = tint.copy(alpha = 0.16f + 0.50f * burst),
+                    start = start,
+                    end = end,
+                    strokeWidth = stroke * (0.42f + 0.24f * burst),
                     cap = StrokeCap.Round
+                )
+                val chipCenter = center + Offset(
+                    dir.x * radius * (0.82f + burst * 0.18f),
+                    dir.y * radius * (0.82f + burst * 0.18f)
+                )
+                drawCircle(
+                    color = tint.copy(alpha = 0.10f + 0.20f * burst),
+                    radius = radius * 0.035f * lengthFactor,
+                    center = chipCenter
                 )
             }
         }
-        // fetus
+
+        // Feto cerrado.
         drawCircle(
-            color = tint.copy(alpha = 0.9f * fetusAlpha),
+            color = tint.copy(alpha = 0.90f * fetusAlpha),
             radius = radius * 0.24f,
             center = Offset(w * 0.58f, h * 0.34f)
         )
@@ -3308,16 +3508,17 @@ private fun FetusToBabyMenuIcon(
             strokeWidth = stroke * 0.72f,
             cap = StrokeCap.Round
         )
-        // baby
+
+        // Bebé abierto.
+        drawCircle(
+            color = tint.copy(alpha = 0.18f * babyAlpha),
+            radius = radius * (0.42f + 0.05f * pop),
+            center = Offset(w * 0.50f, h * 0.58f)
+        )
         drawCircle(
             color = tint.copy(alpha = 0.92f * babyAlpha),
             radius = radius * 0.23f,
             center = Offset(w * 0.50f, h * 0.30f)
-        )
-        drawCircle(
-            color = tint.copy(alpha = 0.22f * babyAlpha),
-            radius = radius * 0.31f,
-            center = Offset(w * 0.50f, h * 0.59f)
         )
         drawLine(
             color = tint.copy(alpha = 0.92f * babyAlpha),
@@ -3329,28 +3530,28 @@ private fun FetusToBabyMenuIcon(
         drawLine(
             color = tint.copy(alpha = 0.86f * babyAlpha),
             start = Offset(w * 0.50f, h * 0.54f),
-            end = Offset(w * 0.34f, h * 0.60f),
+            end = Offset(w * 0.32f, h * 0.58f),
             strokeWidth = stroke * 0.84f,
             cap = StrokeCap.Round
         )
         drawLine(
             color = tint.copy(alpha = 0.86f * babyAlpha),
             start = Offset(w * 0.50f, h * 0.54f),
-            end = Offset(w * 0.66f, h * 0.60f),
+            end = Offset(w * 0.68f, h * 0.58f),
             strokeWidth = stroke * 0.84f,
             cap = StrokeCap.Round
         )
         drawLine(
             color = tint.copy(alpha = 0.86f * babyAlpha),
             start = Offset(w * 0.50f, h * 0.72f),
-            end = Offset(w * 0.38f, h * 0.88f),
+            end = Offset(w * 0.37f, h * 0.88f),
             strokeWidth = stroke * 0.84f,
             cap = StrokeCap.Round
         )
         drawLine(
             color = tint.copy(alpha = 0.86f * babyAlpha),
             start = Offset(w * 0.50f, h * 0.72f),
-            end = Offset(w * 0.62f, h * 0.88f),
+            end = Offset(w * 0.63f, h * 0.88f),
             strokeWidth = stroke * 0.84f,
             cap = StrokeCap.Round
         )
@@ -3366,49 +3567,89 @@ private fun MorulaToFetusMenuIcon(
 ) {
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 800),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
         label = "morulaFetusProgress"
     )
     val stroke = if (compact) 2.4f else 3f
-    Canvas(modifier) {
+    val pop = kotlin.math.sin((progress * Math.PI).toFloat()).coerceAtLeast(0f)
+
+    Canvas(
+        modifier.graphicsLayer {
+            scaleX = 1f + 0.07f * pop
+            scaleY = 1f + 0.07f * pop
+            rotationZ = 6f * (1f - progress) - 3f * pop
+        }
+    ) {
         val w = size.width
         val h = size.height
         val center = Offset(w * 0.5f, h * 0.5f)
-        val baseR = minOf(w, h) * 0.11f
-        val morph = (progress - 0.54f).coerceIn(0f, 1f) / 0.46f
-        val cellAlpha = (1f - progress * 0.9f).coerceIn(0f, 1f)
-        val divisions = 4 + (progress * 4f).toInt().coerceIn(0, 4)
-        val outerR = minOf(w, h) * 0.26f
+        val baseR = minOf(w, h) * 0.105f
+        val outerR = minOf(w, h) * 0.28f
+        val morph = ((progress - 0.50f) / 0.50f).coerceIn(0f, 1f)
+        val cellAlpha = (1f - progress * 0.88f).coerceIn(0f, 1f)
+        val divisions = when {
+            progress < 0.22f -> 4
+            progress < 0.44f -> 6
+            progress < 0.64f -> 8
+            else -> 10
+        }
+
         for (i in 0 until divisions) {
             val angle = (Math.PI * 2.0 * i / divisions) - Math.PI / 2.0
+            val drift = outerR * (0.34f + 0.22f * progress)
             val cellCenter = Offset(
-                center.x + kotlin.math.cos(angle).toFloat() * outerR * (0.45f + 0.15f * progress),
-                center.y + kotlin.math.sin(angle).toFloat() * outerR * (0.45f + 0.15f * progress)
+                center.x + kotlin.math.cos(angle).toFloat() * drift,
+                center.y + kotlin.math.sin(angle).toFloat() * drift
             )
+            val cellRadius = baseR * (1.30f - 0.34f * progress)
             drawCircle(
-                color = tint.copy(alpha = 0.16f * cellAlpha),
-                radius = baseR * (1.22f - 0.24f * progress),
+                color = tint.copy(alpha = 0.15f * cellAlpha),
+                radius = cellRadius,
                 center = cellCenter
             )
             drawCircle(
-                color = tint.copy(alpha = 0.95f * cellAlpha),
-                radius = baseR * (1.22f - 0.24f * progress),
+                color = tint.copy(alpha = 0.96f * cellAlpha),
+                radius = cellRadius,
                 center = cellCenter,
-                style = Stroke(width = stroke * 0.72f)
+                style = Stroke(width = stroke * 0.70f)
             )
+            if (progress > 0.15f && i % 2 == 0) {
+                drawLine(
+                    color = tint.copy(alpha = 0.28f * cellAlpha),
+                    start = center,
+                    end = cellCenter,
+                    strokeWidth = stroke * 0.38f,
+                    cap = StrokeCap.Round
+                )
+            }
         }
+
         drawCircle(
             color = tint.copy(alpha = 0.18f * cellAlpha),
-            radius = outerR * 0.42f,
+            radius = outerR * (0.42f + 0.05f * pop),
             center = center
         )
         drawCircle(
             color = tint.copy(alpha = 0.9f * cellAlpha),
-            radius = outerR * 0.42f,
+            radius = outerR * (0.42f + 0.05f * pop),
             center = center,
             style = Stroke(width = stroke * 0.72f)
         )
-        // fetus reveal
+
+        // Destello tenue de transición de segmentación a embrión.
+        if (progress > 0.34f) {
+            val glow = ((progress - 0.34f) / 0.36f).coerceIn(0f, 1f) * (1f - morph * 0.45f)
+            drawCircle(
+                color = tint.copy(alpha = 0.12f * glow),
+                radius = outerR * (0.78f + 0.20f * pop),
+                center = center
+            )
+        }
+
+        // Feto revelado.
         drawCircle(
             color = tint.copy(alpha = 0.88f * morph),
             radius = outerR * 0.24f,

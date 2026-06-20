@@ -1,0 +1,8 @@
+VERIFICACION V23.10
+- Animación Pediatría feto -> bebé mejorada.
+- Animación Gineco-OB mórula -> feto mejorada.
+- Detección automática de actualizaciones al abrir app agregada.
+- Ventana descartable por toque fuera / botón Después.
+- Botón Actualizar dirige al apartado Actualizaciones.
+- No se modificaron cálculos clínicos.
+- Revisión local de estructura y empaquetado: OK.
