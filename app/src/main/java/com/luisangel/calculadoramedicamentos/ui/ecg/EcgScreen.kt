@@ -10,6 +10,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -71,9 +72,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -204,12 +209,73 @@ private data class EcgPreviewModel(
     val prMs: Double,
     val qrsMs: Double,
     val qtMs: Double,
+    val qtcResult: QtcResult?,
+    val qtcPreferredMs: Double?,
+    val qtcSourceNote: String,
     val stMm: Double,
     val axisDegrees: Double?,
     val rhythmSinus: Boolean,
     val rhythmRegular: Boolean,
     val lvhPositive: Boolean,
     val sourceNote: String
+)
+
+private enum class EcgPreviewMode(val label: String, val description: String) {
+    SINGLE_LEAD("Una derivación", "Ver una derivación ampliada."),
+    TWELVE_LEADS("ECG completo", "Ver 12 derivaciones simuladas."),
+    CARDIAC_AREA("Áreas cardíacas", "Comparar derivaciones por región anatómica."),
+    CORONARY_TERRITORY("Irrigación", "Comparar por territorio coronario probable.")
+}
+
+private enum class EcgLead(
+    val label: String,
+    val region: String,
+    val limbAxisDegrees: Double?,
+    val precordialProjection: Double
+) {
+    DI("DI", "Lateral alta", 0.0, 0.85),
+    DII("DII", "Inferior", 60.0, 1.00),
+    DIII("DIII", "Inferior", 120.0, 0.70),
+    AVR("aVR", "Alta derecha", -150.0, -0.90),
+    AVL("aVL", "Lateral alta", -30.0, 0.65),
+    AVF("aVF", "Inferior", 90.0, 0.80),
+    V1("V1", "Septal / VD", null, -0.65),
+    V2("V2", "Septal", null, -0.35),
+    V3("V3", "Anterior", null, 0.10),
+    V4("V4", "Anterior", null, 0.65),
+    V5("V5", "Lateral baja", null, 0.95),
+    V6("V6", "Lateral baja", null, 0.82)
+}
+
+private data class EcgLeadCluster(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val leads: Set<EcgLead>,
+    val tint: Color
+)
+
+private val ecgAreaGroups = listOf(
+    EcgLeadCluster("inferior", "Inferior", "DII, DIII y aVF", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), Color(0xFF2E7D32)),
+    EcgLeadCluster("septal", "Septal", "V1 y V2", setOf(EcgLead.V1, EcgLead.V2), Color(0xFF1565C0)),
+    EcgLeadCluster("anterior", "Anterior", "V3 y V4", setOf(EcgLead.V3, EcgLead.V4), Color(0xFFC62828)),
+    EcgLeadCluster("lateral_alta", "Lateral alta", "DI y aVL", setOf(EcgLead.DI, EcgLead.AVL), Color(0xFF6A1B9A)),
+    EcgLeadCluster("lateral_baja", "Lateral baja", "V5 y V6", setOf(EcgLead.V5, EcgLead.V6), Color(0xFFEF6C00)),
+    EcgLeadCluster("anteroseptal", "Anteroseptal", "V1 a V4", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3, EcgLead.V4), Color(0xFF00838F)),
+    EcgLeadCluster("lateral", "Lateral", "DI, aVL, V5 y V6", setOf(EcgLead.DI, EcgLead.AVL, EcgLead.V5, EcgLead.V6), Color(0xFFAD1457)),
+    EcgLeadCluster("posterior_indirecta", "Posterior indirecta", "V1 a V3 como espejo; V7-V9 no están en ECG estándar", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), Color(0xFF455A64))
+)
+
+private val ecgCoronaryGroups = listOf(
+    EcgLeadCluster("da", "DA / LAD", "Septal, anterior y parte anterolateral: V1-V4, DI/aVL según extensión", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3, EcgLead.V4, EcgLead.DI, EcgLead.AVL), Color(0xFFC62828)),
+    EcgLeadCluster("cd", "CD / RCA", "Inferior y posible VD: DII, DIII, aVF; V1 puede orientar a VD", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF, EcgLead.V1), Color(0xFF2E7D32)),
+    EcgLeadCluster("cx", "Cx / LCx", "Lateral y posterolateral: DI, aVL, V5-V6; a veces inferior por dominancia", setOf(EcgLead.DI, EcgLead.AVL, EcgLead.V5, EcgLead.V6, EcgLead.DII, EcgLead.DIII, EcgLead.AVF), Color(0xFF6A1B9A))
+)
+
+private val twelveLeadLayout = listOf(
+    listOf(EcgLead.DI, EcgLead.AVR, EcgLead.V1, EcgLead.V4),
+    listOf(EcgLead.DII, EcgLead.AVL, EcgLead.V2, EcgLead.V5),
+    listOf(EcgLead.DIII, EcgLead.AVF, EcgLead.V3, EcgLead.V6)
 )
 
 @Composable
@@ -1232,171 +1298,585 @@ private fun StElevationContent(state: EcgSharedInputState) {
 @Composable
 private fun EcgPreviewContent(state: EcgSharedInputState) {
     val model = buildEcgPreviewModel(state)
+    var selectorExpanded by rememberSaveable { mutableStateOf(false) }
+    var modeName by rememberSaveable { mutableStateOf(EcgPreviewMode.SINGLE_LEAD.name) }
+    var selectedLeadName by rememberSaveable { mutableStateOf(EcgLead.DII.name) }
+    var selectedAreaId by rememberSaveable { mutableStateOf(ecgAreaGroups.first().id) }
+    var selectedTerritoryId by rememberSaveable { mutableStateOf(ecgCoronaryGroups.first().id) }
+    var zoomLevel by rememberSaveable { mutableStateOf(1.0f) }
+
+    val mode = EcgPreviewMode.valueOf(modeName)
+    val selectedLead = EcgLead.valueOf(selectedLeadName)
+    val selectedArea = ecgAreaGroups.firstOrNull { it.id == selectedAreaId } ?: ecgAreaGroups.first()
+    val selectedTerritory = ecgCoronaryGroups.firstOrNull { it.id == selectedTerritoryId } ?: ecgCoronaryGroups.first()
+    val highlightedLeads = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> setOf(selectedLead)
+        EcgPreviewMode.TWELVE_LEADS -> emptySet()
+        EcgPreviewMode.CARDIAC_AREA -> selectedArea.leads
+        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritory.leads
+    }
+    val tint = when (mode) {
+        EcgPreviewMode.CARDIAC_AREA -> selectedArea.tint
+        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritory.tint
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val displayTitle = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> "Derivación ${selectedLead.label}"
+        EcgPreviewMode.TWELVE_LEADS -> "ECG completo · 12 derivaciones"
+        EcgPreviewMode.CARDIAC_AREA -> "Área ${selectedArea.title}"
+        EcgPreviewMode.CORONARY_TERRITORY -> "Territorio ${selectedTerritory.title}"
+    }
+    val displaySubtitle = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> selectedLead.region
+        EcgPreviewMode.TWELVE_LEADS -> "Toca el ECG para abrir el menú de derivaciones y comparaciones."
+        EcgPreviewMode.CARDIAC_AREA -> selectedArea.subtitle
+        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritory.subtitle
+    }
 
     EcgCard(
         title = "Vista previa del ECG",
-        note = "Tira de ritmo simulada en derivación II. Se configura con los datos capturados en las calculadoras: FC/RR, PR, QRS, QT, ST, regularidad y HVI. No es señal real de paciente, porque todavía no estamos invocando espíritus eléctricos."
+        note = "Vista didáctica generada con los datos capturados. Toca el trazo para elegir derivación, ECG completo, áreas cardíacas o territorios coronarios. Ahora sí, el QT/QTc cambia cuando cambias sus datos; qué concepto tan radical."
     ) {
-        DynamicEcgStrip(
-            model = model,
+        EcgPreviewModeHeader(
+            title = displayTitle,
+            subtitle = displaySubtitle,
+            mode = mode,
+            onOpenMenu = { selectorExpanded = !selectorExpanded }
+        )
+
+        AnimatedVisibility(
+            visible = selectorExpanded,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+        ) {
+            EcgPreviewSelectorPanel(
+                mode = mode,
+                onModeSelected = { modeName = it.name },
+                selectedLead = selectedLead,
+                onLeadSelected = {
+                    selectedLeadName = it.name
+                    modeName = EcgPreviewMode.SINGLE_LEAD.name
+                    selectorExpanded = false
+                },
+                selectedArea = selectedArea,
+                onAreaSelected = {
+                    selectedAreaId = it.id
+                    modeName = EcgPreviewMode.CARDIAC_AREA.name
+                    selectorExpanded = false
+                },
+                selectedTerritory = selectedTerritory,
+                onTerritorySelected = {
+                    selectedTerritoryId = it.id
+                    modeName = EcgPreviewMode.CORONARY_TERRITORY.name
+                    selectorExpanded = false
+                }
+            )
+        }
+
+        ZoomControls(
+            zoomLevel = zoomLevel,
+            onZoomOut = { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.75f) },
+            onZoomIn = { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.25f) },
+            onReset = { zoomLevel = 1.0f }
+        )
+
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 220.dp)
-        )
+                .horizontalScroll(rememberScrollState())
+        ) {
+            if (mode == EcgPreviewMode.SINGLE_LEAD) {
+                DynamicEcgStrip(
+                    model = model,
+                    lead = selectedLead,
+                    title = displayTitle,
+                    subtitle = displaySubtitle,
+                    highlighted = true,
+                    tint = tint,
+                    onTap = { selectorExpanded = !selectorExpanded },
+                    modifier = Modifier
+                        .width((860f * zoomLevel).dp)
+                        .height((290f * zoomLevel.coerceIn(0.85f, 1.45f)).dp)
+                )
+            } else {
+                DynamicTwelveLeadEcg(
+                    model = model,
+                    highlightedLeads = highlightedLeads,
+                    tint = tint,
+                    title = displayTitle,
+                    subtitle = displaySubtitle,
+                    onTap = { selectorExpanded = !selectorExpanded },
+                    modifier = Modifier
+                        .width((1120f * zoomLevel).dp)
+                        .height((640f * zoomLevel.coerceIn(0.85f, 1.45f)).dp)
+                )
+            }
+        }
+
+        if (mode == EcgPreviewMode.CARDIAC_AREA || mode == EcgPreviewMode.CORONARY_TERRITORY) {
+            EcgLeadLegend(
+                title = displayTitle,
+                subtitle = displaySubtitle,
+                leads = highlightedLeads,
+                tint = tint
+            )
+        }
+
         ResultGrid(
             listOfNotNull(
                 "FC usada" to "${model.heartRateBpm.roundClean()} lpm",
                 "RR" to "${model.rrMs.roundClean()} ms",
                 "PR" to "${model.prMs.roundClean()} ms",
                 "QRS" to "${model.qrsMs.roundClean()} ms",
-                "QT" to "${model.qtMs.roundClean()} ms",
+                "QT medido" to "${model.qtMs.roundClean()} ms",
+                model.qtcResult?.let { "QTc Bazett" to "${it.bazettMs.roundClean()} ms" },
+                model.qtcResult?.let { "QTc Fridericia" to "${it.fridericiaMs.roundClean()} ms" },
+                model.qtcPreferredMs?.let { "QTc usado" to "${it.roundClean()} ms · ${model.qtcSourceNote}" },
                 "ST visual" to "${model.stMm.format(1)} mm",
                 model.axisDegrees?.let { "Eje" to "${it.roundClean()}°" },
                 "Ritmo" to if (model.rhythmRegular) "Regular" else "Irregular",
-                "Origen" to model.sourceNote
+                "Origen FC" to model.sourceNote
             )
         )
         WarningText(
-            "La tira generada es didáctica: ayuda a visualizar cómo cambian los intervalos y segmentos, pero no diagnostica ni reemplaza un ECG real de 12 derivaciones."
+            "La imagen es una simulación didáctica. Las derivaciones, áreas e irrigación son aproximaciones visuales para estudio; no sustituyen ECG real, correlación clínica ni lectura especializada."
         )
+    }
+}
+
+@Composable
+private fun EcgPreviewModeHeader(
+    title: String,
+    subtitle: String,
+    mode: EcgPreviewMode,
+    onOpenMenu: () -> Unit
+) {
+    Surface(
+        onClick = onOpenMenu,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            EcgHeartMenuIcon(modifier = Modifier.size(34.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(mode.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EcgPreviewSelectorPanel(
+    mode: EcgPreviewMode,
+    onModeSelected: (EcgPreviewMode) -> Unit,
+    selectedLead: EcgLead,
+    onLeadSelected: (EcgLead) -> Unit,
+    selectedArea: EcgLeadCluster,
+    onAreaSelected: (EcgLeadCluster) -> Unit,
+    selectedTerritory: EcgLeadCluster,
+    onTerritorySelected: (EcgLeadCluster) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Menú de visualización ECG", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                EcgPreviewMode.entries.forEach { item ->
+                    PreviewChoiceChip(
+                        text = item.label,
+                        selected = item == mode,
+                        onClick = { onModeSelected(item) }
+                    )
+                }
+            }
+            HorizontalDivider()
+            Text("Derivaciones", fontWeight = FontWeight.Black)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                EcgLead.entries.forEach { lead ->
+                    PreviewChoiceChip(
+                        text = lead.label,
+                        selected = mode == EcgPreviewMode.SINGLE_LEAD && lead == selectedLead,
+                        onClick = { onLeadSelected(lead) }
+                    )
+                }
+            }
+            HorizontalDivider()
+            Text("Comparar por área cardíaca", fontWeight = FontWeight.Black)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ecgAreaGroups.forEach { group ->
+                    PreviewChoiceChip(
+                        text = group.title,
+                        selected = mode == EcgPreviewMode.CARDIAC_AREA && group.id == selectedArea.id,
+                        onClick = { onAreaSelected(group) }
+                    )
+                }
+            }
+            HorizontalDivider()
+            Text("Comparar por irrigación coronaria", fontWeight = FontWeight.Black)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ecgCoronaryGroups.forEach { group ->
+                    PreviewChoiceChip(
+                        text = group.title,
+                        selected = mode == EcgPreviewMode.CORONARY_TERRITORY && group.id == selectedTerritory.id,
+                        onClick = { onTerritorySelected(group) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewChoiceChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun ZoomControls(
+    zoomLevel: Float,
+    onZoomOut: () -> Unit,
+    onZoomIn: () -> Unit,
+    onReset: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedButton(onClick = onZoomOut, modifier = Modifier.weight(1f)) { Text("− Zoom") }
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                "${(zoomLevel * 100f).roundToInt()}%",
+                modifier = Modifier.padding(vertical = 10.dp),
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Black
+            )
+        }
+        OutlinedButton(onClick = onZoomIn, modifier = Modifier.weight(1f)) { Text("+ Zoom") }
+        OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f)) { Text("Restablecer") }
+    }
+}
+
+@Composable
+private fun EcgLeadLegend(
+    title: String,
+    subtitle: String,
+    leads: Set<EcgLead>,
+    tint: Color
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = tint.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.35f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, fontWeight = FontWeight.Black, color = tint)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Derivaciones resaltadas: ${leads.sortedBy { it.ordinal }.joinToString { it.label }}",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
 @Composable
 private fun DynamicEcgStrip(
     model: EcgPreviewModel,
+    lead: EcgLead,
+    title: String,
+    subtitle: String,
+    highlighted: Boolean,
+    tint: Color,
+    onTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val gridMinor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-    val gridMajor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    val gridMajor = MaterialTheme.colorScheme.primary.copy(alpha = 0.23f)
     val baselineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.50f)
     val traceColor = MaterialTheme.colorScheme.primary
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
+        onClick = onTap,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 2.dp,
         modifier = modifier
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(250.dp)
-                .padding(10.dp)
-        ) {
-            val w = size.width
-            val h = size.height
-            val minorStep = (w / 75f).coerceAtLeast(8f)
-            val majorStep = minorStep * 5f
-            var x = 0f
-            while (x <= w) {
-                drawLine(
-                    color = if ((x / majorStep).roundToInt() * majorStep == x) gridMajor else gridMinor,
-                    start = Offset(x, 0f),
-                    end = Offset(x, h),
-                    strokeWidth = if ((x / majorStep).roundToInt() * majorStep == x) 1.2f else 0.6f
+        Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+            drawEcgGrid(gridMinor, gridMajor)
+            if (highlighted) {
+                drawRect(
+                    color = tint.copy(alpha = 0.10f),
+                    topLeft = Offset.Zero,
+                    size = Size(size.width, size.height)
                 )
-                x += minorStep
             }
-            var yGrid = 0f
-            while (yGrid <= h) {
-                drawLine(
-                    color = if ((yGrid / majorStep).roundToInt() * majorStep == yGrid) gridMajor else gridMinor,
-                    start = Offset(0f, yGrid),
-                    end = Offset(w, yGrid),
-                    strokeWidth = if ((yGrid / majorStep).roundToInt() * majorStep == yGrid) 1.2f else 0.6f
-                )
-                yGrid += minorStep
-            }
-
-            val baseline = h * 0.54f
-            drawLine(
-                color = baselineColor,
-                start = Offset(0f, baseline),
-                end = Offset(w, baseline),
-                strokeWidth = 1.4f
+            drawLeadTrace(
+                model = model,
+                lead = lead,
+                topLeft = Offset(0f, 0f),
+                width = size.width,
+                height = size.height,
+                baselineColor = baselineColor,
+                traceColor = traceColor,
+                labelColor = labelColor,
+                label = "$title · ${model.heartRateBpm.roundClean()} lpm",
+                footer = subtitle
             )
+        }
+    }
+}
 
-            val displayMs = when {
-                model.heartRateBpm < 55.0 -> 9000.0
-                model.heartRateBpm > 140.0 -> 4000.0
-                else -> 6000.0
+@Composable
+private fun DynamicTwelveLeadEcg(
+    model: EcgPreviewModel,
+    highlightedLeads: Set<EcgLead>,
+    tint: Color,
+    title: String,
+    subtitle: String,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val gridMinor = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
+    val gridMajor = MaterialTheme.colorScheme.primary.copy(alpha = 0.21f)
+    val baselineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.44f)
+    val traceColor = MaterialTheme.colorScheme.primary
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Surface(
+        onClick = onTap,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 2.dp,
+        modifier = modifier
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+            drawEcgGrid(gridMinor, gridMajor)
+            val rows = twelveLeadLayout.size
+            val columns = twelveLeadLayout.first().size
+            val headerH = 70f
+            val cellW = size.width / columns
+            val cellH = (size.height - headerH).coerceAtLeast(260f) / rows
+            val headerPaint = android.graphics.Paint().apply {
+                color = labelColor.toArgb()
+                textSize = 28f
+                isAntiAlias = true
+                isFakeBoldText = true
             }
-            val pxPerMs = w / displayMs.toFloat()
-            val mmPx = (h / 36f).coerceIn(4f, 9f)
-            fun xFor(ms: Double): Float = (ms.toFloat() * pxPerMs).coerceIn(-w, w * 2f)
-            fun yFor(mm: Double): Float = baseline - (mm.toFloat() * mmPx)
+            drawContext.canvas.nativeCanvas.drawText(title, 14f, 30f, headerPaint)
+            drawContext.canvas.nativeCanvas.drawText(subtitle, 14f, 60f, android.graphics.Paint(headerPaint).apply { textSize = 22f; isFakeBoldText = false })
 
-            val axisProjection = model.axisDegrees?.let { cos((it - 60.0) * PI / 180.0) } ?: 1.0
-            val qrsSign = if (axisProjection < -0.20) -1.0 else 1.0
-            val qrsAmplitude = (if (model.lvhPositive) 15.0 else 10.0) * (0.45 + 0.55 * abs(axisProjection)).coerceIn(0.45, 1.0)
-            val pAmplitude = if (model.rhythmSinus) 1.4 else 0.25
-            val tAmplitude = when {
-                model.qtMs >= 500.0 -> 2.6
-                model.stMm < -0.5 -> -2.2
-                else -> 3.2
-            }
-            val stVisual = model.stMm.coerceIn(-4.0, 5.0)
-            val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
-            var beatStart = 80.0
-            var beatIndex = 0
-            val path = Path().apply {
-                moveTo(0f, baseline)
-                while (beatStart < displayMs + model.rrMs) {
-                    val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
-                    val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
-                    val pr = model.prMs.coerceIn(80.0, 340.0)
-                    val qrs = model.qrsMs.coerceIn(50.0, 220.0)
-                    val qt = model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
-                    val qrsOn = beatStart + pr
-                    val qrsEnd = qrsOn + qrs
-                    val pStart = (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
-                    val pPeak = pStart + 42.0
-                    val pEnd = (qrsOn - 24.0).coerceAtLeast(pPeak + 20.0)
-                    val rPeak = qrsOn + qrs * 0.45
-                    val stEnd = qrsEnd + 115.0
-                    val tEnd = qrsOn + qt
-                    val tPeak = (stEnd + (tEnd - stEnd) * 0.45).coerceAtLeast(stEnd + 35.0)
-
-                    lineTo(xFor(pStart), yFor(0.0))
-                    quadraticBezierTo(xFor(pPeak), yFor(pAmplitude), xFor(pEnd), yFor(0.0))
-                    lineTo(xFor(qrsOn), yFor(0.0))
-                    lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.8 * qrsSign))
-                    lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.72), yFor(-3.2 * qrsSign))
-                    lineTo(xFor(qrsEnd), yFor(stVisual))
-                    lineTo(xFor(stEnd), yFor(stVisual))
-                    quadraticBezierTo(xFor(tPeak), yFor(tAmplitude + stVisual * 0.18), xFor(tEnd), yFor(0.0))
-                    lineTo(xFor(beatStart + rr), yFor(0.0))
-
-                    beatStart += rr
-                    beatIndex += 1
-                }
-            }
-            drawPath(
-                path = path,
-                color = traceColor,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.2f, cap = StrokeCap.Round)
-            )
-
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(
-                        190,
-                        (labelColor.red * 255).roundToInt(),
-                        (labelColor.green * 255).roundToInt(),
-                        (labelColor.blue * 255).roundToInt()
+            twelveLeadLayout.forEachIndexed { rowIndex, row ->
+                row.forEachIndexed { columnIndex, lead ->
+                    val left = columnIndex * cellW
+                    val top = headerH + rowIndex * cellH
+                    val isHighlighted = highlightedLeads.contains(lead)
+                    if (isHighlighted) {
+                        drawRect(
+                            color = tint.copy(alpha = 0.14f),
+                            topLeft = Offset(left + 3f, top + 3f),
+                            size = Size(cellW - 6f, cellH - 6f)
+                        )
+                    }
+                    drawLeadTrace(
+                        model = model,
+                        lead = lead,
+                        topLeft = Offset(left + 8f, top + 14f),
+                        width = cellW - 16f,
+                        height = cellH - 22f,
+                        baselineColor = baselineColor,
+                        traceColor = if (isHighlighted) tint else traceColor,
+                        labelColor = labelColor,
+                        label = lead.label,
+                        footer = lead.region,
+                        compactLabel = true
                     )
-                    textSize = 28f
-                    isAntiAlias = true
                 }
-                drawText("Derivación II simulada · ${model.heartRateBpm.roundClean()} lpm", 18f, 34f, paint)
-                drawText("${(displayMs / 1000.0).format(1)} s visibles", 18f, h - 18f, paint)
             }
         }
     }
+}
+
+private fun DrawScope.drawEcgGrid(
+    minorColor: Color,
+    majorColor: Color
+) {
+    val minorStep = 8f
+    var i = 0
+    var x = 0f
+    while (x <= size.width) {
+        val major = i % 5 == 0
+        drawLine(
+            color = if (major) majorColor else minorColor,
+            start = Offset(x, 0f),
+            end = Offset(x, size.height),
+            strokeWidth = if (major) 1.15f else 0.55f
+        )
+        i += 1
+        x = i * minorStep
+    }
+    i = 0
+    var y = 0f
+    while (y <= size.height) {
+        val major = i % 5 == 0
+        drawLine(
+            color = if (major) majorColor else minorColor,
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = if (major) 1.15f else 0.55f
+        )
+        i += 1
+        y = i * minorStep
+    }
+}
+
+private fun DrawScope.drawLeadTrace(
+    model: EcgPreviewModel,
+    lead: EcgLead,
+    topLeft: Offset,
+    width: Float,
+    height: Float,
+    baselineColor: Color,
+    traceColor: Color,
+    labelColor: Color,
+    label: String,
+    footer: String,
+    compactLabel: Boolean = false
+) {
+    val baseline = topLeft.y + height * 0.56f
+    drawLine(
+        color = baselineColor,
+        start = Offset(topLeft.x, baseline),
+        end = Offset(topLeft.x + width, baseline),
+        strokeWidth = 1.15f
+    )
+
+    val displayMs = when {
+        model.heartRateBpm < 55.0 -> 9000.0
+        model.heartRateBpm > 140.0 -> 4200.0
+        else -> 6200.0
+    }
+    val pxPerMs = width / displayMs.toFloat()
+    val mmPx = (height / 34f).coerceIn(3.2f, 9.5f)
+    fun xFor(ms: Double): Float = topLeft.x + (ms.toFloat() * pxPerMs)
+    fun yFor(mm: Double): Float = baseline - (mm.toFloat() * mmPx)
+
+    val projection = leadProjection(model.axisDegrees, lead)
+    val qrsSign = if (projection < -0.18) -1.0 else 1.0
+    val axisMagnitude = abs(projection).coerceIn(0.34, 1.0)
+    val qrsAmplitude = (if (model.lvhPositive) 15.5 else 10.0) * (0.55 + 0.45 * axisMagnitude)
+    val pAmplitude = if (model.rhythmSinus) 1.25 * qrsSign else 0.20
+    val qtcPreferred = model.qtcPreferredMs ?: model.qtMs
+    val tAmplitude = when {
+        qtcPreferred >= 500.0 -> 3.0 * qrsSign
+        model.stMm < -0.5 -> -2.0 * qrsSign
+        else -> 2.8 * qrsSign
+    }
+    val stVisual = model.stMm.coerceIn(-4.0, 5.0) * if (qrsSign < 0) 0.75 else 1.0
+    val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
+    var beatStart = 80.0
+    var beatIndex = 0
+    val path = Path().apply {
+        moveTo(topLeft.x, baseline)
+        while (beatStart < displayMs + model.rrMs) {
+            val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
+            val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+            val pr = model.prMs.coerceIn(80.0, 340.0)
+            val qrs = model.qrsMs.coerceIn(50.0, 220.0)
+            val qt = model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
+            val qrsOn = beatStart + pr
+            val qrsEnd = qrsOn + qrs
+            val pStart = (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
+            val pPeak = pStart + 42.0
+            val pEnd = (qrsOn - 24.0).coerceAtLeast(pPeak + 20.0)
+            val rPeak = qrsOn + qrs * 0.45
+            val stEnd = qrsEnd + 115.0
+            val tEnd = qrsOn + qt
+            val tPeak = (stEnd + (tEnd - stEnd) * 0.45).coerceAtLeast(stEnd + 35.0)
+
+            lineTo(xFor(pStart), yFor(0.0))
+            quadraticBezierTo(xFor(pPeak), yFor(pAmplitude), xFor(pEnd), yFor(0.0))
+            lineTo(xFor(qrsOn), yFor(0.0))
+            lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.6 * qrsSign))
+            lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
+            lineTo(xFor(qrsOn + qrs * 0.72), yFor(-3.0 * qrsSign))
+            lineTo(xFor(qrsEnd), yFor(stVisual))
+            lineTo(xFor(stEnd), yFor(stVisual))
+            quadraticBezierTo(xFor(tPeak), yFor(tAmplitude + stVisual * 0.18), xFor(tEnd), yFor(0.0))
+            lineTo(xFor(beatStart + rr), yFor(0.0))
+
+            beatStart += rr
+            beatIndex += 1
+        }
+    }
+    drawPath(path = path, color = traceColor, style = Stroke(width = if (compactLabel) 2.45f else 3.2f, cap = StrokeCap.Round))
+
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint().apply {
+            color = labelColor.toArgb()
+            textSize = if (compactLabel) 21f else 28f
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        drawText(label, topLeft.x + 10f, topLeft.y + if (compactLabel) 24f else 34f, paint)
+        val footerPaint = android.graphics.Paint(paint).apply {
+            textSize = if (compactLabel) 17f else 22f
+            isFakeBoldText = false
+            alpha = 205
+        }
+        drawText(footer, topLeft.x + 10f, topLeft.y + height - 10f, footerPaint)
+    }
+}
+
+private fun leadProjection(axisDegrees: Double?, lead: EcgLead): Double {
+    if (lead.limbAxisDegrees == null) return lead.precordialProjection
+    val axis = axisDegrees ?: 60.0
+    return cos((axis - lead.limbAxisDegrees) * PI / 180.0).coerceIn(-1.0, 1.0)
 }
 
 private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
@@ -1412,6 +1892,21 @@ private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
     )
     val heartRate = (rateCandidates.firstOrNull() ?: 75.0).coerceIn(25.0, 240.0)
     val rrMs = EcgCalculator.rrMsFromHeartRate(heartRate).getOrDefault(800.0)
+    val qtMs = (state.qtText.value.toDecimalOrNull() ?: 390.0).coerceIn(180.0, 720.0)
+    val qtcResult = if (state.qtcUseRr.value) {
+        state.qtcRrText.value.toDecimalOrNull()?.let { EcgCalculator.qtcFromRrMs(qtMs, it).getOrNull() }
+            ?: EcgCalculator.qtcFromHeartRate(qtMs, heartRate).getOrNull()
+    } else {
+        EcgCalculator.qtcFromHeartRate(qtMs, heartRate).getOrNull()
+    }
+    val qtcPreferredMs = qtcResult?.let {
+        if (heartRate < 60.0 || heartRate > 100.0) it.fridericiaMs else it.bazettMs
+    }
+    val qtcSourceNote = when {
+        state.qtcUseRr.value && state.qtcRrText.value.toDecimalOrNull() != null -> "por RR capturado"
+        directRate != null || rateCandidates.isNotEmpty() -> "por FC"
+        else -> "por ejemplo 75 lpm"
+    }
     val axisFromCalculator = state.axisFirstText.value.toDecimalOrNull()?.let { first ->
         state.axisSecondText.value.toDecimalOrNull()?.let { second ->
             EcgCalculator.calculateAxis(EcgAxisMethod.valueOf(state.axisMethodName.value), first, second).degrees
@@ -1438,7 +1933,10 @@ private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
         rrMs = rrMs,
         prMs = (state.prText.value.toDecimalOrNull() ?: 160.0).coerceIn(60.0, 360.0),
         qrsMs = (state.qrsText.value.toDecimalOrNull() ?: 90.0).coerceIn(45.0, 240.0),
-        qtMs = (state.qtText.value.toDecimalOrNull() ?: 390.0).coerceIn(180.0, 720.0),
+        qtMs = qtMs,
+        qtcResult = qtcResult,
+        qtcPreferredMs = qtcPreferredMs,
+        qtcSourceNote = qtcSourceNote,
         stMm = state.stElevationText.value.toDecimalOrNull()?.coerceIn(-5.0, 8.0) ?: 0.0,
         axisDegrees = state.axisText.value.toDecimalOrNull() ?: axisFromCalculator,
         rhythmSinus = state.sinusRhythm.value,
@@ -1821,29 +2319,34 @@ private fun EcgTool.info(): EcgInfoContent = when (this) {
 
     EcgTool.PREVIEW -> EcgInfoContent(
         title = "Vista previa ECG · referencias",
-        purpose = "Dibuja una tira de ritmo simulada, configurada por los valores capturados en las calculadoras ECG.",
-        method = "No interpreta imágenes ni reconstruye un ECG real. Usa FC/RR para separar complejos, PR para ubicar P-QRS, QRS para anchura del complejo, QT para duración de repolarización, ST para desplazamiento visual, eje para polaridad aproximada en DII y HVI para aumentar voltaje didáctico.",
+        purpose = "Dibuja una tira de ritmo y un ECG de 12 derivaciones simulados, configurados por los valores capturados en las calculadoras ECG.",
+        method = "No interpreta imágenes ni reconstruye un ECG real. Usa FC/RR para separar complejos, PR para ubicar P-QRS, QRS para anchura del complejo, QT y QTc para duración de repolarización, ST para desplazamiento visual, eje para polaridad aproximada por derivación y HVI para aumentar voltaje didáctico. Permite vista por derivación, 12 derivaciones, áreas cardíacas y territorios coronarios con sombreado tenue.",
         references = listOf(
             EcgReferenceItem(
                 source = "AHA/ACCF/HRS",
                 citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Part I: the electrocardiogram and its technology. J Am Coll Cardiol. 2007;49:1109–1127.",
-                useInApp = "Base técnica de calibración, velocidad de papel y representación temporal del ECG."
+                useInApp = "Base técnica de calibración, velocidad de papel, rejilla y representación temporal del ECG."
             ),
             EcgReferenceItem(
                 source = "AHA/ACCF/HRS",
                 citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Part IV: ST segment, T and U waves, and QT interval. J Am Coll Cardiol. 2009;53:982–991.",
-                useInApp = "Relación visual de ST, onda T y QT dentro de la tira simulada."
+                useInApp = "Relación visual de ST, onda T, QT y QTc dentro del trazo simulado."
             ),
             EcgReferenceItem(
                 source = "Life in the Fast Lane",
-                citation = "ECG Basics y ECG Rate Interpretation: papel estándar, velocidad 25 mm/s, cuadros de 40 ms/200 ms y construcción visual de complejos.",
-                useInApp = "Cotejo educativo para escala de tiempo y lectura de la tira."
+                citation = "ECG Basics, ECG Rate Interpretation y territorios de IAM: papel estándar, velocidad 25 mm/s, cuadros de 40 ms/200 ms, derivaciones y regiones.",
+                useInApp = "Cotejo educativo para escala de tiempo, lectura de la tira, regiones y correlación de derivaciones."
+            ),
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Part VI: Acute ischemia/infarction. J Am Coll Cardiol. 2009;53:1003–1011.",
+                useInApp = "Concepto de derivaciones contiguas, región anatómica y correlación orientativa con arteria culpable."
             )
         ),
         limitations = listOf(
             "La imagen es una simulación didáctica generada por parámetros, no una señal clínica adquirida.",
-            "No representa morfología específica por derivación ni sustitución de un ECG de 12 derivaciones.",
-            "El dibujo puede ser coherente con los datos capturados y aun así no corresponder a un paciente real. Qué conveniente y peligroso a la vez."
+            "La morfología por derivación es aproximada y didáctica; no sustituye un ECG de 12 derivaciones adquirido.",
+            "La correlación área-arteria coronaria es orientativa: dominancia, variantes anatómicas y extensión del evento pueden cambiar la interpretación."
         )
     )
 }

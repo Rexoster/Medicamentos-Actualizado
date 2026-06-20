@@ -1,0 +1,6 @@
+Verificación v23.4
+
+- Preflight local ejecutado: correcto.
+- ZIPs verificados: correcto.
+- Gradle completo no pudo ejecutarse en este entorno porque el wrapper intenta descargar Gradle sin acceso a internet.
+- No se agregó contenido del PDF de enfermedades infecciosas.
