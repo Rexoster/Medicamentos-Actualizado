@@ -1,0 +1,7 @@
+Verificación v23.6:
+- Se agregó soporte de zoom con gesto de pellizco mediante detectTransformGestures.
+- Se conservan botones de zoom.
+- Se cambió la selección de áreas/territorios a multiselección.
+- Se agregaron colores independientes por zona/territorio seleccionado.
+- Se mantiene la continuidad temporal de derivaciones de la v23.5.
+- No se modificaron medicamentos ni integración de PDF de enfermedades infecciosas.

@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -81,6 +82,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -278,6 +280,42 @@ private val twelveLeadLayout = listOf(
     listOf(EcgLead.DII, EcgLead.AVL, EcgLead.V2, EcgLead.V5),
     listOf(EcgLead.DIII, EcgLead.AVF, EcgLead.V3, EcgLead.V6)
 )
+
+
+private fun selectedClusterIds(raw: String, groups: List<EcgLeadCluster>): Set<String> {
+    val validIds = groups.map { it.id }.toSet()
+    val parsed = raw.split("|")
+        .map { it.trim() }
+        .filter { it.isNotBlank() && it in validIds }
+        .toSet()
+    return parsed.ifEmpty { setOf(groups.first().id) }
+}
+
+private fun toggleClusterSelection(raw: String, cluster: EcgLeadCluster, groups: List<EcgLeadCluster>): String {
+    val current = selectedClusterIds(raw, groups).toMutableSet()
+    if (cluster.id in current) {
+        if (current.size > 1) current.remove(cluster.id)
+    } else {
+        current.add(cluster.id)
+    }
+    return groups.filter { it.id in current }.joinToString("|") { it.id }
+}
+
+private fun leadHighlightColors(clusters: List<EcgLeadCluster>): Map<EcgLead, List<Color>> {
+    val result = mutableMapOf<EcgLead, MutableList<Color>>()
+    clusters.forEach { cluster ->
+        cluster.leads.forEach { lead ->
+            result.getOrPut(lead) { mutableListOf() }.add(cluster.tint)
+        }
+    }
+    return result.mapValues { it.value.toList() }
+}
+
+private fun clusterSummaryTitle(prefix: String, clusters: List<EcgLeadCluster>): String =
+    if (clusters.size == 1) "$prefix ${clusters.first().title}" else "$prefix: ${clusters.joinToString { it.title }}"
+
+private fun clusterSummarySubtitle(clusters: List<EcgLeadCluster>): String =
+    clusters.joinToString(" · ") { it.subtitle }
 
 @Composable
 private fun rememberEcgSharedInputState(): EcgSharedInputState = EcgSharedInputState(
@@ -1302,41 +1340,46 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
     var selectorExpanded by rememberSaveable { mutableStateOf(false) }
     var modeName by rememberSaveable { mutableStateOf(EcgPreviewMode.SINGLE_LEAD.name) }
     var selectedLeadName by rememberSaveable { mutableStateOf(EcgLead.DII.name) }
-    var selectedAreaId by rememberSaveable { mutableStateOf(ecgAreaGroups.first().id) }
-    var selectedTerritoryId by rememberSaveable { mutableStateOf(ecgCoronaryGroups.first().id) }
+    var selectedAreaIdsRaw by rememberSaveable { mutableStateOf(ecgAreaGroups.first().id) }
+    var selectedTerritoryIdsRaw by rememberSaveable { mutableStateOf(ecgCoronaryGroups.first().id) }
     var zoomLevel by rememberSaveable { mutableStateOf(1.0f) }
 
     val mode = EcgPreviewMode.valueOf(modeName)
     val selectedLead = EcgLead.valueOf(selectedLeadName)
-    val selectedArea = ecgAreaGroups.firstOrNull { it.id == selectedAreaId } ?: ecgAreaGroups.first()
-    val selectedTerritory = ecgCoronaryGroups.firstOrNull { it.id == selectedTerritoryId } ?: ecgCoronaryGroups.first()
-    val highlightedLeads = when (mode) {
-        EcgPreviewMode.SINGLE_LEAD -> setOf(selectedLead)
-        EcgPreviewMode.TWELVE_LEADS -> emptySet()
-        EcgPreviewMode.CARDIAC_AREA -> selectedArea.leads
-        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritory.leads
+    val selectedAreaIds = selectedClusterIds(selectedAreaIdsRaw, ecgAreaGroups)
+    val selectedTerritoryIds = selectedClusterIds(selectedTerritoryIdsRaw, ecgCoronaryGroups)
+    val selectedAreas = ecgAreaGroups.filter { it.id in selectedAreaIds }.ifEmpty { listOf(ecgAreaGroups.first()) }
+    val selectedTerritories = ecgCoronaryGroups.filter { it.id in selectedTerritoryIds }.ifEmpty { listOf(ecgCoronaryGroups.first()) }
+
+    val activeClusters = when (mode) {
+        EcgPreviewMode.CARDIAC_AREA -> selectedAreas
+        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritories
+        else -> emptyList()
     }
-    val tint = when (mode) {
-        EcgPreviewMode.CARDIAC_AREA -> selectedArea.tint
-        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritory.tint
-        else -> MaterialTheme.colorScheme.primary
+    val highlightedLeadColors = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> mapOf(selectedLead to listOf(MaterialTheme.colorScheme.primary))
+        EcgPreviewMode.TWELVE_LEADS -> emptyMap()
+        EcgPreviewMode.CARDIAC_AREA -> leadHighlightColors(selectedAreas)
+        EcgPreviewMode.CORONARY_TERRITORY -> leadHighlightColors(selectedTerritories)
     }
+    val highlightedLeads = highlightedLeadColors.keys
+    val tint = activeClusters.firstOrNull()?.tint ?: MaterialTheme.colorScheme.primary
     val displayTitle = when (mode) {
         EcgPreviewMode.SINGLE_LEAD -> "Derivación ${selectedLead.label}"
         EcgPreviewMode.TWELVE_LEADS -> "ECG completo · 12 derivaciones"
-        EcgPreviewMode.CARDIAC_AREA -> "Área ${selectedArea.title}"
-        EcgPreviewMode.CORONARY_TERRITORY -> "Territorio ${selectedTerritory.title}"
+        EcgPreviewMode.CARDIAC_AREA -> clusterSummaryTitle("Área", selectedAreas)
+        EcgPreviewMode.CORONARY_TERRITORY -> clusterSummaryTitle("Territorio", selectedTerritories)
     }
     val displaySubtitle = when (mode) {
         EcgPreviewMode.SINGLE_LEAD -> selectedLead.region
-        EcgPreviewMode.TWELVE_LEADS -> "Toca el ECG para abrir el menú de derivaciones y comparaciones."
-        EcgPreviewMode.CARDIAC_AREA -> selectedArea.subtitle
-        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritory.subtitle
+        EcgPreviewMode.TWELVE_LEADS -> "Toca el ECG para abrir el menú de derivaciones y comparaciones. Pellizca el trazo para acercar o alejar."
+        EcgPreviewMode.CARDIAC_AREA -> clusterSummarySubtitle(selectedAreas)
+        EcgPreviewMode.CORONARY_TERRITORY -> clusterSummarySubtitle(selectedTerritories)
     }
 
     EcgCard(
         title = "Vista previa del ECG",
-        note = "Vista didáctica generada con los datos capturados. Toca el trazo para elegir derivación, ECG completo, áreas cardíacas o territorios coronarios. Ahora sí, el QT/QTc cambia cuando cambias sus datos; qué concepto tan radical."
+        note = "Vista didáctica generada con los datos capturados. Toca el trazo para elegir derivación, ECG completo, áreas cardíacas o territorios coronarios. Pellizca sobre el ECG para hacer zoom."
     ) {
         EcgPreviewModeHeader(
             title = displayTitle,
@@ -1359,17 +1402,15 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
                     modeName = EcgPreviewMode.SINGLE_LEAD.name
                     selectorExpanded = false
                 },
-                selectedArea = selectedArea,
-                onAreaSelected = {
-                    selectedAreaId = it.id
+                selectedAreaIds = selectedAreaIds,
+                onAreaToggled = {
+                    selectedAreaIdsRaw = toggleClusterSelection(selectedAreaIdsRaw, it, ecgAreaGroups)
                     modeName = EcgPreviewMode.CARDIAC_AREA.name
-                    selectorExpanded = false
                 },
-                selectedTerritory = selectedTerritory,
-                onTerritorySelected = {
-                    selectedTerritoryId = it.id
+                selectedTerritoryIds = selectedTerritoryIds,
+                onTerritoryToggled = {
+                    selectedTerritoryIdsRaw = toggleClusterSelection(selectedTerritoryIdsRaw, it, ecgCoronaryGroups)
                     modeName = EcgPreviewMode.CORONARY_TERRITORY.name
-                    selectorExpanded = false
                 }
             )
         }
@@ -1377,13 +1418,25 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
         ZoomControls(
             zoomLevel = zoomLevel,
             onZoomOut = { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.75f) },
-            onZoomIn = { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.25f) },
+            onZoomIn = { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(3.0f) },
             onReset = { zoomLevel = 1.0f }
+        )
+        Text(
+            "También puedes pellizcar directamente el ECG para acercar o alejar.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, zoomChange, _ ->
+                        if (zoomChange.isFinite() && zoomChange > 0f) {
+                            zoomLevel = (zoomLevel * zoomChange).coerceIn(0.75f, 3.0f)
+                        }
+                    }
+                }
                 .horizontalScroll(rememberScrollState())
         ) {
             if (mode == EcgPreviewMode.SINGLE_LEAD) {
@@ -1397,19 +1450,18 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
                     onTap = { selectorExpanded = !selectorExpanded },
                     modifier = Modifier
                         .width((860f * zoomLevel).dp)
-                        .height((290f * zoomLevel.coerceIn(0.85f, 1.45f)).dp)
+                        .height((290f * zoomLevel.coerceIn(0.85f, 1.55f)).dp)
                 )
             } else {
                 DynamicTwelveLeadEcg(
                     model = model,
-                    highlightedLeads = highlightedLeads,
-                    tint = tint,
+                    highlightedLeadColors = highlightedLeadColors,
                     title = displayTitle,
                     subtitle = displaySubtitle,
                     onTap = { selectorExpanded = !selectorExpanded },
                     modifier = Modifier
                         .width((1120f * zoomLevel).dp)
-                        .height((640f * zoomLevel.coerceIn(0.85f, 1.45f)).dp)
+                        .height((640f * zoomLevel.coerceIn(0.85f, 1.55f)).dp)
                 )
             }
         }
@@ -1418,8 +1470,8 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
             EcgLeadLegend(
                 title = displayTitle,
                 subtitle = displaySubtitle,
-                leads = highlightedLeads,
-                tint = tint
+                clusters = activeClusters,
+                leads = highlightedLeads
             )
         }
 
@@ -1482,10 +1534,10 @@ private fun EcgPreviewSelectorPanel(
     onModeSelected: (EcgPreviewMode) -> Unit,
     selectedLead: EcgLead,
     onLeadSelected: (EcgLead) -> Unit,
-    selectedArea: EcgLeadCluster,
-    onAreaSelected: (EcgLeadCluster) -> Unit,
-    selectedTerritory: EcgLeadCluster,
-    onTerritorySelected: (EcgLeadCluster) -> Unit
+    selectedAreaIds: Set<String>,
+    onAreaToggled: (EcgLeadCluster) -> Unit,
+    selectedTerritoryIds: Set<String>,
+    onTerritoryToggled: (EcgLeadCluster) -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(22.dp),
@@ -1520,24 +1572,36 @@ private fun EcgPreviewSelectorPanel(
                 }
             }
             HorizontalDivider()
-            Text("Comparar por área cardíaca", fontWeight = FontWeight.Black)
+            Text("Comparar por área cardíaca · selección múltiple", fontWeight = FontWeight.Black)
+            Text(
+                "Puedes marcar más de una zona; cada una conserva un color distinto sobre el ECG.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ecgAreaGroups.forEach { group ->
                     PreviewChoiceChip(
                         text = group.title,
-                        selected = mode == EcgPreviewMode.CARDIAC_AREA && group.id == selectedArea.id,
-                        onClick = { onAreaSelected(group) }
+                        selected = mode == EcgPreviewMode.CARDIAC_AREA && group.id in selectedAreaIds,
+                        selectedColor = group.tint,
+                        onClick = { onAreaToggled(group) }
                     )
                 }
             }
             HorizontalDivider()
-            Text("Comparar por irrigación coronaria", fontWeight = FontWeight.Black)
+            Text("Comparar por irrigación coronaria · selección múltiple", fontWeight = FontWeight.Black)
+            Text(
+                "Puedes activar más de un territorio para comparar superposición de derivaciones.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ecgCoronaryGroups.forEach { group ->
                     PreviewChoiceChip(
                         text = group.title,
-                        selected = mode == EcgPreviewMode.CORONARY_TERRITORY && group.id == selectedTerritory.id,
-                        onClick = { onTerritorySelected(group) }
+                        selected = mode == EcgPreviewMode.CORONARY_TERRITORY && group.id in selectedTerritoryIds,
+                        selectedColor = group.tint,
+                        onClick = { onTerritoryToggled(group) }
                     )
                 }
             }
@@ -1549,14 +1613,15 @@ private fun EcgPreviewSelectorPanel(
 private fun PreviewChoiceChip(
     text: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    selectedColor: Color = MaterialTheme.colorScheme.primary
 ) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(999.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
+        color = if (selected) selectedColor.copy(alpha = 0.86f) else MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, if (selected) selectedColor else MaterialTheme.colorScheme.outlineVariant)
     ) {
         Text(
             text,
@@ -1601,18 +1666,39 @@ private fun ZoomControls(
 private fun EcgLeadLegend(
     title: String,
     subtitle: String,
-    leads: Set<EcgLead>,
-    tint: Color
+    clusters: List<EcgLeadCluster>,
+    leads: Set<EcgLead>
 ) {
+    val borderTint = clusters.firstOrNull()?.tint ?: MaterialTheme.colorScheme.primary
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = tint.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, tint.copy(alpha = 0.35f)),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, borderTint.copy(alpha = 0.35f)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, fontWeight = FontWeight.Black, color = tint)
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, fontWeight = FontWeight.Black, color = borderTint)
             Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            clusters.forEach { cluster ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = cluster.tint.copy(alpha = 0.13f),
+                    border = BorderStroke(1.dp, cluster.tint.copy(alpha = 0.32f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(shape = RoundedCornerShape(999.dp), color = cluster.tint, modifier = Modifier.size(14.dp)) {}
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(cluster.title, fontWeight = FontWeight.Black, color = cluster.tint)
+                            Text(cluster.subtitle, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
             Text(
                 "Derivaciones resaltadas: ${leads.sortedBy { it.ordinal }.joinToString { it.label }}",
                 style = MaterialTheme.typography.labelLarge,
@@ -1675,8 +1761,7 @@ private fun DynamicEcgStrip(
 @Composable
 private fun DynamicTwelveLeadEcg(
     model: EcgPreviewModel,
-    highlightedLeads: Set<EcgLead>,
-    tint: Color,
+    highlightedLeadColors: Map<EcgLead, List<Color>>,
     title: String,
     subtitle: String,
     onTap: () -> Unit,
@@ -1716,13 +1801,16 @@ private fun DynamicTwelveLeadEcg(
                 row.forEachIndexed { columnIndex, lead ->
                     val left = columnIndex * cellW
                     val top = headerH + rowIndex * cellH
-                    val isHighlighted = highlightedLeads.contains(lead)
-                    if (isHighlighted) {
-                        drawRect(
-                            color = tint.copy(alpha = 0.14f),
-                            topLeft = Offset(left + 3f, top + 3f),
-                            size = Size(cellW - 6f, cellH - 6f)
-                        )
+                    val highlightColors = highlightedLeadColors[lead].orEmpty()
+                    if (highlightColors.isNotEmpty()) {
+                        val stripeWidth = (cellW - 6f) / highlightColors.size.coerceAtLeast(1)
+                        highlightColors.forEachIndexed { index, color ->
+                            drawRect(
+                                color = color.copy(alpha = if (highlightColors.size == 1) 0.14f else 0.18f),
+                                topLeft = Offset(left + 3f + index * stripeWidth, top + 3f),
+                                size = Size(stripeWidth, cellH - 6f)
+                            )
+                        }
                     }
                     val segmentMs = 2500.0
                     val segmentStartMs = columnIndex * segmentMs
@@ -1733,7 +1821,7 @@ private fun DynamicTwelveLeadEcg(
                         width = cellW - 16f,
                         height = cellH - 22f,
                         baselineColor = baselineColor,
-                        traceColor = if (isHighlighted) tint else traceColor,
+                        traceColor = highlightColors.firstOrNull() ?: traceColor,
                         labelColor = labelColor,
                         label = lead.label,
                         footer = lead.region,
