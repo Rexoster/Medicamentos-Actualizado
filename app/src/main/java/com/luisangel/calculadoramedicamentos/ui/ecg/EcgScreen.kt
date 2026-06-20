@@ -158,6 +158,12 @@ private enum class EcgTool(
         description = "Umbrales por edad, sexo y derivaciones contiguas.",
         icon = Icons.Default.WarningAmber
     ),
+    PATHOLOGIES(
+        label = "Patologías ECG",
+        shortLabel = "Patologías",
+        description = "Carga ejemplos didácticos y rellena las calculadoras para comparar trazos.",
+        icon = Icons.Default.MonitorHeart
+    ),
     PREVIEW(
         label = "Vista previa ECG",
         shortLabel = "Vista ECG",
@@ -165,6 +171,34 @@ private enum class EcgTool(
         icon = Icons.Default.MonitorHeart
     )
 }
+
+private enum class EcgPathologyPattern(
+    val displayName: String,
+    val teachingNote: String
+) {
+    NORMAL_SINUS("Ritmo sinusal normal", "P antes de cada QRS, RR regular, PR/QRS/QT dentro de rangos habituales."),
+    PVC("Extrasístole ventricular", "Latido prematuro de QRS ancho, sin P previa clara y con pausa compensadora en la tira."),
+    ATRIAL_FIBRILLATION("Fibrilación auricular", "Ritmo irregularmente irregular, sin ondas P organizadas y QRS habitualmente estrecho."),
+    FIRST_DEGREE_AV_BLOCK("BAV de primer grado", "PR prolongado con conducción 1:1 entre P y QRS."),
+    LEFT_VENTRICULAR_HYPERTROPHY("Crecimiento ventricular izquierdo", "Voltajes aumentados y posible repolarización secundaria; se cargan criterios de Sokolow-Lyon/Cornell."),
+    RIGHT_VENTRICULAR_HYPERTROPHY("Crecimiento ventricular derecho", "Eje derecho y predominio de R en V1 con transición precordial alterada de forma didáctica."),
+    RIGHT_BUNDLE_BRANCH_BLOCK("Bloqueo de rama derecha", "QRS ancho, patrón rSR' en V1 y S terminal ancha en DI/V6."),
+    LEFT_BUNDLE_BRANCH_BLOCK("Bloqueo de rama izquierda", "QRS ancho, complejo negativo en V1 y R ancha/notchada en derivaciones laterales."),
+    ANTERIOR_STEMI("IAM con elevación anterior", "Elevación del ST predominante en V2-V4/V5, orientativa de territorio anterior/DA."),
+    INFERIOR_STEMI("IAM con elevación inferior", "Elevación del ST en DII, DIII y aVF con posible descenso recíproco en DI/aVL."),
+    HYPERKALEMIA("Hiperkalemia", "Ondas T altas y picudas, QT corto relativo y ensanchamiento progresivo del QRS en el ejemplo."),
+    LONG_QT("QT prolongado", "QT/QTc prolongado con repolarización extendida; útil para comparar fórmulas QTc.")
+}
+
+private data class EcgPathologyExample(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val description: String,
+    val pattern: EcgPathologyPattern,
+    val focusLead: EcgLead = EcgLead.DII,
+    val references: String
+)
 
 private data class EcgReferenceItem(
     val source: String,
@@ -211,7 +245,8 @@ private data class EcgSharedInputState(
     val qtcUseRr: MutableState<Boolean>,
     val axisMethodName: MutableState<String>,
     val axisFirstText: MutableState<String>,
-    val axisSecondText: MutableState<String>
+    val axisSecondText: MutableState<String>,
+    val pathologyPatternName: MutableState<String>
 )
 
 private data class EcgPreviewModel(
@@ -228,6 +263,7 @@ private data class EcgPreviewModel(
     val rhythmSinus: Boolean,
     val rhythmRegular: Boolean,
     val lvhPositive: Boolean,
+    val pathologyPattern: EcgPathologyPattern,
     val sourceNote: String
 )
 
@@ -356,7 +392,8 @@ private fun rememberEcgSharedInputState(): EcgSharedInputState = EcgSharedInputS
     qtcUseRr = rememberSaveable { mutableStateOf(false) },
     axisMethodName = rememberSaveable { mutableStateOf(EcgAxisMethod.LEAD_I_AVF.name) },
     axisFirstText = rememberSaveable { mutableStateOf("") },
-    axisSecondText = rememberSaveable { mutableStateOf("") }
+    axisSecondText = rememberSaveable { mutableStateOf("") },
+    pathologyPatternName = rememberSaveable { mutableStateOf(EcgPathologyPattern.NORMAL_SINUS.name) }
 )
 
 @Composable
@@ -1040,6 +1077,7 @@ private fun EcgCalculatorContent(tool: EcgTool, sharedInput: EcgSharedInputState
             EcgTool.AXIS -> AxisCalculatorContent(sharedInput)
             EcgTool.LVH -> LvhCalculatorContent(sharedInput)
             EcgTool.ST -> StElevationContent(sharedInput)
+            EcgTool.PATHOLOGIES -> EcgPathologiesContent(sharedInput)
             EcgTool.PREVIEW -> EcgPreviewContent(sharedInput)
         }
     }
@@ -1342,6 +1380,332 @@ private fun StElevationContent(state: EcgSharedInputState) {
     }
 }
 
+private val ecgPathologyExamples = listOf(
+    EcgPathologyExample(
+        id = "normal_sinus",
+        title = "Ritmo sinusal normal",
+        subtitle = "Base comparativa",
+        description = "FC 75 lpm, PR 160 ms, QRS 90 ms y QT 390 ms. Útil como punto de partida para comparar cambios.",
+        pattern = EcgPathologyPattern.NORMAL_SINUS,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part IV; ECG basics."
+    ),
+    EcgPathologyExample(
+        id = "pvc",
+        title = "Extrasístole ventricular",
+        subtitle = "QRS ancho prematuro + pausa",
+        description = "Simula latidos ventriculares prematuros: QRS ancho, sin P previa clara y pausa compensadora. Se cargan QRS 160 ms y ritmo irregular.",
+        pattern = EcgPathologyPattern.PVC,
+        focusLead = EcgLead.DII,
+        references = "LITFL ECG Library: premature ventricular complexes; NCBI/StatPearls arrhythmias."
+    ),
+    EcgPathologyExample(
+        id = "afib",
+        title = "Fibrilación auricular",
+        subtitle = "RR irregular + sin P organizada",
+        description = "Carga ritmo no sinusal e irregular, con FC 125 lpm y QRS estrecho para revisar la tira y el cálculo de frecuencia.",
+        pattern = EcgPathologyPattern.ATRIAL_FIBRILLATION,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACC/HRS AF guidance; ECG rhythm basics."
+    ),
+    EcgPathologyExample(
+        id = "first_degree_avb",
+        title = "BAV de primer grado",
+        subtitle = "PR prolongado",
+        description = "Conducción 1:1 con PR de 240 ms. Sirve para ver cómo se desplaza la onda P respecto al QRS.",
+        pattern = EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part III conduction disturbances."
+    ),
+    EcgPathologyExample(
+        id = "lvh",
+        title = "Crecimiento ventricular izquierdo",
+        subtitle = "Voltajes altos + criterios HVI",
+        description = "Carga S en V1 y R en V5/V6 altos para activar Sokolow-Lyon y Cornell. El trazo aumenta voltaje de forma didáctica.",
+        pattern = EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY,
+        focusLead = EcgLead.V5,
+        references = "AHA/ACCF/HRS Part V; Sokolow-Lyon/Cornell."
+    ),
+    EcgPathologyExample(
+        id = "rvh",
+        title = "Crecimiento ventricular derecho",
+        subtitle = "Eje derecho + R dominante en V1",
+        description = "Carga eje derecho y morfología orientativa con predominio anterior derecho, útil para comparar V1 y derivaciones inferiores.",
+        pattern = EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY,
+        focusLead = EcgLead.V1,
+        references = "AHA/ACCF/HRS Part V chamber hypertrophy."
+    ),
+    EcgPathologyExample(
+        id = "rbbb",
+        title = "Bloqueo de rama derecha",
+        subtitle = "rSR' en V1 + S lateral",
+        description = "QRS 140 ms, patrón terminal derecho. El ejemplo se aprecia mejor en V1 y V6.",
+        pattern = EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK,
+        focusLead = EcgLead.V1,
+        references = "AHA/ACCF/HRS Part III; bundle branch block criteria."
+    ),
+    EcgPathologyExample(
+        id = "lbbb",
+        title = "Bloqueo de rama izquierda",
+        subtitle = "QRS ancho + R lateral amplia",
+        description = "QRS 150 ms, V1 negativo y laterales con R ancha/notchada de manera didáctica.",
+        pattern = EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK,
+        focusLead = EcgLead.V6,
+        references = "AHA/ACCF/HRS Part III; LBBB criteria."
+    ),
+    EcgPathologyExample(
+        id = "anterior_stemi",
+        title = "IAM con elevación anterior",
+        subtitle = "V2-V4 / DA",
+        description = "Carga elevación del ST de 3 mm en precordiales anteriores y permite revisar criterios ST por edad/sexo.",
+        pattern = EcgPathologyPattern.ANTERIOR_STEMI,
+        focusLead = EcgLead.V3,
+        references = "Fourth Universal Definition of MI; AHA/ACCF/HRS Part VI."
+    ),
+    EcgPathologyExample(
+        id = "inferior_stemi",
+        title = "IAM con elevación inferior",
+        subtitle = "DII, DIII, aVF",
+        description = "Carga elevación del ST inferior y descenso recíproco orientativo en lateral alta.",
+        pattern = EcgPathologyPattern.INFERIOR_STEMI,
+        focusLead = EcgLead.DIII,
+        references = "Fourth Universal Definition of MI; STEMI territories."
+    ),
+    EcgPathologyExample(
+        id = "hyperkalemia",
+        title = "Hiperkalemia",
+        subtitle = "T picudas + QRS ensanchado",
+        description = "Carga QRS 130 ms, QT más corto y ondas T altas/picudas. No estima potasio sérico, solo representa patrón educativo.",
+        pattern = EcgPathologyPattern.HYPERKALEMIA,
+        focusLead = EcgLead.V4,
+        references = "NCBI/StatPearls Hyperkalemia; ECG electrolyte patterns."
+    ),
+    EcgPathologyExample(
+        id = "long_qt",
+        title = "QT prolongado",
+        subtitle = "QT/QTc prolongado",
+        description = "Carga QT 520 ms con FC 70 lpm para revisar QTc por Bazett y Fridericia.",
+        pattern = EcgPathologyPattern.LONG_QT,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part IV; QT interval measurement."
+    )
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EcgPathologiesContent(state: EcgSharedInputState) {
+    var selectedId by rememberSaveable { mutableStateOf(ecgPathologyExamples.first().id) }
+    val selected = ecgPathologyExamples.firstOrNull { it.id == selectedId } ?: ecgPathologyExamples.first()
+    val model = buildEcgPreviewModel(state)
+
+    EcgCard(
+        title = "Ejemplos de patologías ECG",
+        note = "Toca una patología para cargar valores en las calculadoras del módulo ECG y ver un trazo didáctico. Sí, por fin las calculadoras dejan de vivir aisladas como residentes postguardia."
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            ecgPathologyExamples.forEach { example ->
+                PreviewChoiceChip(
+                    text = example.title,
+                    selected = selectedId == example.id,
+                    onClick = {
+                        selectedId = example.id
+                        applyEcgPathologyExample(example, state)
+                    }
+                )
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(selected.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                Text(selected.subtitle, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(selected.description, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Al seleccionarlo se rellenan: FC/RR, PR, QRS, QT/QTc, eje, ST o HVI según corresponda.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Referencias: ${selected.references}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+        ) {
+            DynamicEcgStrip(
+                model = model,
+                lead = selected.focusLead,
+                title = "${selected.focusLead.label} · ${selected.title}",
+                subtitle = selected.focusLead.region,
+                highlighted = true,
+                tint = MaterialTheme.colorScheme.primary,
+                onTap = {},
+                zoomLevel = 1.15f,
+                modifier = Modifier
+                    .width(ecgSingleLeadWidthDp(model, 1.15f))
+                    .height(ecgSingleLeadHeightDp(1.15f))
+            )
+        }
+
+        ResultGrid(
+            listOfNotNull(
+                "Patrón activo" to model.pathologyPattern.displayName,
+                "FC" to "${model.heartRateBpm.roundClean()} lpm",
+                "PR" to "${model.prMs.roundClean()} ms",
+                "QRS" to "${model.qrsMs.roundClean()} ms",
+                "QT" to "${model.qtMs.roundClean()} ms",
+                model.qtcResult?.let { "QTc Bazett" to "${it.bazettMs.roundClean()} ms" },
+                model.qtcResult?.let { "QTc Fridericia" to "${it.fridericiaMs.roundClean()} ms" },
+                model.axisDegrees?.let { "Eje" to "${it.roundClean()}°" },
+                "ST visual" to "${model.stMm.format(1)} mm",
+                "Ritmo" to if (model.rhythmRegular) "Regular" else "Irregular"
+            )
+        )
+        WarningText("Son ejemplos de enseñanza. Para un paciente real, mide el ECG real y confirma con clínica, derivaciones completas, biomarcadores o imagen según el caso.")
+    }
+}
+
+private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSharedInputState) {
+    state.pathologyPatternName.value = example.pattern.name
+    state.ageText.value = "45"
+    state.sexName.value = EcgSex.MALE.name
+    state.heartRateText.value = "75"
+    state.prText.value = "160"
+    state.qrsText.value = "90"
+    state.qtText.value = "390"
+    state.axisText.value = "60"
+    state.sinusRhythm.value = true
+    state.regularRhythm.value = true
+    state.includeSt.value = false
+    state.stElevationText.value = "0"
+    state.stLeadGroupName.value = EcgLeadGroup.OTHER_CONTIGUOUS.name
+    state.stContiguous.value = true
+    state.includeLvh.value = false
+    state.sV1Text.value = "8"
+    state.rV5Text.value = "14"
+    state.rV6Text.value = "12"
+    state.rAvlText.value = "5"
+    state.sV3Text.value = "8"
+    state.ratePaperSpeedName.value = EcgPaperSpeed.SPEED_25.name
+    state.rateRrMsText.value = ""
+    state.rateRrSecText.value = ""
+    state.rateLargeSquaresText.value = ""
+    state.rateSmallSquaresText.value = ""
+    state.rateQrsCountText.value = ""
+    state.qtcUseRr.value = false
+    state.qtcRrText.value = ""
+    state.axisMethodName.value = EcgAxisMethod.LEAD_I_AVF.name
+    state.axisFirstText.value = "5"
+    state.axisSecondText.value = "9"
+
+    when (example.pattern) {
+        EcgPathologyPattern.NORMAL_SINUS -> Unit
+        EcgPathologyPattern.PVC -> {
+            state.heartRateText.value = "82"
+            state.prText.value = "160"
+            state.qrsText.value = "160"
+            state.qtText.value = "420"
+            state.regularRhythm.value = false
+        }
+        EcgPathologyPattern.ATRIAL_FIBRILLATION -> {
+            state.heartRateText.value = "125"
+            state.prText.value = ""
+            state.qrsText.value = "90"
+            state.qtText.value = "340"
+            state.sinusRhythm.value = false
+            state.regularRhythm.value = false
+        }
+        EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK -> {
+            state.heartRateText.value = "68"
+            state.prText.value = "240"
+            state.qrsText.value = "90"
+            state.qtText.value = "410"
+        }
+        EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> {
+            state.heartRateText.value = "78"
+            state.qrsText.value = "100"
+            state.qtText.value = "410"
+            state.axisText.value = "-20"
+            state.includeLvh.value = true
+            state.sV1Text.value = "24"
+            state.rV5Text.value = "26"
+            state.rV6Text.value = "22"
+            state.rAvlText.value = "13"
+            state.sV3Text.value = "19"
+            state.axisFirstText.value = "9"
+            state.axisSecondText.value = "-3"
+        }
+        EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY -> {
+            state.heartRateText.value = "92"
+            state.qrsText.value = "96"
+            state.qtText.value = "360"
+            state.axisText.value = "115"
+            state.axisFirstText.value = "-3"
+            state.axisSecondText.value = "9"
+        }
+        EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK -> {
+            state.heartRateText.value = "76"
+            state.qrsText.value = "140"
+            state.qtText.value = "430"
+            state.axisText.value = "80"
+        }
+        EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK -> {
+            state.heartRateText.value = "72"
+            state.qrsText.value = "150"
+            state.qtText.value = "450"
+            state.axisText.value = "-35"
+            state.axisFirstText.value = "8"
+            state.axisSecondText.value = "-5"
+        }
+        EcgPathologyPattern.ANTERIOR_STEMI -> {
+            state.heartRateText.value = "96"
+            state.qrsText.value = "92"
+            state.qtText.value = "390"
+            state.includeSt.value = true
+            state.stElevationText.value = "3.0"
+            state.stLeadGroupName.value = EcgLeadGroup.V2_V3.name
+            state.axisText.value = "55"
+        }
+        EcgPathologyPattern.INFERIOR_STEMI -> {
+            state.heartRateText.value = "88"
+            state.qrsText.value = "94"
+            state.qtText.value = "400"
+            state.includeSt.value = true
+            state.stElevationText.value = "2.5"
+            state.stLeadGroupName.value = EcgLeadGroup.OTHER_CONTIGUOUS.name
+            state.axisText.value = "80"
+        }
+        EcgPathologyPattern.HYPERKALEMIA -> {
+            state.heartRateText.value = "58"
+            state.prText.value = "210"
+            state.qrsText.value = "130"
+            state.qtText.value = "320"
+            state.regularRhythm.value = true
+        }
+        EcgPathologyPattern.LONG_QT -> {
+            state.heartRateText.value = "70"
+            state.prText.value = "160"
+            state.qrsText.value = "92"
+            state.qtText.value = "520"
+        }
+    }
+}
+
 @Composable
 private fun EcgPreviewContent(state: EcgSharedInputState) {
     val model = buildEcgPreviewModel(state)
@@ -1497,6 +1861,7 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
 
         ResultGrid(
             listOfNotNull(
+                "Patrón" to model.pathologyPattern.displayName,
                 "FC usada" to "${model.heartRateBpm.roundClean()} lpm",
                 "RR" to "${model.rrMs.roundClean()} ms",
                 "PR" to "${model.prMs.roundClean()} ms",
@@ -1967,18 +2332,38 @@ private fun DrawScope.drawLeadTrace(
     fun xFor(globalMs: Double): Float = topLeft.x + ((globalMs - segmentStartMs).toFloat() * paperPxPerMs)
     fun yFor(mm: Double): Float = baseline - (mm.toFloat() * smallSquarePx)
 
-    val projection = leadProjection(model.axisDegrees, lead)
+    val pattern = model.pathologyPattern
+    val projectionAxis = when (pattern) {
+        EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY -> 115.0
+        EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK -> -35.0
+        else -> model.axisDegrees
+    }
+    val projection = leadProjection(projectionAxis, lead)
     val qrsSign = if (projection < -0.18) -1.0 else 1.0
     val axisMagnitude = abs(projection).coerceIn(0.34, 1.0)
-    val qrsAmplitude = (if (model.lvhPositive) 15.5 else 10.0) * (0.55 + 0.45 * axisMagnitude)
-    val pAmplitude = if (model.rhythmSinus) 1.25 * qrsSign else 0.20
+    val lvhActive = model.lvhPositive || pattern == EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY
+    val qrsAmplitude = when {
+        pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lead == EcgLead.V1 -> 14.0
+        pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && (lead == EcgLead.V5 || lead == EcgLead.V6) -> 7.0
+        lvhActive -> 16.5 * (0.60 + 0.40 * axisMagnitude)
+        else -> 10.0 * (0.55 + 0.45 * axisMagnitude)
+    }
+    val pAmplitude = when {
+        pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION -> 0.0
+        model.rhythmSinus -> 1.25 * qrsSign
+        else -> 0.20
+    }
     val qtcPreferred = model.qtcPreferredMs ?: model.qtMs
+    val stVisual = ecgStForLead(model, lead).coerceIn(-4.0, 5.0) * if (qrsSign < 0) 0.75 else 1.0
     val tAmplitude = when {
+        pattern == EcgPathologyPattern.HYPERKALEMIA -> 7.8 * qrsSign
+        pattern == EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY && (lead == EcgLead.V5 || lead == EcgLead.V6 || lead == EcgLead.DI || lead == EcgLead.AVL) -> -2.4
         qtcPreferred >= 500.0 -> 3.0 * qrsSign
-        model.stMm < -0.5 -> -2.0 * qrsSign
+        stVisual < -0.5 -> -2.0 * qrsSign
         else -> 2.8 * qrsSign
     }
-    val stVisual = model.stMm.coerceIn(-4.0, 5.0) * if (qrsSign < 0) 0.75 else 1.0
+    val lateralLead = lead == EcgLead.DI || lead == EcgLead.AVL || lead == EcgLead.V5 || lead == EcgLead.V6
+    val lateralLowLead = lead == EcgLead.V5 || lead == EcgLead.V6
     val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
     var beatStart = 80.0
     var beatIndex = 0
@@ -1993,10 +2378,11 @@ private fun DrawScope.drawLeadTrace(
         while (beatStart < segmentEndMs + model.rrMs) {
             val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
             val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
-            val pr = model.prMs.coerceIn(80.0, 340.0)
-            val qrs = model.qrsMs.coerceIn(50.0, 220.0)
+            val isPvcBeat = pattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
+            val pr = if (isPvcBeat) 0.0 else model.prMs.coerceIn(80.0, 340.0)
+            val qrs = (if (isPvcBeat) model.qrsMs.coerceAtLeast(160.0) else model.qrsMs).coerceIn(50.0, 230.0)
             val qt = model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
-            val qrsOn = beatStart + pr
+            val qrsOn = if (isPvcBeat) beatStart + rr * 0.30 else beatStart + pr
             val qrsEnd = qrsOn + qrs
             val pStart = (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
             val pPeak = pStart + 42.0
@@ -2005,19 +2391,66 @@ private fun DrawScope.drawLeadTrace(
             val stEnd = qrsEnd + 115.0
             val tEnd = qrsOn + qt
             val tPeak = (stEnd + (tEnd - stEnd) * 0.45).coerceAtLeast(stEnd + 35.0)
+            val showP = pAmplitude != 0.0 && !isPvcBeat
 
-            lineTo(xFor(pStart), yFor(0.0))
-            quadraticBezierTo(xFor(pPeak), yFor(pAmplitude), xFor(pEnd), yFor(0.0))
+            if (showP) {
+                lineTo(xFor(pStart), yFor(0.0))
+                quadraticBezierTo(xFor(pPeak), yFor(pAmplitude), xFor(pEnd), yFor(0.0))
+            }
+            if (pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION) {
+                lineTo(xFor(qrsOn - 52.0), yFor(0.25 * kotlin.math.sin(beatIndex.toDouble() * 1.7)))
+                lineTo(xFor(qrsOn - 28.0), yFor(-0.18 * kotlin.math.cos(beatIndex.toDouble() * 1.4)))
+            }
             lineTo(xFor(qrsOn), yFor(0.0))
-            lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.6 * qrsSign))
-            lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
-            lineTo(xFor(qrsOn + qrs * 0.72), yFor(-3.0 * qrsSign))
+            when {
+                isPvcBeat -> {
+                    val pvcSign = -qrsSign
+                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(-2.4 * pvcSign))
+                    lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * 1.25 * pvcSign))
+                    lineTo(xFor(qrsOn + qrs * 0.86), yFor(-5.0 * pvcSign))
+                }
+                pattern == EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK && lead == EcgLead.V1 -> {
+                    lineTo(xFor(qrsOn + qrs * 0.16), yFor(3.5))
+                    lineTo(xFor(qrsOn + qrs * 0.36), yFor(-3.2))
+                    lineTo(xFor(qrsOn + qrs * 0.76), yFor(qrsAmplitude * 1.10))
+                }
+                pattern == EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK && lateralLead -> {
+                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(-1.4 * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.42), yFor(qrsAmplitude * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.88), yFor(-5.2))
+                }
+                pattern == EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK && lead == EcgLead.V1 -> {
+                    lineTo(xFor(qrsOn + qrs * 0.22), yFor(-qrsAmplitude * 0.70))
+                    lineTo(xFor(qrsOn + qrs * 0.55), yFor(-qrsAmplitude * 1.05))
+                    lineTo(xFor(qrsOn + qrs * 0.86), yFor(-qrsAmplitude * 0.70))
+                }
+                pattern == EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK && lateralLead -> {
+                    lineTo(xFor(qrsOn + qrs * 0.20), yFor(qrsAmplitude * 0.75))
+                    lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * 1.10))
+                    lineTo(xFor(qrsOn + qrs * 0.66), yFor(qrsAmplitude * 0.82))
+                    lineTo(xFor(qrsOn + qrs * 0.88), yFor(qrsAmplitude * 1.02))
+                }
+                pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lead == EcgLead.V1 -> {
+                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(-1.2))
+                    lineTo(xFor(rPeak), yFor(qrsAmplitude * 1.18))
+                    lineTo(xFor(qrsOn + qrs * 0.78), yFor(-2.0))
+                }
+                pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lateralLowLead -> {
+                    lineTo(xFor(qrsOn + qrs * 0.20), yFor(3.0))
+                    lineTo(xFor(qrsOn + qrs * 0.72), yFor(-7.5))
+                }
+                else -> {
+                    lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.6 * qrsSign))
+                    lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.72), yFor(-3.0 * qrsSign))
+                }
+            }
             lineTo(xFor(qrsEnd), yFor(stVisual))
             lineTo(xFor(stEnd), yFor(stVisual))
             quadraticBezierTo(xFor(tPeak), yFor(tAmplitude + stVisual * 0.18), xFor(tEnd), yFor(0.0))
             lineTo(xFor(beatStart + rr), yFor(0.0))
 
-            beatStart += rr
+            beatStart += if (isPvcBeat) rr * 1.35 else rr
             beatIndex += 1
         }
         lineTo(topLeft.x + width, baseline)
@@ -2052,6 +2485,20 @@ private fun leadProjection(axisDegrees: Double?, lead: EcgLead): Double {
     if (lead.limbAxisDegrees == null) return lead.precordialProjection
     val axis = axisDegrees ?: 60.0
     return cos((axis - lead.limbAxisDegrees) * PI / 180.0).coerceIn(-1.0, 1.0)
+}
+
+private fun ecgStForLead(model: EcgPreviewModel, lead: EcgLead): Double = when (model.pathologyPattern) {
+    EcgPathologyPattern.ANTERIOR_STEMI -> when (lead) {
+        EcgLead.V2, EcgLead.V3, EcgLead.V4, EcgLead.V5 -> model.stMm.takeIf { it != 0.0 } ?: 3.0
+        EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> -0.6
+        else -> 0.0
+    }
+    EcgPathologyPattern.INFERIOR_STEMI -> when (lead) {
+        EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> model.stMm.takeIf { it != 0.0 } ?: 2.5
+        EcgLead.DI, EcgLead.AVL -> -1.0
+        else -> 0.0
+    }
+    else -> model.stMm
 }
 
 private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
@@ -2117,6 +2564,7 @@ private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
         rhythmSinus = state.sinusRhythm.value,
         rhythmRegular = state.regularRhythm.value,
         lvhPositive = lvhPositive,
+        pathologyPattern = runCatching { EcgPathologyPattern.valueOf(state.pathologyPatternName.value) }.getOrDefault(EcgPathologyPattern.NORMAL_SINUS),
         sourceNote = sourceNote
     )
 }
@@ -2489,6 +2937,34 @@ private fun EcgTool.info(): EcgInfoContent = when (this) {
             "No identifica automáticamente equivalentes de IAMCEST ni patrones sutiles.",
             "No sustituye protocolo de dolor torácico, ECG seriados, biomarcadores ni valoración urgente.",
             "El contexto clínico pesa más que una casilla aislada. Trágico, pero cierto."
+        )
+    )
+
+    EcgTool.PATHOLOGIES -> EcgInfoContent(
+        title = "Patologías ECG · ejemplos didácticos",
+        purpose = "Muestra patrones clínicos frecuentes como ejemplos configurables y rellena las calculadoras ya existentes para que el usuario compare FC, RR, PR, QRS, QT/QTc, eje, ST e HVI.",
+        method = "Cada patología carga un conjunto de valores de ejemplo en el estado compartido del módulo ECG. La vista previa usa esos valores para dibujar un trazo simulado y las calculadoras quedan listas para revisar los criterios relacionados.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Parts III, IV, V and VI. J Am Coll Cardiol. 2009.",
+                useInApp = "Criterios y contexto para conducción intraventricular, ST/QT, crecimiento de cavidades e isquemia/infarto."
+            ),
+            EcgReferenceItem(
+                source = "Life in the Fast Lane",
+                citation = "ECG Library: PVCs, atrial fibrillation, bundle branch block, LVH, STEMI territories and electrolyte patterns.",
+                useInApp = "Morfología educativa de ejemplos y correlación visual por derivaciones."
+            ),
+            EcgReferenceItem(
+                source = "NCBI Bookshelf / StatPearls",
+                citation = "Electrocardiogram, Bundle Branch Block, STEMI and Hyperkalemia clinical reviews.",
+                useInApp = "Cotejo de descripciones clínicas y rasgos electrocardiográficos."
+            )
+        ),
+        limitations = listOf(
+            "Los ejemplos son plantillas didácticas, no pacientes reales ni diagnóstico automático.",
+            "La morfología puede variar por derivación, edad, electrodos, cardiopatía previa y contexto clínico.",
+            "Al tocar un ejemplo se rellenan calculadoras, pero el usuario debe verificar medidas reales si evalúa un ECG clínico."
         )
     )
 

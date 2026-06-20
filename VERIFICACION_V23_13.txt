@@ -1,0 +1,8 @@
+VERIFICACION V23.13
+- Nuevo apartado ECG: Patologías ECG.
+- Ejemplos cargan datos en estado compartido del módulo ECG.
+- Vista previa ECG reconoce patrón activo.
+- Rejilla/zoom de v23.11 se conserva.
+- Actualización directa de v23.12 se conserva.
+- No se tocaron medicamentos, Pediatría, Gineco-OB ni renales.
+- Revisión local de estructura: OK.
