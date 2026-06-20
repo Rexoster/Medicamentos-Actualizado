@@ -301,6 +301,90 @@ private fun percentileClinicalInfo() = ClinicalInfoContent(
     )
 )
 
+
+private fun pediatricMaintenanceClinicalInfo() = ClinicalInfoContent(
+    title = "Mantenimiento hídrico pediátrico · información y referencias",
+    purpose = (
+        "Calcula líquidos de mantenimiento en pediatría con Holliday-Segar " +
+            "y regla 4-2-1. También estima bolos cristaloides y déficit por " +
+            "deshidratación como apoyo de prescripción."
+    ),
+    method = (
+        "La app calcula 100 mL/kg/día para los primeros 10 kg, 50 mL/kg/día " +
+            "para los siguientes 10 kg y 20 mL/kg/día por arriba de 20 kg. " +
+            "La tasa horaria equivalente usa 4-2-1: 4, 2 y 1 mL/kg/h por " +
+            "tramos de peso."
+    ),
+    references = listOf(
+        ClinicalReferenceItem(
+            source = "NICE NG29",
+            citation = "Intravenous fluid therapy in children and young people in hospital, recomendaciones 1.4.1 a 1.4.3.",
+            useInApp = "Holliday-Segar, límites diarios orientativos e indicación de cristaloides isotónicos con sodio 131–154 mmol/L."
+        ),
+        ClinicalReferenceItem(
+            source = "Meyers RS",
+            citation = "Pediatric Fluid and Electrolyte Therapy. J Pediatr Pharmacol Ther. 2009;14(4):204–211.",
+            useInApp = "Referencia de base para terapia de líquidos y electrólitos pediátricos."
+        ),
+        ClinicalReferenceItem(
+            source = "Royal Children's Hospital Melbourne",
+            citation = "Clinical Practice Guideline: Intravenous fluids.",
+            useInApp = "Monitoreo, control de peso, electrolitos y uso de soluciones con sodio similar al plasma."
+        ),
+        ClinicalReferenceItem(
+            source = "American Academy of Pediatrics",
+            citation = "Clinical Practice Guideline: Maintenance Intravenous Fluids in Children. Pediatrics. 2018;142(6):e20183083.",
+            useInApp = "Recomendación de soluciones isotónicas en pacientes de 28 días a 18 años que requieren líquidos IV de mantenimiento."
+        )
+    ),
+    limitations = listOf(
+        "No aplica a neonatos prematuros, DKA, falla renal, cardiopatías, quemaduras, choque no resuelto ni UCI sin valoración especializada.",
+        "No sustituye la exploración clínica, balance hídrico, diuresis, glucosa ni electrólitos seriados.",
+        "El potasio IV debe individualizarse y evitarse si no hay diuresis adecuada o existe deterioro renal."
+    )
+)
+
+private fun pediatricElectrolyteClinicalInfo() = ClinicalInfoContent(
+    title = "Electrolitos pediátricos · información y referencias",
+    purpose = (
+        "Apoya cálculos de sodio y potasio relacionados con líquidos IV: " +
+            "déficit de sodio, déficit de agua libre en hipernatremia y " +
+            "aporte de sodio/potasio de una solución seleccionada."
+    ),
+    method = (
+        "Déficit de sodio = ACT × peso × (Na objetivo - Na actual). " +
+            "Déficit de agua libre = ACT × peso × ((Na actual / Na objetivo) - 1). " +
+            "El aporte de electrolitos se calcula con concentración mmol/L por volumen diario."
+    ),
+    references = listOf(
+        ClinicalReferenceItem(
+            source = "NICE NG29",
+            citation = "Intravenous fluid therapy in children and young people in hospital, recomendaciones de mantenimiento y composición inicial.",
+            useInApp = "Selección de cristaloides isotónicos y vigilancia de electrolitos."
+        ),
+        ClinicalReferenceItem(
+            source = "Royal Children's Hospital Melbourne",
+            citation = "Clinical Practice Guideline: Intravenous fluids.",
+            useInApp = "Revisión de electrolitos/glucosa antes de iniciar líquidos y durante el tratamiento."
+        ),
+        ClinicalReferenceItem(
+            source = "Welsh Clinical Network for Paediatric Nephrology",
+            citation = "Guidelines for the management of hyponatraemia: sodium deficit = 0.6 × peso × cambio de sodio.",
+            useInApp = "Fórmula de déficit de sodio en hiponatremia."
+        ),
+        ClinicalReferenceItem(
+            source = "UCSF Hospital Handbook",
+            citation = "Hypernatremia: free water deficit = TBW × ((Na/goal Na) - 1).",
+            useInApp = "Fórmula de déficit de agua libre y advertencia de corrección gradual."
+        )
+    ),
+    limitations = listOf(
+        "Las disnatremias sintomáticas, graves o agudas requieren protocolo institucional y vigilancia estrecha.",
+        "La app no decide el tipo exacto de solución, velocidad máxima ni indicación de solución hipertónica.",
+        "ACT es una aproximación; lactantes, obesidad, edema, deshidratación grave y enfermedad renal pueden requerir ajustes."
+    )
+)
+
 private fun renalClinicalInfo() = ClinicalInfoContent(
     title = "Función renal · información y referencias",
     purpose = (
@@ -928,8 +1012,8 @@ private enum class MainSection(
         icon = Icons.Default.Medication
     ),
     PERCENTILES(
-        label = "Percentiles",
-        description = "Tablas y curvas de crecimiento",
+        label = "Pediatría",
+        description = "Percentiles, líquidos y electrolitos",
         icon = Icons.Default.Insights
     ),
     OBSTETRICS(
@@ -1075,7 +1159,7 @@ private fun ApplicationShell(
                             )
 
                         MainSection.PERCENTILES ->
-                            PercentilesScreen(
+                            PediatricsScreen(
                                 modifier =
                                     Modifier.fillMaxSize()
                             )
@@ -5037,7 +5121,677 @@ private fun ResultBlock(
     }
 }
 
+private enum class PediatricTool(
+    val label: String,
+    val description: String,
+    val icon: ImageVector
+) {
+    PERCENTILES(
+        label = "Percentiles",
+        description = "Curvas OMS/CDC y estado nutricional",
+        icon = Icons.Default.Insights
+    ),
+    FLUIDS(
+        label = "Mantenimiento de líquidos",
+        description = "Holliday-Segar, 4-2-1 y bolos",
+        icon = Icons.Default.WaterDrop
+    ),
+    ELECTROLYTES(
+        label = "Electrolitos",
+        description = "Sodio, agua libre y aporte Na/K",
+        icon = Icons.Default.Medication
+    )
+}
+
+@Composable
+private fun PediatricsScreen(modifier: Modifier = Modifier) {
+    var selectedTool by rememberSaveable {
+        mutableStateOf(PediatricTool.PERCENTILES)
+    }
+    var menuExpanded by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    BoxWithConstraints(modifier) {
+        val compactHeight = maxHeight < 560.dp
+        val landscape = maxWidth > maxHeight
+        val menuSpacing = if (compactHeight) 6.dp else 10.dp
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(menuSpacing)
+        ) {
+            PediatricToolMenu(
+                expanded = menuExpanded,
+                selectedTool = selectedTool,
+                onToggle = { menuExpanded = !menuExpanded },
+                onToolSelected = {
+                    selectedTool = it
+                    menuExpanded = false
+                },
+                compactHeight = compactHeight,
+                landscape = landscape,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when (selectedTool) {
+                    PediatricTool.PERCENTILES -> PercentilesScreen(
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    PediatricTool.FLUIDS -> PediatricMaintenanceFluidsScreen(
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    PediatricTool.ELECTROLYTES -> PediatricElectrolytesScreen(
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PediatricToolMenu(
+    expanded: Boolean,
+    selectedTool: PediatricTool,
+    onToggle: () -> Unit,
+    onToolSelected: (PediatricTool) -> Unit,
+    compactHeight: Boolean,
+    landscape: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val buttonWidth by animateDpAsState(
+        targetValue = if (expanded) {
+            if (compactHeight) 218.dp else 254.dp
+        } else {
+            if (compactHeight) 58.dp else 64.dp
+        },
+        label = "pediatricMenuButtonWidth"
+    )
+    val buttonHeight = if (compactHeight) 46.dp else 54.dp
+    val panelMaxHeight = if (landscape) 190.dp else 320.dp
+    val columnCount = if (landscape) 3 else 1
+
+    Column(
+        modifier = modifier.animateContentSize(),
+        verticalArrangement = Arrangement.spacedBy(if (compactHeight) 5.dp else 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            onClick = onToggle,
+            modifier = Modifier
+                .width(buttonWidth)
+                .height(buttonHeight),
+            shape = RoundedCornerShape(if (compactHeight) 17.dp else 20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.primary,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.4.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+            ),
+            tonalElevation = if (expanded) 5.dp else 2.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (compactHeight) 10.dp else 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Menú de pediatría",
+                    modifier = Modifier.size(if (compactHeight) 24.dp else 28.dp)
+                )
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Pediatría",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (compactHeight) 8.dp else 14.dp)
+                    .heightIn(max = panelMaxHeight)
+                    .verticalScroll(rememberScrollState()),
+                shape = RoundedCornerShape(if (compactHeight) 20.dp else 26.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                ),
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(if (compactHeight) 10.dp else 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 12.dp)
+                ) {
+                    Text(
+                        "Herramientas pediátricas",
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+
+                    PediatricTool.entries.chunked(columnCount).forEach { rowTools ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 12.dp)
+                        ) {
+                            rowTools.forEach { tool ->
+                                PediatricToolTile(
+                                    tool = tool,
+                                    selected = selectedTool == tool,
+                                    compact = compactHeight,
+                                    onClick = { onToolSelected(tool) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(columnCount - rowTools.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PediatricToolTile(
+    tool: PediatricTool,
+    selected: Boolean,
+    compact: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(if (compact) 92.dp else 116.dp),
+        shape = RoundedCornerShape(if (compact) 17.dp else 22.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (selected) 1.8.dp else 0.8.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        tonalElevation = if (selected) 6.dp else 1.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (compact) 10.dp else 13.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = tool.icon,
+                contentDescription = null,
+                modifier = Modifier.size(if (compact) 22.dp else 26.dp)
+            )
+            Text(
+                tool.label,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.Black,
+                style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall
+            )
+            Text(
+                tool.description,
+                textAlign = TextAlign.Center,
+                maxLines = if (compact) 1 else 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PediatricMaintenanceFluidsScreen(modifier: Modifier = Modifier) {
+    var weightText by rememberSaveable { mutableStateOf("") }
+    var maintenancePercentText by rememberSaveable { mutableStateOf("100") }
+    var dehydrationPercentText by rememberSaveable { mutableStateOf("0") }
+
+    val weight = weightText.replace(',', '.').toDoubleOrNull()
+    val maintenancePercent = maintenancePercentText.replace(',', '.').toDoubleOrNull() ?: 100.0
+    val dehydrationPercent = dehydrationPercentText.replace(',', '.').toDoubleOrNull() ?: 0.0
+    val dailyFull = weight?.let { pediatricMaintenanceDailyMl(it) }
+    val hourlyFull = weight?.let { pediatricMaintenanceHourlyMl(it) }
+    val factor = (maintenancePercent.coerceIn(0.0, 200.0) / 100.0)
+    val adjustedDaily = dailyFull?.times(factor)
+    val adjustedHourly = hourlyFull?.times(factor)
+    val deficitMl = if (weight != null) weight * dehydrationPercent.coerceIn(0.0, 15.0) * 10.0 else null
+    val totalWithDeficit = if (adjustedDaily != null && deficitMl != null) adjustedDaily + deficitMl else null
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp, 12.dp, 12.dp, 40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            OutlinedCard(
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("Mantenimiento de líquidos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Calcula mantenimiento pediátrico por Holliday-Segar y su equivalente horario 4-2-1. Permite ajustar porcentaje de mantenimiento y estimar déficit por deshidratación.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Usar con electrolitos, glucosa, diuresis, balance hídrico y contexto clínico. La app no sustituye protocolo hospitalario.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    ClinicalInfoButton(info = pediatricMaintenanceClinicalInfo())
+                }
+            }
+        }
+
+        item {
+            OutlinedCard {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Datos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = weightText,
+                        onValueChange = { weightText = decimalText(it) },
+                        label = { Text("Peso") },
+                        suffix = { Text("kg") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = maintenancePercentText,
+                        onValueChange = { maintenancePercentText = decimalText(it) },
+                        label = { Text("Porcentaje de mantenimiento") },
+                        suffix = { Text("%") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("Accesos rápidos", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("100", "75", "50", "33").forEach { option ->
+                            FilterChip(
+                                selected = maintenancePercentText == option,
+                                onClick = { maintenancePercentText = option },
+                                label = { Text("$option%") }
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = dehydrationPercentText,
+                        onValueChange = { dehydrationPercentText = decimalText(it) },
+                        label = { Text("Déficit por deshidratación") },
+                        suffix = { Text("%") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Déficit estimado: 1% ≈ 10 mL/kg. Si no se requiere, deja 0%.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        if (weight == null || weight <= 0.0) {
+            item {
+                PediatricWarningCard("Captura un peso válido para calcular mantenimiento.")
+            }
+        } else {
+            item {
+                PediatricResultCard(
+                    title = "Mantenimiento calculado",
+                    rows = listOf(
+                        "Holliday-Segar 24 h" to "${formatDecimal(dailyFull ?: 0.0, 0)} mL/día",
+                        "Regla 4-2-1" to "${formatDecimal(hourlyFull ?: 0.0, 1)} mL/h",
+                        "Ajustado al ${formatDecimal(maintenancePercent.coerceIn(0.0, 200.0), 0)}%" to "${formatDecimal(adjustedDaily ?: 0.0, 0)} mL/día · ${formatDecimal(adjustedHourly ?: 0.0, 1)} mL/h",
+                        "Bolo 10 mL/kg" to "${formatDecimal(weight * 10.0, 0)} mL",
+                        "Bolo 20 mL/kg" to "${formatDecimal(weight * 20.0, 0)} mL"
+                    )
+                )
+            }
+            item {
+                PediatricResultCard(
+                    title = "Déficit y total orientativo",
+                    rows = listOf(
+                        "Déficit estimado" to "${formatDecimal(deficitMl ?: 0.0, 0)} mL",
+                        "Mantenimiento ajustado + déficit/24 h" to "${formatDecimal(totalWithDeficit ?: 0.0, 0)} mL/día",
+                        "Tasa si se reparte en 24 h" to "${formatDecimal((totalWithDeficit ?: 0.0) / 24.0, 1)} mL/h"
+                    )
+                )
+            }
+            item {
+                PediatricWarningCard(
+                    "Para mantenimiento IV rutinario, NICE y AAP favorecen cristaloides isotónicos en muchos pacientes pediátricos. Agregar potasio solo con función renal/diuresis adecuadas y según electrolitos."
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PediatricElectrolytesScreen(modifier: Modifier = Modifier) {
+    var weightText by rememberSaveable { mutableStateOf("") }
+    var dailyVolumeText by rememberSaveable { mutableStateOf("") }
+    var useMaintenanceVolume by rememberSaveable { mutableStateOf(true) }
+    var serumSodiumText by rememberSaveable { mutableStateOf("") }
+    var targetSodiumText by rememberSaveable { mutableStateOf("135") }
+    var tbwFactorText by rememberSaveable { mutableStateOf("0.6") }
+    var fluidSodiumText by rememberSaveable { mutableStateOf("154") }
+    var fluidPotassiumText by rememberSaveable { mutableStateOf("20") }
+
+    val weight = weightText.replace(',', '.').toDoubleOrNull()
+    val maintenanceVolume = weight?.let { pediatricMaintenanceDailyMl(it) }
+    val manualVolume = dailyVolumeText.replace(',', '.').toDoubleOrNull()
+    val dailyVolume = if (useMaintenanceVolume) maintenanceVolume else manualVolume
+    val serumSodium = serumSodiumText.replace(',', '.').toDoubleOrNull()
+    val targetSodium = targetSodiumText.replace(',', '.').toDoubleOrNull()
+    val tbwFactor = (tbwFactorText.replace(',', '.').toDoubleOrNull() ?: 0.6).coerceIn(0.45, 0.8)
+    val fluidSodium = fluidSodiumText.replace(',', '.').toDoubleOrNull() ?: 154.0
+    val fluidPotassium = fluidPotassiumText.replace(',', '.').toDoubleOrNull() ?: 20.0
+
+    val sodiumDeficit = if (weight != null && serumSodium != null && targetSodium != null && targetSodium > serumSodium) {
+        tbwFactor * weight * (targetSodium - serumSodium)
+    } else null
+    val freeWaterDeficitL = if (weight != null && serumSodium != null && targetSodium != null && serumSodium > targetSodium && targetSodium > 0.0) {
+        tbwFactor * weight * ((serumSodium / targetSodium) - 1.0)
+    } else null
+    val volumeL = dailyVolume?.div(1000.0)
+    val sodiumDelivered = volumeL?.times(fluidSodium)
+    val potassiumDelivered = volumeL?.times(fluidPotassium)
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp, 12.dp, 12.dp, 40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            OutlinedCard(
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("Electrolitos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Calcula déficit de sodio, déficit de agua libre y aporte diario de sodio/potasio según volumen y composición de la solución.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Diseñado para apoyo de cálculo. La corrección real depende de síntomas, cronicidad, volemia, pérdidas, diuresis y protocolo institucional.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    ClinicalInfoButton(info = pediatricElectrolyteClinicalInfo())
+                }
+            }
+        }
+
+        item {
+            OutlinedCard {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Datos generales", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = weightText,
+                        onValueChange = { weightText = decimalText(it) },
+                        label = { Text("Peso") },
+                        suffix = { Text("kg") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = useMaintenanceVolume,
+                            onCheckedChange = { useMaintenanceVolume = it }
+                        )
+                        Text("Usar volumen de mantenimiento Holliday-Segar")
+                    }
+                    if (!useMaintenanceVolume) {
+                        OutlinedTextField(
+                            value = dailyVolumeText,
+                            onValueChange = { dailyVolumeText = decimalText(it) },
+                            label = { Text("Volumen diario") },
+                            suffix = { Text("mL/día") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Text(
+                        "Volumen usado: ${dailyVolume?.let { formatDecimal(it, 0) + " mL/día" } ?: "pendiente"}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        item {
+            OutlinedCard {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Sodio y agua libre", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = serumSodiumText,
+                        onValueChange = { serumSodiumText = decimalText(it) },
+                        label = { Text("Sodio sérico actual") },
+                        suffix = { Text("mEq/L") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = targetSodiumText,
+                        onValueChange = { targetSodiumText = decimalText(it) },
+                        label = { Text("Sodio objetivo") },
+                        suffix = { Text("mEq/L") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = tbwFactorText,
+                        onValueChange = { tbwFactorText = decimalText(it) },
+                        label = { Text("Factor de agua corporal total") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("0.7" to "Lactante", "0.6" to "Niño", "0.5" to "Adolescente").forEach { (value, label) ->
+                            FilterChip(
+                                selected = tbwFactorText == value,
+                                onClick = { tbwFactorText = value },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            OutlinedCard {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Aporte de la solución", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = fluidSodiumText,
+                        onValueChange = { fluidSodiumText = decimalText(it) },
+                        label = { Text("Sodio de la solución") },
+                        suffix = { Text("mmol/L") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = fluidPotassiumText,
+                        onValueChange = { fluidPotassiumText = decimalText(it) },
+                        label = { Text("Potasio agregado") },
+                        suffix = { Text("mmol/L") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Ejemplo común: NaCl 0.9% ≈ 154 mmol/L de sodio. KCl 20 mmol/L es solo un ejemplo de concentración; no se debe usar sin revisar diuresis y función renal.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        if (weight == null || weight <= 0.0) {
+            item { PediatricWarningCard("Captura un peso válido para calcular electrolitos.") }
+        } else {
+            item {
+                PediatricResultCard(
+                    title = "Resultados de sodio",
+                    rows = listOf(
+                        "Déficit de sodio" to (sodiumDeficit?.let { "${formatDecimal(it, 1)} mEq" } ?: "No aplica con los datos actuales"),
+                        "Déficit de agua libre" to (freeWaterDeficitL?.let { "${formatDecimal(it, 2)} L · ${formatDecimal(it * 1000.0, 0)} mL" } ?: "No aplica con los datos actuales"),
+                        "ACT usada" to "${formatDecimal(tbwFactor * weight, 2)} L"
+                    )
+                )
+            }
+            item {
+                PediatricResultCard(
+                    title = "Aporte diario según volumen",
+                    rows = listOf(
+                        "Volumen" to (dailyVolume?.let { "${formatDecimal(it, 0)} mL/día" } ?: "Pendiente"),
+                        "Sodio aportado" to (sodiumDelivered?.let { "${formatDecimal(it, 1)} mmol/día · ${formatDecimal(it / weight, 2)} mmol/kg/día" } ?: "Pendiente"),
+                        "Potasio aportado" to (potassiumDelivered?.let { "${formatDecimal(it, 1)} mmol/día · ${formatDecimal(it / weight, 2)} mmol/kg/día" } ?: "Pendiente")
+                    )
+                )
+            }
+            item {
+                PediatricWarningCard(
+                    "Advertencia clínica: no corrijas sodio rápido sin protocolo. Hiponatremia sintomática, convulsiones, Na muy bajo/alto o cambios agudos requieren manejo urgente y monitorización seriada."
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PediatricResultCard(
+    title: String,
+    rows: List<Pair<String, String>>
+) {
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+            rows.forEach { (label, value) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        label,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        value,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.End,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PediatricWarningCard(text: String) {
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+        )
+    ) {
+        Row(
+            Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Text(
+                text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        }
+    }
+}
+
+private fun pediatricMaintenanceDailyMl(weightKg: Double): Double = when {
+    weightKg <= 0.0 -> 0.0
+    weightKg <= 10.0 -> weightKg * 100.0
+    weightKg <= 20.0 -> 1000.0 + ((weightKg - 10.0) * 50.0)
+    else -> 1500.0 + ((weightKg - 20.0) * 20.0)
+}
+
+private fun pediatricMaintenanceHourlyMl(weightKg: Double): Double = when {
+    weightKg <= 0.0 -> 0.0
+    weightKg <= 10.0 -> weightKg * 4.0
+    weightKg <= 20.0 -> 40.0 + ((weightKg - 10.0) * 2.0)
+    else -> 60.0 + (weightKg - 20.0)
+}
+
 @Composable
 private fun PercentilesScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current

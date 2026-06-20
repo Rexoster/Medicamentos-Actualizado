@@ -1,0 +1,9 @@
+Verificación v23.8
+
+- Se actualizó el apartado principal de Percentiles a Pediatría.
+- Se agregó menú interno colapsable con Percentiles, Mantenimiento de líquidos y Electrolitos.
+- Se conservaron los cálculos previos de percentiles.
+- Se agregaron referencias clínicas para los apartados nuevos.
+- Se actualizaron version.properties a 3.16.8-native / code 44.
+- ZIPs verificados con unzip -t.
+- Gradle completo no pudo ejecutarse en este entorno porque el wrapper intenta descargar Gradle y no hay acceso a internet.
