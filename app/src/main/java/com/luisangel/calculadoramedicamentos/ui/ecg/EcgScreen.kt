@@ -110,6 +110,12 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 
+private const val ECG_PAPER_SPEED_MM_PER_SECOND = 25.0
+private const val ECG_SMALL_SQUARE_DP = 5f
+private const val ECG_SINGLE_LEAD_VERTICAL_MM = 56f
+private const val ECG_TWELVE_LEAD_VERTICAL_MM = 42f
+private const val ECG_TWELVE_LEAD_SEGMENT_MS = 2500.0
+
 private enum class EcgTool(
     val label: String,
     val shortLabel: String,
@@ -1460,9 +1466,10 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
                     highlighted = true,
                     tint = tint,
                     onTap = { selectorExpanded = !selectorExpanded },
+                    zoomLevel = zoomLevel,
                     modifier = Modifier
-                        .width((860f * zoomLevel).dp)
-                        .height((290f * zoomLevel.coerceIn(0.85f, 1.55f)).dp)
+                        .width(ecgSingleLeadWidthDp(model, zoomLevel))
+                        .height(ecgSingleLeadHeightDp(zoomLevel))
                 )
             } else {
                 DynamicTwelveLeadEcg(
@@ -1471,9 +1478,10 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
                     title = displayTitle,
                     subtitle = displaySubtitle,
                     onTap = { selectorExpanded = !selectorExpanded },
+                    zoomLevel = zoomLevel,
                     modifier = Modifier
-                        .width((1120f * zoomLevel).dp)
-                        .height((640f * zoomLevel.coerceIn(0.85f, 1.55f)).dp)
+                        .width(ecgTwelveLeadWidthDp(zoomLevel))
+                        .height(ecgTwelveLeadHeightDp(zoomLevel))
                 )
             }
         }
@@ -1720,6 +1728,34 @@ private fun EcgLeadLegend(
     }
 }
 
+private fun ecgPreviewDisplayMs(model: EcgPreviewModel): Double = when {
+    model.heartRateBpm < 55.0 -> 9000.0
+    model.heartRateBpm > 140.0 -> 4200.0
+    else -> 6200.0
+}
+
+private fun ecgSingleLeadWidthDp(model: EcgPreviewModel, zoomLevel: Float): Dp {
+    val displayMm = ecgPreviewDisplayMs(model) * ECG_PAPER_SPEED_MM_PER_SECOND / 1000.0
+    val widthDp = displayMm.toFloat() * ECG_SMALL_SQUARE_DP * zoomLevel + 20f
+    return widthDp.coerceIn(520f, 2200f).dp
+}
+
+private fun ecgSingleLeadHeightDp(zoomLevel: Float): Dp {
+    val heightDp = ECG_SINGLE_LEAD_VERTICAL_MM * ECG_SMALL_SQUARE_DP * zoomLevel + 20f
+    return heightDp.coerceIn(230f, 980f).dp
+}
+
+private fun ecgTwelveLeadWidthDp(zoomLevel: Float): Dp {
+    val displayMm = ECG_TWELVE_LEAD_SEGMENT_MS * ECG_PAPER_SPEED_MM_PER_SECOND / 1000.0
+    val widthDp = displayMm.toFloat() * ECG_SMALL_SQUARE_DP * 4f * zoomLevel + 20f
+    return widthDp.coerceIn(760f, 3600f).dp
+}
+
+private fun ecgTwelveLeadHeightDp(zoomLevel: Float): Dp {
+    val heightDp = 70f + (ECG_TWELVE_LEAD_VERTICAL_MM * ECG_SMALL_SQUARE_DP * 3f * zoomLevel) + 20f
+    return heightDp.coerceIn(520f, 2300f).dp
+}
+
 @Composable
 private fun DynamicEcgStrip(
     model: EcgPreviewModel,
@@ -1729,6 +1765,7 @@ private fun DynamicEcgStrip(
     highlighted: Boolean,
     tint: Color,
     onTap: () -> Unit,
+    zoomLevel: Float,
     modifier: Modifier = Modifier
 ) {
     val gridMinor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
@@ -1746,7 +1783,8 @@ private fun DynamicEcgStrip(
         modifier = modifier
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-            drawEcgGrid(gridMinor, gridMajor)
+            val smallSquarePx = ECG_SMALL_SQUARE_DP.dp.toPx() * zoomLevel
+            drawEcgGrid(gridMinor, gridMajor, smallSquarePx)
             if (highlighted) {
                 drawRect(
                     color = tint.copy(alpha = 0.10f),
@@ -1764,7 +1802,8 @@ private fun DynamicEcgStrip(
                 traceColor = traceColor,
                 labelColor = labelColor,
                 label = "$title · ${model.heartRateBpm.roundClean()} lpm",
-                footer = subtitle
+                footer = subtitle,
+                smallSquarePx = smallSquarePx
             )
         }
     }
@@ -1777,6 +1816,7 @@ private fun DynamicTwelveLeadEcg(
     title: String,
     subtitle: String,
     onTap: () -> Unit,
+    zoomLevel: Float,
     modifier: Modifier = Modifier
 ) {
     val gridMinor = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
@@ -1794,7 +1834,8 @@ private fun DynamicTwelveLeadEcg(
         modifier = modifier
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-            drawEcgGrid(gridMinor, gridMajor)
+            val smallSquarePx = ECG_SMALL_SQUARE_DP.dp.toPx() * zoomLevel
+            drawEcgGrid(gridMinor, gridMajor, smallSquarePx)
             val rows = twelveLeadLayout.size
             val columns = twelveLeadLayout.first().size
             val headerH = 70f
@@ -1824,7 +1865,7 @@ private fun DynamicTwelveLeadEcg(
                             )
                         }
                     }
-                    val segmentMs = 2500.0
+                    val segmentMs = ECG_TWELVE_LEAD_SEGMENT_MS
                     val segmentStartMs = columnIndex * segmentMs
                     drawLeadTrace(
                         model = model,
@@ -1839,7 +1880,8 @@ private fun DynamicTwelveLeadEcg(
                         footer = lead.region,
                         compactLabel = true,
                         displayMsOverride = segmentMs,
-                        segmentStartMs = segmentStartMs
+                        segmentStartMs = segmentStartMs,
+                        smallSquarePx = smallSquarePx
                     )
                 }
             }
@@ -1849,34 +1891,49 @@ private fun DynamicTwelveLeadEcg(
 
 private fun DrawScope.drawEcgGrid(
     minorColor: Color,
-    majorColor: Color
+    majorColor: Color,
+    smallSquarePx: Float
 ) {
-    val minorStep = 8f
-    var i = 0
+    val minorStep = smallSquarePx.coerceAtLeast(2.5f)
+    val majorStep = minorStep * 5f
     var x = 0f
-    while (x <= size.width) {
-        val major = i % 5 == 0
+    var index = 0
+    while (x <= size.width + minorStep) {
+        val major = index % 5 == 0
         drawLine(
             color = if (major) majorColor else minorColor,
             start = Offset(x, 0f),
             end = Offset(x, size.height),
-            strokeWidth = if (major) 1.15f else 0.55f
+            strokeWidth = if (major) (1.15f * (minorStep / 5f).coerceIn(0.75f, 2.3f)) else (0.55f * (minorStep / 5f).coerceIn(0.75f, 1.8f))
         )
-        i += 1
-        x = i * minorStep
+        index += 1
+        x = index * minorStep
     }
-    i = 0
     var y = 0f
-    while (y <= size.height) {
-        val major = i % 5 == 0
+    index = 0
+    while (y <= size.height + minorStep) {
+        val major = index % 5 == 0
         drawLine(
             color = if (major) majorColor else minorColor,
             start = Offset(0f, y),
             end = Offset(size.width, y),
-            strokeWidth = if (major) 1.15f else 0.55f
+            strokeWidth = if (major) (1.15f * (minorStep / 5f).coerceIn(0.75f, 2.3f)) else (0.55f * (minorStep / 5f).coerceIn(0.75f, 1.8f))
         )
-        i += 1
-        y = i * minorStep
+        index += 1
+        y = index * minorStep
+    }
+    // Líneas guía de 5 mm más visibles: equivalen a cuadros grandes del papel ECG.
+    if (majorStep >= 18f) {
+        var gx = 0f
+        while (gx <= size.width) {
+            drawLine(majorColor.copy(alpha = majorColor.alpha * 1.18f), Offset(gx, 0f), Offset(gx, size.height), strokeWidth = 1.45f)
+            gx += majorStep
+        }
+        var gy = 0f
+        while (gy <= size.height) {
+            drawLine(majorColor.copy(alpha = majorColor.alpha * 1.18f), Offset(0f, gy), Offset(size.width, gy), strokeWidth = 1.45f)
+            gy += majorStep
+        }
     }
 }
 
@@ -1893,7 +1950,8 @@ private fun DrawScope.drawLeadTrace(
     footer: String,
     compactLabel: Boolean = false,
     displayMsOverride: Double? = null,
-    segmentStartMs: Double = 0.0
+    segmentStartMs: Double = 0.0,
+    smallSquarePx: Float
 ) {
     val baseline = topLeft.y + height * 0.56f
     drawLine(
@@ -1903,16 +1961,11 @@ private fun DrawScope.drawLeadTrace(
         strokeWidth = 1.15f
     )
 
-    val displayMs = displayMsOverride ?: when {
-        model.heartRateBpm < 55.0 -> 9000.0
-        model.heartRateBpm > 140.0 -> 4200.0
-        else -> 6200.0
-    }
+    val displayMs = displayMsOverride ?: ecgPreviewDisplayMs(model)
+    val paperPxPerMs = ((ECG_PAPER_SPEED_MM_PER_SECOND / 1000.0) * smallSquarePx).toFloat()
     val segmentEndMs = segmentStartMs + displayMs
-    val pxPerMs = width / displayMs.toFloat()
-    val mmPx = (height / 34f).coerceIn(3.2f, 9.5f)
-    fun xFor(globalMs: Double): Float = topLeft.x + ((globalMs - segmentStartMs).toFloat() * pxPerMs)
-    fun yFor(mm: Double): Float = baseline - (mm.toFloat() * mmPx)
+    fun xFor(globalMs: Double): Float = topLeft.x + ((globalMs - segmentStartMs).toFloat() * paperPxPerMs)
+    fun yFor(mm: Double): Float = baseline - (mm.toFloat() * smallSquarePx)
 
     val projection = leadProjection(model.axisDegrees, lead)
     val qrsSign = if (projection < -0.18) -1.0 else 1.0
@@ -1967,6 +2020,7 @@ private fun DrawScope.drawLeadTrace(
             beatStart += rr
             beatIndex += 1
         }
+        lineTo(topLeft.x + width, baseline)
     }
     clipRect(
         left = topLeft.x,

@@ -1,0 +1,7 @@
+VERIFICACION V23.11
+- ECG: cuadrícula escala con el zoom.
+- ECG: cuadros pequeños y grandes conservan proporción entre sí.
+- ECG: trazo usa escala horizontal compatible con papel ECG 25 mm/s.
+- ECG: vista individual y 12 derivaciones actualizadas.
+- No se modificaron cálculos clínicos ni otros módulos.
+- Empaquetado ZIP: OK.
