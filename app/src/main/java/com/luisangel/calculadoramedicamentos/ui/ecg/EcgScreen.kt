@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -1723,6 +1724,8 @@ private fun DynamicTwelveLeadEcg(
                             size = Size(cellW - 6f, cellH - 6f)
                         )
                     }
+                    val segmentMs = 2500.0
+                    val segmentStartMs = columnIndex * segmentMs
                     drawLeadTrace(
                         model = model,
                         lead = lead,
@@ -1734,7 +1737,9 @@ private fun DynamicTwelveLeadEcg(
                         labelColor = labelColor,
                         label = lead.label,
                         footer = lead.region,
-                        compactLabel = true
+                        compactLabel = true,
+                        displayMsOverride = segmentMs,
+                        segmentStartMs = segmentStartMs
                     )
                 }
             }
@@ -1786,7 +1791,9 @@ private fun DrawScope.drawLeadTrace(
     labelColor: Color,
     label: String,
     footer: String,
-    compactLabel: Boolean = false
+    compactLabel: Boolean = false,
+    displayMsOverride: Double? = null,
+    segmentStartMs: Double = 0.0
 ) {
     val baseline = topLeft.y + height * 0.56f
     drawLine(
@@ -1796,14 +1803,15 @@ private fun DrawScope.drawLeadTrace(
         strokeWidth = 1.15f
     )
 
-    val displayMs = when {
+    val displayMs = displayMsOverride ?: when {
         model.heartRateBpm < 55.0 -> 9000.0
         model.heartRateBpm > 140.0 -> 4200.0
         else -> 6200.0
     }
+    val segmentEndMs = segmentStartMs + displayMs
     val pxPerMs = width / displayMs.toFloat()
     val mmPx = (height / 34f).coerceIn(3.2f, 9.5f)
-    fun xFor(ms: Double): Float = topLeft.x + (ms.toFloat() * pxPerMs)
+    fun xFor(globalMs: Double): Float = topLeft.x + ((globalMs - segmentStartMs).toFloat() * pxPerMs)
     fun yFor(mm: Double): Float = baseline - (mm.toFloat() * mmPx)
 
     val projection = leadProjection(model.axisDegrees, lead)
@@ -1821,9 +1829,15 @@ private fun DrawScope.drawLeadTrace(
     val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
     var beatStart = 80.0
     var beatIndex = 0
+    while (beatStart + model.rrMs < segmentStartMs - 260.0) {
+        val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
+        val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+        beatStart += rr
+        beatIndex += 1
+    }
     val path = Path().apply {
         moveTo(topLeft.x, baseline)
-        while (beatStart < displayMs + model.rrMs) {
+        while (beatStart < segmentEndMs + model.rrMs) {
             val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
             val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
             val pr = model.prMs.coerceIn(80.0, 340.0)
@@ -1854,7 +1868,14 @@ private fun DrawScope.drawLeadTrace(
             beatIndex += 1
         }
     }
-    drawPath(path = path, color = traceColor, style = Stroke(width = if (compactLabel) 2.45f else 3.2f, cap = StrokeCap.Round))
+    clipRect(
+        left = topLeft.x,
+        top = topLeft.y,
+        right = topLeft.x + width,
+        bottom = topLeft.y + height
+    ) {
+        drawPath(path = path, color = traceColor, style = Stroke(width = if (compactLabel) 2.45f else 3.2f, cap = StrokeCap.Round))
+    }
 
     drawContext.canvas.nativeCanvas.apply {
         val paint = android.graphics.Paint().apply {
