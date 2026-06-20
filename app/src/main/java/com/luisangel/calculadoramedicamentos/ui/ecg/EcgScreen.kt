@@ -1,7 +1,14 @@
 package com.luisangel.calculadoramedicamentos.ui.ecg
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,9 +30,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
@@ -58,7 +67,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -144,51 +156,32 @@ private data class EcgInfoContent(
 @Composable
 fun EcgScreen(modifier: Modifier = Modifier) {
     var selectedName by rememberSaveable { mutableStateOf(EcgTool.ANALYZER.name) }
+    var ecgMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val selected = remember(selectedName) { EcgTool.valueOf(selectedName) }
 
     BoxWithConstraints(modifier = modifier) {
-        val landscape = maxWidth >= 840.dp
         val compactHeight = maxHeight < 520.dp
         val padding = if (compactHeight) 8.dp else 14.dp
 
-        if (landscape) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                horizontalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 14.dp)
-            ) {
-                EcgToolMenu(
+        EcgToolBody(
+            selected = selected,
+            compact = compactHeight,
+            contentPadding = PaddingValues(padding),
+            modifier = Modifier.fillMaxSize(),
+            menu = {
+                EcgCollapsibleToolMenu(
                     selected = selected,
-                    onSelected = { selectedName = it.name },
+                    expanded = ecgMenuExpanded,
+                    onToggle = { ecgMenuExpanded = !ecgMenuExpanded },
+                    onSelected = { tool ->
+                        selectedName = tool.name
+                        ecgMenuExpanded = false
+                    },
                     compact = compactHeight,
-                    modifier = Modifier
-                        .widthIn(min = 250.dp, max = if (compactHeight) 290.dp else 340.dp)
-                        .fillMaxHeight()
-                )
-                EcgToolBody(
-                    selected = selected,
-                    compact = compactHeight,
-                    contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.weight(1f)
+                    availableWidth = maxWidth
                 )
             }
-        } else {
-            EcgToolBody(
-                selected = selected,
-                compact = compactHeight,
-                contentPadding = PaddingValues(padding),
-                modifier = Modifier.fillMaxSize(),
-                menu = {
-                    EcgToolGrid(
-                        selected = selected,
-                        onSelected = { selectedName = it.name },
-                        compact = compactHeight,
-                        availableWidth = maxWidth
-                    )
-                }
-            )
-        }
+        )
     }
 }
 
@@ -213,6 +206,148 @@ private fun EcgToolBody(
         item { EcgCalculatorContent(selected) }
     }
 }
+
+@Composable
+private fun EcgCollapsibleToolMenu(
+    selected: EcgTool,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onSelected: (EcgTool) -> Unit,
+    compact: Boolean,
+    availableWidth: Dp,
+    modifier: Modifier = Modifier
+) {
+    val expandedButtonWidth = if (compact) 178.dp else 206.dp
+    val collapsedButtonWidth = if (compact) 52.dp else 58.dp
+    val buttonHeight = if (compact) 46.dp else 52.dp
+    val buttonWidth by animateDpAsState(
+        targetValue = if (expanded) expandedButtonWidth else collapsedButtonWidth,
+        label = "ecgMenuButtonWidth"
+    )
+    val panelMaxHeight = if (compact) 250.dp else 420.dp
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp)
+    ) {
+        Surface(
+            onClick = onToggle,
+            modifier = Modifier
+                .width(buttonWidth)
+                .height(buttonHeight),
+            shape = RoundedCornerShape(if (compact) 16.dp else 18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.primary,
+            border = BorderStroke(
+                width = 1.4.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+            ),
+            tonalElevation = if (expanded) 5.dp else 2.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (compact) 9.dp else 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                EcgHeartMenuIcon(
+                    modifier = Modifier.size(if (compact) 29.dp else 33.dp)
+                )
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Menú ECG",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 980.dp)
+                    .heightIn(max = panelMaxHeight),
+                shape = RoundedCornerShape(if (compact) 20.dp else 26.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                tonalElevation = 8.dp,
+                shadowElevation = 10.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(if (compact) 9.dp else 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
+                ) {
+                    Text(
+                        "Selecciona una herramienta de ECG",
+                        style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    EcgToolGridRows(
+                        selected = selected,
+                        onSelected = onSelected,
+                        compact = compact,
+                        availableWidth = availableWidth
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EcgHeartMenuIcon(modifier: Modifier = Modifier) {
+    val heartColor = MaterialTheme.colorScheme.primary
+    val lineColor = MaterialTheme.colorScheme.onPrimary
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val heart = Path().apply {
+            moveTo(w * 0.50f, h * 0.88f)
+            cubicTo(w * 0.13f, h * 0.62f, w * 0.03f, h * 0.38f, w * 0.20f, h * 0.22f)
+            cubicTo(w * 0.34f, h * 0.09f, w * 0.47f, h * 0.18f, w * 0.50f, h * 0.33f)
+            cubicTo(w * 0.53f, h * 0.18f, w * 0.66f, h * 0.09f, w * 0.80f, h * 0.22f)
+            cubicTo(w * 0.97f, h * 0.38f, w * 0.87f, h * 0.62f, w * 0.50f, h * 0.88f)
+            close()
+        }
+        drawPath(path = heart, color = heartColor)
+
+        val strokeWidth = (h * 0.065f).coerceAtLeast(2.2f)
+        listOf(0.43f, 0.55f, 0.67f).forEach { yFactor ->
+            drawLine(
+                color = lineColor,
+                start = Offset(w * 0.34f, h * yFactor),
+                end = Offset(w * 0.66f, h * yFactor),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
 
 @Composable
 private fun EcgToolMenu(
@@ -321,11 +456,6 @@ private fun EcgToolGrid(
     compact: Boolean,
     availableWidth: Dp
 ) {
-    val columnCount = when {
-        availableWidth >= 700.dp -> 3
-        else -> 2
-    }
-
     OutlinedCard {
         Column(
             modifier = Modifier.padding(if (compact) 9.dp else 12.dp),
@@ -338,23 +468,46 @@ private fun EcgToolGrid(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
-            EcgTool.entries.chunked(columnCount).forEach { rowTools ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 10.dp)
-                ) {
-                    rowTools.forEach { tool ->
-                        EcgToolGridTile(
-                            tool = tool,
-                            selected = selected == tool,
-                            compact = compact,
-                            onClick = { onSelected(tool) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    repeat(columnCount - rowTools.size) {
-                        Spacer(Modifier.weight(1f))
-                    }
+            EcgToolGridRows(
+                selected = selected,
+                onSelected = onSelected,
+                compact = compact,
+                availableWidth = availableWidth
+            )
+        }
+    }
+}
+
+@Composable
+private fun EcgToolGridRows(
+    selected: EcgTool,
+    onSelected: (EcgTool) -> Unit,
+    compact: Boolean,
+    availableWidth: Dp
+) {
+    val columnCount = when {
+        availableWidth >= 900.dp -> 3
+        availableWidth >= 620.dp -> 3
+        else -> 2
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 10.dp)) {
+        EcgTool.entries.chunked(columnCount).forEach { rowTools ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 10.dp)
+            ) {
+                rowTools.forEach { tool ->
+                    EcgToolGridTile(
+                        tool = tool,
+                        selected = selected == tool,
+                        compact = compact,
+                        onClick = { onSelected(tool) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                repeat(columnCount - rowTools.size) {
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }
