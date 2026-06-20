@@ -1,0 +1,7 @@
+VERIFICACION V23.12
+- Botón Actualizar del aviso automático inicia descarga directa: OK.
+- Progreso visible dentro del aviso: OK.
+- Instalador se abre al completar si existe permiso: OK.
+- Si falta permiso, abre configuración de instalación: OK.
+- Flujo manual de pantalla Actualizaciones sin cambios: OK.
+- No se modificaron cálculos clínicos: OK.

@@ -102,6 +102,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -1079,6 +1080,16 @@ private fun ApplicationShell(
     var automaticUpdateDismissed by rememberSaveable {
         mutableStateOf(false)
     }
+    var autoUpdateDownloading by remember {
+        mutableStateOf(false)
+    }
+    var autoUpdateProgress by remember {
+        mutableStateOf(0)
+    }
+    var autoUpdateStatus by remember {
+        mutableStateOf<String?>(null)
+    }
+    val autoUpdateScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.messages.collectLatest {
@@ -1094,6 +1105,9 @@ private fun ApplicationShell(
         if (result is UpdateCheckResult.Available) {
             automaticUpdate = result.manifest
             automaticUpdateDismissed = false
+            autoUpdateDownloading = false
+            autoUpdateProgress = 0
+            autoUpdateStatus = null
         }
     }
 
@@ -1260,13 +1274,44 @@ private fun ApplicationShell(
                     AutoUpdateAvailableDialog(
                         update = update,
                         currentVersion = updateManager.currentVersionLabel(),
+                        downloading = autoUpdateDownloading,
+                        progress = autoUpdateProgress,
+                        status = autoUpdateStatus,
                         onDismiss = {
                             automaticUpdateDismissed = true
                         },
-                        onOpenUpdates = {
-                            automaticUpdateDismissed = true
-                            section = MainSection.UPDATES
-                            menuExpanded = false
+                        onUpdateNow = {
+                            if (!autoUpdateDownloading) {
+                                autoUpdateScope.launch {
+                                autoUpdateDownloading = true
+                                autoUpdateProgress = 0
+                                autoUpdateStatus = "Descargando APK..."
+
+                                try {
+                                    val file = withContext(Dispatchers.IO) {
+                                        updateManager.downloadApk(update) {
+                                            autoUpdateProgress = it
+                                        }
+                                    }
+
+                                    autoUpdateDownloading = false
+                                    autoUpdateProgress = 100
+
+                                    if (updateManager.canInstallDownloadedApk()) {
+                                        autoUpdateStatus = "Descarga completa. Se abrirá el instalador."
+                                        updateManager.installApk(file)
+                                    } else {
+                                        autoUpdateStatus =
+                                            "Descarga completa. Android necesita permiso para instalar desde esta app."
+                                        updateManager.openInstallPermissionSettings()
+                                    }
+                                } catch (error: Exception) {
+                                    autoUpdateDownloading = false
+                                    autoUpdateStatus =
+                                        "No se pudo descargar o instalar: ${error.message}"
+                                }
+                                }
+                            }
                         }
                     )
                 }
@@ -1278,8 +1323,11 @@ private fun ApplicationShell(
 private fun AutoUpdateAvailableDialog(
     update: UpdateManifest,
     currentVersion: String,
+    downloading: Boolean,
+    progress: Int,
+    status: String?,
     onDismiss: () -> Unit,
-    onOpenUpdates: () -> Unit
+    onUpdateNow: () -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -1364,6 +1412,32 @@ private fun AutoUpdateAvailableDialog(
                     }
                 }
 
+                if (downloading) {
+                    LinearProgressIndicator(
+                        progress = { progress / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "$progress %",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                status?.let {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    ) {
+                        Text(
+                            it,
+                            modifier = Modifier.padding(10.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+
                 Text(
                     "Toca fuera de esta ventana para cerrarla. Volverá a aparecer al abrir de nuevo la app si la actualización sigue disponible.",
                     style = MaterialTheme.typography.labelSmall,
@@ -1375,13 +1449,19 @@ private fun AutoUpdateAvailableDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(
+                        enabled = !downloading,
+                        onClick = onDismiss
+                    ) {
                         Text("Después")
                     }
-                    Button(onClick = onOpenUpdates) {
+                    Button(
+                        enabled = !downloading,
+                        onClick = onUpdateNow
+                    ) {
                         Icon(Icons.Default.Download, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Actualizar")
+                        Text(if (downloading) "Descargando..." else "Actualizar")
                     }
                 }
             }
