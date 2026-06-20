@@ -9,7 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -83,6 +84,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -1431,10 +1433,20 @@ private fun EcgPreviewContent(state: EcgSharedInputState) {
             modifier = Modifier
                 .fillMaxWidth()
                 .pointerInput(Unit) {
-                    detectTransformGestures { _, _, zoomChange, _ ->
-                        if (zoomChange.isFinite() && zoomChange > 0f) {
-                            zoomLevel = (zoomLevel * zoomChange).coerceIn(0.75f, 3.0f)
-                        }
+                    awaitEachGesture {
+                        do {
+                            val event = awaitPointerEvent()
+                            val pressedPointers = event.changes.count { it.pressed }
+                            if (pressedPointers >= 2) {
+                                val zoomChange = event.calculateZoom()
+                                if (zoomChange.isFinite() && zoomChange > 0f && zoomChange != 1f) {
+                                    zoomLevel = (zoomLevel * zoomChange).coerceIn(0.75f, 3.0f)
+                                }
+                                event.changes.forEach { change ->
+                                    if (change.positionChanged()) change.consume()
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
                     }
                 }
                 .horizontalScroll(rememberScrollState())

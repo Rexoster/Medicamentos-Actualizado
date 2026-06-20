@@ -1,0 +1,5 @@
+VERIFICACION V23.7
+
+- Preflight source checks: correcto.
+- ZIPs generados y verificados: correcto.
+- Compilación Gradle completa no ejecutada en este entorno porque el wrapper requiere descarga de Gradle sin acceso a internet.
