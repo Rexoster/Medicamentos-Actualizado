@@ -61,6 +61,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,9 +69,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -92,6 +95,9 @@ import com.luisangel.calculadoramedicamentos.ecg.EcgSummaryInput
 import com.luisangel.calculadoramedicamentos.ecg.LvhResult
 import com.luisangel.calculadoramedicamentos.ecg.QtcResult
 import com.luisangel.calculadoramedicamentos.ecg.StElevationResult
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.roundToInt
 
 private enum class EcgTool(
@@ -135,6 +141,12 @@ private enum class EcgTool(
         shortLabel = "ST",
         description = "Umbrales por edad, sexo y derivaciones contiguas.",
         icon = Icons.Default.WarningAmber
+    ),
+    PREVIEW(
+        label = "Vista previa ECG",
+        shortLabel = "Vista ECG",
+        description = "Dibuja una tira de ritmo configurada con los datos capturados.",
+        icon = Icons.Default.MonitorHeart
     )
 }
 
@@ -153,10 +165,92 @@ private data class EcgInfoContent(
     val reviewedOn: String = "19 de junio de 2026"
 )
 
+private data class EcgSharedInputState(
+    val ageText: MutableState<String>,
+    val sexName: MutableState<String>,
+    val heartRateText: MutableState<String>,
+    val prText: MutableState<String>,
+    val qrsText: MutableState<String>,
+    val qtText: MutableState<String>,
+    val axisText: MutableState<String>,
+    val sinusRhythm: MutableState<Boolean>,
+    val regularRhythm: MutableState<Boolean>,
+    val includeSt: MutableState<Boolean>,
+    val stElevationText: MutableState<String>,
+    val stLeadGroupName: MutableState<String>,
+    val stContiguous: MutableState<Boolean>,
+    val includeLvh: MutableState<Boolean>,
+    val sV1Text: MutableState<String>,
+    val rV5Text: MutableState<String>,
+    val rV6Text: MutableState<String>,
+    val rAvlText: MutableState<String>,
+    val sV3Text: MutableState<String>,
+    val ratePaperSpeedName: MutableState<String>,
+    val rateRrMsText: MutableState<String>,
+    val rateRrSecText: MutableState<String>,
+    val rateLargeSquaresText: MutableState<String>,
+    val rateSmallSquaresText: MutableState<String>,
+    val rateQrsCountText: MutableState<String>,
+    val qtcRrText: MutableState<String>,
+    val qtcUseRr: MutableState<Boolean>,
+    val axisMethodName: MutableState<String>,
+    val axisFirstText: MutableState<String>,
+    val axisSecondText: MutableState<String>
+)
+
+private data class EcgPreviewModel(
+    val heartRateBpm: Double,
+    val rrMs: Double,
+    val prMs: Double,
+    val qrsMs: Double,
+    val qtMs: Double,
+    val stMm: Double,
+    val axisDegrees: Double?,
+    val rhythmSinus: Boolean,
+    val rhythmRegular: Boolean,
+    val lvhPositive: Boolean,
+    val sourceNote: String
+)
+
+@Composable
+private fun rememberEcgSharedInputState(): EcgSharedInputState = EcgSharedInputState(
+    ageText = rememberSaveable { mutableStateOf("") },
+    sexName = rememberSaveable { mutableStateOf(EcgSex.MALE.name) },
+    heartRateText = rememberSaveable { mutableStateOf("") },
+    prText = rememberSaveable { mutableStateOf("") },
+    qrsText = rememberSaveable { mutableStateOf("") },
+    qtText = rememberSaveable { mutableStateOf("") },
+    axisText = rememberSaveable { mutableStateOf("") },
+    sinusRhythm = rememberSaveable { mutableStateOf(true) },
+    regularRhythm = rememberSaveable { mutableStateOf(true) },
+    includeSt = rememberSaveable { mutableStateOf(false) },
+    stElevationText = rememberSaveable { mutableStateOf("") },
+    stLeadGroupName = rememberSaveable { mutableStateOf(EcgLeadGroup.OTHER_CONTIGUOUS.name) },
+    stContiguous = rememberSaveable { mutableStateOf(true) },
+    includeLvh = rememberSaveable { mutableStateOf(false) },
+    sV1Text = rememberSaveable { mutableStateOf("") },
+    rV5Text = rememberSaveable { mutableStateOf("") },
+    rV6Text = rememberSaveable { mutableStateOf("") },
+    rAvlText = rememberSaveable { mutableStateOf("") },
+    sV3Text = rememberSaveable { mutableStateOf("") },
+    ratePaperSpeedName = rememberSaveable { mutableStateOf(EcgPaperSpeed.SPEED_25.name) },
+    rateRrMsText = rememberSaveable { mutableStateOf("") },
+    rateRrSecText = rememberSaveable { mutableStateOf("") },
+    rateLargeSquaresText = rememberSaveable { mutableStateOf("") },
+    rateSmallSquaresText = rememberSaveable { mutableStateOf("") },
+    rateQrsCountText = rememberSaveable { mutableStateOf("") },
+    qtcRrText = rememberSaveable { mutableStateOf("") },
+    qtcUseRr = rememberSaveable { mutableStateOf(false) },
+    axisMethodName = rememberSaveable { mutableStateOf(EcgAxisMethod.LEAD_I_AVF.name) },
+    axisFirstText = rememberSaveable { mutableStateOf("") },
+    axisSecondText = rememberSaveable { mutableStateOf("") }
+)
+
 @Composable
 fun EcgScreen(modifier: Modifier = Modifier) {
     var selectedName by rememberSaveable { mutableStateOf(EcgTool.ANALYZER.name) }
     var ecgMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val sharedInput = rememberEcgSharedInputState()
     val selected = remember(selectedName) { EcgTool.valueOf(selectedName) }
 
     BoxWithConstraints(modifier = modifier) {
@@ -165,6 +259,7 @@ fun EcgScreen(modifier: Modifier = Modifier) {
 
         EcgToolBody(
             selected = selected,
+            sharedInput = sharedInput,
             compact = compactHeight,
             contentPadding = PaddingValues(padding),
             modifier = Modifier.fillMaxSize(),
@@ -188,6 +283,7 @@ fun EcgScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun EcgToolBody(
     selected: EcgTool,
+    sharedInput: EcgSharedInputState,
     compact: Boolean,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
@@ -203,7 +299,7 @@ private fun EcgToolBody(
             item { menu() }
         }
         item { EcgInfoButton(info = selected.info()) }
-        item { EcgCalculatorContent(selected) }
+        item { EcgCalculatorContent(selected, sharedInput) }
     }
 }
 
@@ -817,7 +913,7 @@ private fun EcgInfoSection(title: String, text: String) {
 }
 
 @Composable
-private fun EcgCalculatorContent(tool: EcgTool) {
+private fun EcgCalculatorContent(tool: EcgTool, sharedInput: EcgSharedInputState) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -825,68 +921,50 @@ private fun EcgCalculatorContent(tool: EcgTool) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         when (tool) {
-            EcgTool.ANALYZER -> EcgAnalyzerContent()
-            EcgTool.RATE -> EcgRateContent()
-            EcgTool.QTC -> QtcCalculatorContent()
-            EcgTool.AXIS -> AxisCalculatorContent()
-            EcgTool.LVH -> LvhCalculatorContent()
-            EcgTool.ST -> StElevationContent()
+            EcgTool.ANALYZER -> EcgAnalyzerContent(sharedInput)
+            EcgTool.RATE -> EcgRateContent(sharedInput)
+            EcgTool.QTC -> QtcCalculatorContent(sharedInput)
+            EcgTool.AXIS -> AxisCalculatorContent(sharedInput)
+            EcgTool.LVH -> LvhCalculatorContent(sharedInput)
+            EcgTool.ST -> StElevationContent(sharedInput)
+            EcgTool.PREVIEW -> EcgPreviewContent(sharedInput)
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EcgAnalyzerContent() {
+private fun EcgAnalyzerContent(state: EcgSharedInputState) {
     val clipboard = LocalClipboardManager.current
-    var ageText by rememberSaveable { mutableStateOf("") }
-    var sexName by rememberSaveable { mutableStateOf(EcgSex.MALE.name) }
-    val sex = EcgSex.valueOf(sexName)
-    var heartRateText by rememberSaveable { mutableStateOf("") }
-    var prText by rememberSaveable { mutableStateOf("") }
-    var qrsText by rememberSaveable { mutableStateOf("") }
-    var qtText by rememberSaveable { mutableStateOf("") }
-    var axisText by rememberSaveable { mutableStateOf("") }
-    var sinusRhythm by rememberSaveable { mutableStateOf(true) }
-    var regularRhythm by rememberSaveable { mutableStateOf(true) }
-    var includeSt by rememberSaveable { mutableStateOf(false) }
-    var includeLvh by rememberSaveable { mutableStateOf(false) }
-    var stElevationText by rememberSaveable { mutableStateOf("") }
-    var stLeadGroupName by rememberSaveable { mutableStateOf(EcgLeadGroup.OTHER_CONTIGUOUS.name) }
-    var stContiguous by rememberSaveable { mutableStateOf(true) }
-    var sV1Text by rememberSaveable { mutableStateOf("") }
-    var rV5Text by rememberSaveable { mutableStateOf("") }
-    var rV6Text by rememberSaveable { mutableStateOf("") }
-    var rAvlText by rememberSaveable { mutableStateOf("") }
-    var sV3Text by rememberSaveable { mutableStateOf("") }
+    val sex = EcgSex.valueOf(state.sexName.value)
 
-    val age = ageText.toIntOrNull()
-    val heartRate = heartRateText.toDecimalOrNull()
-    val pr = prText.toDecimalOrNull()
-    val qrs = qrsText.toDecimalOrNull()
-    val qt = qtText.toDecimalOrNull()
-    val axis = axisText.toDecimalOrNull()
+    val age = state.ageText.value.toIntOrNull()
+    val heartRate = state.heartRateText.value.toDecimalOrNull()
+    val pr = state.prText.value.toDecimalOrNull()
+    val qrs = state.qrsText.value.toDecimalOrNull()
+    val qt = state.qtText.value.toDecimalOrNull()
+    val axis = state.axisText.value.toDecimalOrNull()
 
-    val stResult = if (includeSt && age != null) {
+    val stResult = if (state.includeSt.value && age != null) {
         EcgCalculator.stElevationCriteria(
             ageYears = age,
             sex = sex,
-            leadGroup = EcgLeadGroup.valueOf(stLeadGroupName),
-            elevationMm = stElevationText.toDecimalOrNull() ?: 0.0,
-            contiguousLeads = stContiguous
+            leadGroup = EcgLeadGroup.valueOf(state.stLeadGroupName.value),
+            elevationMm = state.stElevationText.value.toDecimalOrNull() ?: 0.0,
+            contiguousLeads = state.stContiguous.value
         ).getOrNull()
     } else {
         null
     }
 
-    val lvhResult = if (includeLvh) {
+    val lvhResult = if (state.includeLvh.value) {
         EcgCalculator.lvh(
             sex = sex,
-            sV1Mm = sV1Text.toDecimalOrNull(),
-            rV5Mm = rV5Text.toDecimalOrNull(),
-            rV6Mm = rV6Text.toDecimalOrNull(),
-            rAvlMm = rAvlText.toDecimalOrNull(),
-            sV3Mm = sV3Text.toDecimalOrNull(),
+            sV1Mm = state.sV1Text.value.toDecimalOrNull(),
+            rV5Mm = state.rV5Text.value.toDecimalOrNull(),
+            rV6Mm = state.rV6Text.value.toDecimalOrNull(),
+            rAvlMm = state.rAvlText.value.toDecimalOrNull(),
+            sV3Mm = state.sV3Text.value.toDecimalOrNull(),
             qrsDurationMs = qrs
         )
     } else {
@@ -902,8 +980,8 @@ private fun EcgAnalyzerContent() {
             qrsMs = qrs,
             qtMs = qt,
             axisDegrees = axis,
-            rhythmSinus = sinusRhythm,
-            rhythmRegular = regularRhythm,
+            rhythmSinus = state.sinusRhythm.value,
+            rhythmRegular = state.regularRhythm.value,
             stElevationResult = stResult,
             lvhResult = lvhResult
         )
@@ -914,45 +992,45 @@ private fun EcgAnalyzerContent() {
         note = "Captura los datos medidos en el ECG. La app redacta una interpretación preliminar, no una sentencia divina tallada en piedra."
     ) {
         ResponsiveFields {
-            NumericField("Edad", ageText, { ageText = it.onlyDigits() }, suffix = "años")
-            EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
-            NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
-            NumericField("PR", prText, { prText = it.decimalInput() }, suffix = "ms")
-            NumericField("QRS", qrsText, { qrsText = it.decimalInput() }, suffix = "ms")
-            NumericField("QT", qtText, { qtText = it.decimalInput() }, suffix = "ms")
-            NumericField("Eje eléctrico", axisText, { axisText = it.signedDecimalInput() }, suffix = "°")
+            NumericField("Edad", state.ageText.value, { state.ageText.value = it.onlyDigits() }, suffix = "años")
+            EnumDropdown("Sexo", state.sexName.value, { state.sexName.value = it }, EcgSex.entries.associate { it.name to it.label })
+            NumericField("Frecuencia cardiaca", state.heartRateText.value, { state.heartRateText.value = it.decimalInput() }, suffix = "lpm")
+            NumericField("PR", state.prText.value, { state.prText.value = it.decimalInput() }, suffix = "ms")
+            NumericField("QRS", state.qrsText.value, { state.qrsText.value = it.decimalInput() }, suffix = "ms")
+            NumericField("QT", state.qtText.value, { state.qtText.value = it.decimalInput() }, suffix = "ms")
+            NumericField("Eje eléctrico", state.axisText.value, { state.axisText.value = it.signedDecimalInput() }, suffix = "°")
         }
-        CheckRow("Ritmo sinusal", sinusRhythm) { sinusRhythm = it }
-        CheckRow("Ritmo regular", regularRhythm) { regularRhythm = it }
+        CheckRow("Ritmo sinusal", state.sinusRhythm.value) { state.sinusRhythm.value = it }
+        CheckRow("Ritmo regular", state.regularRhythm.value) { state.regularRhythm.value = it }
     }
 
     EcgCard(
         title = "Hallazgos opcionales",
         note = "Agrega criterios de ST o HVI cuando tengas los datos medidos. Vacío no significa normal: significa no capturado. Vaya revelación."
     ) {
-        CheckRow("Evaluar elevación del ST", includeSt) { includeSt = it }
-        if (includeSt) {
+        CheckRow("Evaluar elevación del ST", state.includeSt.value) { state.includeSt.value = it }
+        if (state.includeSt.value) {
             ResponsiveFields {
                 EnumDropdown(
                     "Grupo de derivaciones",
-                    stLeadGroupName,
-                    { stLeadGroupName = it },
+                    state.stLeadGroupName.value,
+                    { state.stLeadGroupName.value = it },
                     EcgLeadGroup.entries.associate { it.name to it.label }
                 )
-                NumericField("Elevación máxima", stElevationText, { stElevationText = it.decimalInput() }, suffix = "mm")
+                NumericField("Elevación máxima", state.stElevationText.value, { state.stElevationText.value = it.decimalInput() }, suffix = "mm")
             }
-            CheckRow("Presente en ≥2 derivaciones contiguas", stContiguous) { stContiguous = it }
+            CheckRow("Presente en ≥2 derivaciones contiguas", state.stContiguous.value) { state.stContiguous.value = it }
             stResult?.let { StResultCard(it) }
         }
         HorizontalDivider()
-        CheckRow("Evaluar HVI", includeLvh) { includeLvh = it }
-        if (includeLvh) {
+        CheckRow("Evaluar HVI", state.includeLvh.value) { state.includeLvh.value = it }
+        if (state.includeLvh.value) {
             ResponsiveFields {
-                NumericField("S en V1", sV1Text, { sV1Text = it.decimalInput() }, suffix = "mm")
-                NumericField("R en V5", rV5Text, { rV5Text = it.decimalInput() }, suffix = "mm")
-                NumericField("R en V6", rV6Text, { rV6Text = it.decimalInput() }, suffix = "mm")
-                NumericField("R en aVL", rAvlText, { rAvlText = it.decimalInput() }, suffix = "mm")
-                NumericField("S en V3", sV3Text, { sV3Text = it.decimalInput() }, suffix = "mm")
+                NumericField("S en V1", state.sV1Text.value, { state.sV1Text.value = it.decimalInput() }, suffix = "mm")
+                NumericField("R en V5", state.rV5Text.value, { state.rV5Text.value = it.decimalInput() }, suffix = "mm")
+                NumericField("R en V6", state.rV6Text.value, { state.rV6Text.value = it.decimalInput() }, suffix = "mm")
+                NumericField("R en aVL", state.rAvlText.value, { state.rAvlText.value = it.decimalInput() }, suffix = "mm")
+                NumericField("S en V3", state.sV3Text.value, { state.sV3Text.value = it.decimalInput() }, suffix = "mm")
             }
             lvhResult?.let { LvhResultCard(it) }
         }
@@ -981,28 +1059,21 @@ private fun EcgAnalyzerContent() {
 }
 
 @Composable
-private fun EcgRateContent() {
-    var paperSpeedName by rememberSaveable { mutableStateOf(EcgPaperSpeed.SPEED_25.name) }
-    val paperSpeed = EcgPaperSpeed.valueOf(paperSpeedName)
-    var rrMsText by rememberSaveable { mutableStateOf("") }
-    var rrSecText by rememberSaveable { mutableStateOf("") }
-    var largeSquaresText by rememberSaveable { mutableStateOf("") }
-    var smallSquaresText by rememberSaveable { mutableStateOf("") }
-    var qrsCountText by rememberSaveable { mutableStateOf("") }
-    var heartRateText by rememberSaveable { mutableStateOf("") }
+private fun EcgRateContent(state: EcgSharedInputState) {
+    val paperSpeed = EcgPaperSpeed.valueOf(state.ratePaperSpeedName.value)
 
-    val rrMsResult = rrMsText.toDecimalOrNull()?.let { EcgCalculator.rateFromRrMs(it).getOrNull() }
-    val rrSecResult = rrSecText.toDecimalOrNull()?.let { EcgCalculator.rateFromRrSeconds(it).getOrNull() }
-    val largeResult = largeSquaresText.toDecimalOrNull()?.let { EcgCalculator.rateFromLargeSquares(it, paperSpeed).getOrNull() }
-    val smallResult = smallSquaresText.toDecimalOrNull()?.let { EcgCalculator.rateFromSmallSquares(it, paperSpeed).getOrNull() }
-    val stripResult = qrsCountText.toIntOrNull()?.let { EcgCalculator.rateFromTenSecondStrip(it).getOrNull() }
-    val rrFromHr = heartRateText.toDecimalOrNull()?.let { EcgCalculator.rrMsFromHeartRate(it).getOrNull() }
+    val rrMsResult = state.rateRrMsText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromRrMs(it).getOrNull() }
+    val rrSecResult = state.rateRrSecText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromRrSeconds(it).getOrNull() }
+    val largeResult = state.rateLargeSquaresText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromLargeSquares(it, paperSpeed).getOrNull() }
+    val smallResult = state.rateSmallSquaresText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromSmallSquares(it, paperSpeed).getOrNull() }
+    val stripResult = state.rateQrsCountText.value.toIntOrNull()?.let { EcgCalculator.rateFromTenSecondStrip(it).getOrNull() }
+    val rrFromHr = state.heartRateText.value.toDecimalOrNull()?.let { EcgCalculator.rrMsFromHeartRate(it).getOrNull() }
 
     EcgCard(
         title = "Frecuencia cardiaca e intervalo RR",
         note = "A 25 mm/s: 1 cuadro pequeño = 40 ms, 1 cuadro grande = 200 ms, 300/cuadros grandes y 1500/cuadros pequeños. La humanidad sobrevivió siglos para acabar dividiendo cuadritos, pero funciona."
     ) {
-        EnumDropdown("Velocidad del papel", paperSpeedName, { paperSpeedName = it }, EcgPaperSpeed.entries.associate { it.name to it.label })
+        EnumDropdown("Velocidad del papel", state.ratePaperSpeedName.value, { state.ratePaperSpeedName.value = it }, EcgPaperSpeed.entries.associate { it.name to it.label })
         ResultGrid(
             listOf(
                 "1 cuadro pequeño" to "${EcgCalculator.smallSquareMs(paperSpeed).roundClean()} ms",
@@ -1011,13 +1082,13 @@ private fun EcgRateContent() {
         )
     }
 
-    EcgCard("Calcular FC", "Usa el dato que tengas disponible.") {
+    EcgCard("Calcular FC", "Usa el dato que tengas disponible. La vista previa toma el primer resultado válido si no capturaste FC directa.") {
         ResponsiveFields {
-            NumericField("RR", rrMsText, { rrMsText = it.decimalInput() }, suffix = "ms")
-            NumericField("RR", rrSecText, { rrSecText = it.decimalInput() }, suffix = "s")
-            NumericField("Cuadros grandes", largeSquaresText, { largeSquaresText = it.decimalInput() })
-            NumericField("Cuadros pequeños", smallSquaresText, { smallSquaresText = it.decimalInput() })
-            NumericField("QRS en tira de 10 s", qrsCountText, { qrsCountText = it.onlyDigits() })
+            NumericField("RR", state.rateRrMsText.value, { state.rateRrMsText.value = it.decimalInput() }, suffix = "ms")
+            NumericField("RR", state.rateRrSecText.value, { state.rateRrSecText.value = it.decimalInput() }, suffix = "s")
+            NumericField("Cuadros grandes", state.rateLargeSquaresText.value, { state.rateLargeSquaresText.value = it.decimalInput() })
+            NumericField("Cuadros pequeños", state.rateSmallSquaresText.value, { state.rateSmallSquaresText.value = it.decimalInput() })
+            NumericField("QRS en tira de 10 s", state.rateQrsCountText.value, { state.rateQrsCountText.value = it.onlyDigits() })
         }
         listOf(
             "Por RR en ms" to rrMsResult,
@@ -1038,8 +1109,8 @@ private fun EcgRateContent() {
         }
     }
 
-    EcgCard("Calcular RR desde FC", "Útil para QTc y para revisar coherencia de mediciones.") {
-        NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
+    EcgCard("Calcular RR desde FC", "Útil para QTc y para revisar coherencia de mediciones. También alimenta la vista previa ECG.") {
+        NumericField("Frecuencia cardiaca", state.heartRateText.value, { state.heartRateText.value = it.decimalInput() }, suffix = "lpm")
         rrFromHr?.let {
             ResultGrid(listOf("RR" to "${it.roundClean()} ms", "RR" to "${(it / 1000.0).format(3)} s"))
         }
@@ -1047,18 +1118,13 @@ private fun EcgRateContent() {
 }
 
 @Composable
-private fun QtcCalculatorContent() {
-    var qtText by rememberSaveable { mutableStateOf("") }
-    var heartRateText by rememberSaveable { mutableStateOf("") }
-    var rrText by rememberSaveable { mutableStateOf("") }
-    var useRr by rememberSaveable { mutableStateOf(false) }
-
-    val qt = qtText.toDecimalOrNull()
+private fun QtcCalculatorContent(state: EcgSharedInputState) {
+    val qt = state.qtText.value.toDecimalOrNull()
     val result = if (qt != null) {
-        if (useRr) {
-            rrText.toDecimalOrNull()?.let { EcgCalculator.qtcFromRrMs(qt, it).getOrNull() }
+        if (state.qtcUseRr.value) {
+            state.qtcRrText.value.toDecimalOrNull()?.let { EcgCalculator.qtcFromRrMs(qt, it).getOrNull() }
         } else {
-            heartRateText.toDecimalOrNull()?.let { EcgCalculator.qtcFromHeartRate(qt, it).getOrNull() }
+            state.heartRateText.value.toDecimalOrNull()?.let { EcgCalculator.qtcFromHeartRate(qt, it).getOrNull() }
         }
     } else {
         null
@@ -1066,116 +1132,320 @@ private fun QtcCalculatorContent() {
 
     EcgCard(
         title = "QT corregido",
-        note = "Calcula Bazett, Fridericia, Framingham y Hodges. En frecuencias muy altas o bajas conviene mirar más allá de Bazett, porque una fórmula también puede ponerse dramática."
+        note = "Calcula Bazett, Fridericia, Framingham y Hodges. La vista previa usa el QT capturado para alargar o acortar visualmente la repolarización. No, no convierte al teléfono en holter."
     ) {
-        NumericField("QT medido", qtText, { qtText = it.decimalInput() }, suffix = "ms")
-        CheckRow("Usar RR en lugar de FC", useRr) { useRr = it }
-        if (useRr) {
-            NumericField("RR", rrText, { rrText = it.decimalInput() }, suffix = "ms")
+        NumericField("QT medido", state.qtText.value, { state.qtText.value = it.decimalInput() }, suffix = "ms")
+        CheckRow("Usar RR en lugar de FC", state.qtcUseRr.value) { state.qtcUseRr.value = it }
+        if (state.qtcUseRr.value) {
+            NumericField("RR", state.qtcRrText.value, { state.qtcRrText.value = it.decimalInput() }, suffix = "ms")
         } else {
-            NumericField("Frecuencia cardiaca", heartRateText, { heartRateText = it.decimalInput() }, suffix = "lpm")
+            NumericField("Frecuencia cardiaca", state.heartRateText.value, { state.heartRateText.value = it.decimalInput() }, suffix = "lpm")
         }
         result?.let { QtcResultCard(it) }
     }
 }
 
 @Composable
-private fun AxisCalculatorContent() {
-    var methodName by rememberSaveable { mutableStateOf(EcgAxisMethod.LEAD_I_AVF.name) }
-    val method = EcgAxisMethod.valueOf(methodName)
-    var firstText by rememberSaveable { mutableStateOf("") }
-    var secondText by rememberSaveable { mutableStateOf("") }
+private fun AxisCalculatorContent(state: EcgSharedInputState) {
+    val method = EcgAxisMethod.valueOf(state.axisMethodName.value)
 
     val firstLabel = "QRS neto en DI"
     val secondLabel = if (method == EcgAxisMethod.LEAD_I_AVF) "QRS neto en aVF" else "QRS neto en DIII"
-    val result = firstText.toDecimalOrNull()?.let { first ->
-        secondText.toDecimalOrNull()?.let { second -> EcgCalculator.calculateAxis(method, first, second) }
+    val result = state.axisFirstText.value.toDecimalOrNull()?.let { first ->
+        state.axisSecondText.value.toDecimalOrNull()?.let { second -> EcgCalculator.calculateAxis(method, first, second) }
     }
 
     EcgCard(
         title = "Eje eléctrico",
-        note = "Introduce amplitudes netas del QRS en mm: R positiva menos Q/S negativas. DI+aVF es práctico; DI+DIII replica la idea de calculadoras clásicas como My EKG."
+        note = "Introduce amplitudes netas del QRS en mm: R positiva menos Q/S negativas. Si calculas el eje aquí, también alimenta la vista previa. Milagro: los datos ahora sí hablan entre pantallas."
     ) {
-        EnumDropdown("Método", methodName, { methodName = it }, EcgAxisMethod.entries.associate { it.name to it.label })
+        EnumDropdown("Método", state.axisMethodName.value, { state.axisMethodName.value = it }, EcgAxisMethod.entries.associate { it.name to it.label })
         ResponsiveFields {
-            NumericField(firstLabel, firstText, { firstText = it.signedDecimalInput() }, suffix = "mm")
-            NumericField(secondLabel, secondText, { secondText = it.signedDecimalInput() }, suffix = "mm")
+            NumericField(firstLabel, state.axisFirstText.value, { state.axisFirstText.value = it.signedDecimalInput() }, suffix = "mm")
+            NumericField(secondLabel, state.axisSecondText.value, { state.axisSecondText.value = it.signedDecimalInput() }, suffix = "mm")
         }
         result?.let { AxisResultCard(it) }
     }
 }
 
 @Composable
-private fun LvhCalculatorContent() {
-    var sexName by rememberSaveable { mutableStateOf(EcgSex.MALE.name) }
-    val sex = EcgSex.valueOf(sexName)
-    var sV1Text by rememberSaveable { mutableStateOf("") }
-    var rV5Text by rememberSaveable { mutableStateOf("") }
-    var rV6Text by rememberSaveable { mutableStateOf("") }
-    var rAvlText by rememberSaveable { mutableStateOf("") }
-    var sV3Text by rememberSaveable { mutableStateOf("") }
-    var qrsText by rememberSaveable { mutableStateOf("") }
+private fun LvhCalculatorContent(state: EcgSharedInputState) {
+    val sex = EcgSex.valueOf(state.sexName.value)
 
     val result = EcgCalculator.lvh(
         sex = sex,
-        sV1Mm = sV1Text.toDecimalOrNull(),
-        rV5Mm = rV5Text.toDecimalOrNull(),
-        rV6Mm = rV6Text.toDecimalOrNull(),
-        rAvlMm = rAvlText.toDecimalOrNull(),
-        sV3Mm = sV3Text.toDecimalOrNull(),
-        qrsDurationMs = qrsText.toDecimalOrNull()
+        sV1Mm = state.sV1Text.value.toDecimalOrNull(),
+        rV5Mm = state.rV5Text.value.toDecimalOrNull(),
+        rV6Mm = state.rV6Text.value.toDecimalOrNull(),
+        rAvlMm = state.rAvlText.value.toDecimalOrNull(),
+        sV3Mm = state.sV3Text.value.toDecimalOrNull(),
+        qrsDurationMs = state.qrsText.value.toDecimalOrNull()
     )
 
     EcgCard(
         title = "Hipertrofia ventricular izquierda",
-        note = "Incluye Sokolow-Lyon, Cornell voltaje y Cornell producto. Son criterios eléctricos, no ecocardiograma disfrazado de app."
+        note = "Incluye Sokolow-Lyon, Cornell voltaje y Cornell producto. Si sale positivo, la vista previa aumenta el voltaje del QRS para representar el hallazgo de forma didáctica."
     ) {
-        EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
+        EnumDropdown("Sexo", state.sexName.value, { state.sexName.value = it }, EcgSex.entries.associate { it.name to it.label })
         ResponsiveFields {
-            NumericField("S en V1", sV1Text, { sV1Text = it.decimalInput() }, suffix = "mm")
-            NumericField("R en V5", rV5Text, { rV5Text = it.decimalInput() }, suffix = "mm")
-            NumericField("R en V6", rV6Text, { rV6Text = it.decimalInput() }, suffix = "mm")
-            NumericField("R en aVL", rAvlText, { rAvlText = it.decimalInput() }, suffix = "mm")
-            NumericField("S en V3", sV3Text, { sV3Text = it.decimalInput() }, suffix = "mm")
-            NumericField("QRS", qrsText, { qrsText = it.decimalInput() }, suffix = "ms")
+            NumericField("S en V1", state.sV1Text.value, { state.sV1Text.value = it.decimalInput() }, suffix = "mm")
+            NumericField("R en V5", state.rV5Text.value, { state.rV5Text.value = it.decimalInput() }, suffix = "mm")
+            NumericField("R en V6", state.rV6Text.value, { state.rV6Text.value = it.decimalInput() }, suffix = "mm")
+            NumericField("R en aVL", state.rAvlText.value, { state.rAvlText.value = it.decimalInput() }, suffix = "mm")
+            NumericField("S en V3", state.sV3Text.value, { state.sV3Text.value = it.decimalInput() }, suffix = "mm")
+            NumericField("QRS", state.qrsText.value, { state.qrsText.value = it.decimalInput() }, suffix = "ms")
         }
         LvhResultCard(result)
     }
 }
 
 @Composable
-private fun StElevationContent() {
-    var ageText by rememberSaveable { mutableStateOf("") }
-    var sexName by rememberSaveable { mutableStateOf(EcgSex.MALE.name) }
-    val sex = EcgSex.valueOf(sexName)
-    var leadGroupName by rememberSaveable { mutableStateOf(EcgLeadGroup.OTHER_CONTIGUOUS.name) }
-    val leadGroup = EcgLeadGroup.valueOf(leadGroupName)
-    var elevationText by rememberSaveable { mutableStateOf("") }
-    var contiguous by rememberSaveable { mutableStateOf(true) }
+private fun StElevationContent(state: EcgSharedInputState) {
+    val sex = EcgSex.valueOf(state.sexName.value)
+    val leadGroup = EcgLeadGroup.valueOf(state.stLeadGroupName.value)
 
-    val result = ageText.toIntOrNull()?.let { age ->
+    val result = state.ageText.value.toIntOrNull()?.let { age ->
         EcgCalculator.stElevationCriteria(
             ageYears = age,
             sex = sex,
             leadGroup = leadGroup,
-            elevationMm = elevationText.toDecimalOrNull() ?: 0.0,
-            contiguousLeads = contiguous
+            elevationMm = state.stElevationText.value.toDecimalOrNull() ?: 0.0,
+            contiguousLeads = state.stContiguous.value
         ).getOrNull()
     }
 
     EcgCard(
         title = "Criterios de elevación del ST",
-        note = "Evalúa el umbral en punto J para derivaciones contiguas. Si hay dolor torácico, inestabilidad o equivalente isquémico, esto no es juego de llenar casillas: requiere protocolo clínico."
+        note = "Evalúa el umbral en punto J para derivaciones contiguas. La vista previa eleva o deprime el segmento ST con el valor capturado, sin fingir que eso reemplaza un ECG real."
     ) {
         ResponsiveFields {
-            NumericField("Edad", ageText, { ageText = it.onlyDigits() }, suffix = "años")
-            EnumDropdown("Sexo", sexName, { sexName = it }, EcgSex.entries.associate { it.name to it.label })
-            EnumDropdown("Grupo", leadGroupName, { leadGroupName = it }, EcgLeadGroup.entries.associate { it.name to it.label })
-            NumericField("Elevación máxima", elevationText, { elevationText = it.decimalInput() }, suffix = "mm")
+            NumericField("Edad", state.ageText.value, { state.ageText.value = it.onlyDigits() }, suffix = "años")
+            EnumDropdown("Sexo", state.sexName.value, { state.sexName.value = it }, EcgSex.entries.associate { it.name to it.label })
+            EnumDropdown("Grupo", state.stLeadGroupName.value, { state.stLeadGroupName.value = it }, EcgLeadGroup.entries.associate { it.name to it.label })
+            NumericField("Elevación máxima", state.stElevationText.value, { state.stElevationText.value = it.signedDecimalInput() }, suffix = "mm")
         }
-        CheckRow("Está en ≥2 derivaciones contiguas", contiguous) { contiguous = it }
+        CheckRow("Está en ≥2 derivaciones contiguas", state.stContiguous.value) { state.stContiguous.value = it }
         result?.let { StResultCard(it) }
     }
+}
+
+@Composable
+private fun EcgPreviewContent(state: EcgSharedInputState) {
+    val model = buildEcgPreviewModel(state)
+
+    EcgCard(
+        title = "Vista previa del ECG",
+        note = "Tira de ritmo simulada en derivación II. Se configura con los datos capturados en las calculadoras: FC/RR, PR, QRS, QT, ST, regularidad y HVI. No es señal real de paciente, porque todavía no estamos invocando espíritus eléctricos."
+    ) {
+        DynamicEcgStrip(
+            model = model,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 220.dp)
+        )
+        ResultGrid(
+            listOfNotNull(
+                "FC usada" to "${model.heartRateBpm.roundClean()} lpm",
+                "RR" to "${model.rrMs.roundClean()} ms",
+                "PR" to "${model.prMs.roundClean()} ms",
+                "QRS" to "${model.qrsMs.roundClean()} ms",
+                "QT" to "${model.qtMs.roundClean()} ms",
+                "ST visual" to "${model.stMm.format(1)} mm",
+                model.axisDegrees?.let { "Eje" to "${it.roundClean()}°" },
+                "Ritmo" to if (model.rhythmRegular) "Regular" else "Irregular",
+                "Origen" to model.sourceNote
+            )
+        )
+        WarningText(
+            "La tira generada es didáctica: ayuda a visualizar cómo cambian los intervalos y segmentos, pero no diagnostica ni reemplaza un ECG real de 12 derivaciones."
+        )
+    }
+}
+
+@Composable
+private fun DynamicEcgStrip(
+    model: EcgPreviewModel,
+    modifier: Modifier = Modifier
+) {
+    val gridMinor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+    val gridMajor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    val baselineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.50f)
+    val traceColor = MaterialTheme.colorScheme.primary
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 2.dp,
+        modifier = modifier
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(250.dp)
+                .padding(10.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+            val minorStep = (w / 75f).coerceAtLeast(8f)
+            val majorStep = minorStep * 5f
+            var x = 0f
+            while (x <= w) {
+                drawLine(
+                    color = if ((x / majorStep).roundToInt() * majorStep == x) gridMajor else gridMinor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, h),
+                    strokeWidth = if ((x / majorStep).roundToInt() * majorStep == x) 1.2f else 0.6f
+                )
+                x += minorStep
+            }
+            var yGrid = 0f
+            while (yGrid <= h) {
+                drawLine(
+                    color = if ((yGrid / majorStep).roundToInt() * majorStep == yGrid) gridMajor else gridMinor,
+                    start = Offset(0f, yGrid),
+                    end = Offset(w, yGrid),
+                    strokeWidth = if ((yGrid / majorStep).roundToInt() * majorStep == yGrid) 1.2f else 0.6f
+                )
+                yGrid += minorStep
+            }
+
+            val baseline = h * 0.54f
+            drawLine(
+                color = baselineColor,
+                start = Offset(0f, baseline),
+                end = Offset(w, baseline),
+                strokeWidth = 1.4f
+            )
+
+            val displayMs = when {
+                model.heartRateBpm < 55.0 -> 9000.0
+                model.heartRateBpm > 140.0 -> 4000.0
+                else -> 6000.0
+            }
+            val pxPerMs = w / displayMs.toFloat()
+            val mmPx = (h / 36f).coerceIn(4f, 9f)
+            fun xFor(ms: Double): Float = (ms.toFloat() * pxPerMs).coerceIn(-w, w * 2f)
+            fun yFor(mm: Double): Float = baseline - (mm.toFloat() * mmPx)
+
+            val axisProjection = model.axisDegrees?.let { cos((it - 60.0) * PI / 180.0) } ?: 1.0
+            val qrsSign = if (axisProjection < -0.20) -1.0 else 1.0
+            val qrsAmplitude = (if (model.lvhPositive) 15.0 else 10.0) * (0.45 + 0.55 * abs(axisProjection)).coerceIn(0.45, 1.0)
+            val pAmplitude = if (model.rhythmSinus) 1.4 else 0.25
+            val tAmplitude = when {
+                model.qtMs >= 500.0 -> 2.6
+                model.stMm < -0.5 -> -2.2
+                else -> 3.2
+            }
+            val stVisual = model.stMm.coerceIn(-4.0, 5.0)
+            val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
+            var beatStart = 80.0
+            var beatIndex = 0
+            val path = Path().apply {
+                moveTo(0f, baseline)
+                while (beatStart < displayMs + model.rrMs) {
+                    val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
+                    val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+                    val pr = model.prMs.coerceIn(80.0, 340.0)
+                    val qrs = model.qrsMs.coerceIn(50.0, 220.0)
+                    val qt = model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
+                    val qrsOn = beatStart + pr
+                    val qrsEnd = qrsOn + qrs
+                    val pStart = (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
+                    val pPeak = pStart + 42.0
+                    val pEnd = (qrsOn - 24.0).coerceAtLeast(pPeak + 20.0)
+                    val rPeak = qrsOn + qrs * 0.45
+                    val stEnd = qrsEnd + 115.0
+                    val tEnd = qrsOn + qt
+                    val tPeak = (stEnd + (tEnd - stEnd) * 0.45).coerceAtLeast(stEnd + 35.0)
+
+                    lineTo(xFor(pStart), yFor(0.0))
+                    quadraticBezierTo(xFor(pPeak), yFor(pAmplitude), xFor(pEnd), yFor(0.0))
+                    lineTo(xFor(qrsOn), yFor(0.0))
+                    lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.8 * qrsSign))
+                    lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.72), yFor(-3.2 * qrsSign))
+                    lineTo(xFor(qrsEnd), yFor(stVisual))
+                    lineTo(xFor(stEnd), yFor(stVisual))
+                    quadraticBezierTo(xFor(tPeak), yFor(tAmplitude + stVisual * 0.18), xFor(tEnd), yFor(0.0))
+                    lineTo(xFor(beatStart + rr), yFor(0.0))
+
+                    beatStart += rr
+                    beatIndex += 1
+                }
+            }
+            drawPath(
+                path = path,
+                color = traceColor,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.2f, cap = StrokeCap.Round)
+            )
+
+            drawContext.canvas.nativeCanvas.apply {
+                val paint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.argb(
+                        190,
+                        (labelColor.red * 255).roundToInt(),
+                        (labelColor.green * 255).roundToInt(),
+                        (labelColor.blue * 255).roundToInt()
+                    )
+                    textSize = 28f
+                    isAntiAlias = true
+                }
+                drawText("Derivación II simulada · ${model.heartRateBpm.roundClean()} lpm", 18f, 34f, paint)
+                drawText("${(displayMs / 1000.0).format(1)} s visibles", 18f, h - 18f, paint)
+            }
+        }
+    }
+}
+
+private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
+    val paperSpeed = EcgPaperSpeed.valueOf(state.ratePaperSpeedName.value)
+    val directRate = state.heartRateText.value.toDecimalOrNull()
+    val rateCandidates = listOfNotNull(
+        directRate,
+        state.rateRrMsText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromRrMs(it).getOrNull()?.bpm },
+        state.rateRrSecText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromRrSeconds(it).getOrNull()?.bpm },
+        state.rateLargeSquaresText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromLargeSquares(it, paperSpeed).getOrNull()?.bpm },
+        state.rateSmallSquaresText.value.toDecimalOrNull()?.let { EcgCalculator.rateFromSmallSquares(it, paperSpeed).getOrNull()?.bpm },
+        state.rateQrsCountText.value.toIntOrNull()?.let { EcgCalculator.rateFromTenSecondStrip(it).getOrNull()?.bpm }
+    )
+    val heartRate = (rateCandidates.firstOrNull() ?: 75.0).coerceIn(25.0, 240.0)
+    val rrMs = EcgCalculator.rrMsFromHeartRate(heartRate).getOrDefault(800.0)
+    val axisFromCalculator = state.axisFirstText.value.toDecimalOrNull()?.let { first ->
+        state.axisSecondText.value.toDecimalOrNull()?.let { second ->
+            EcgCalculator.calculateAxis(EcgAxisMethod.valueOf(state.axisMethodName.value), first, second).degrees
+        }
+    }
+    val sex = EcgSex.valueOf(state.sexName.value)
+    val lvh = EcgCalculator.lvh(
+        sex = sex,
+        sV1Mm = state.sV1Text.value.toDecimalOrNull(),
+        rV5Mm = state.rV5Text.value.toDecimalOrNull(),
+        rV6Mm = state.rV6Text.value.toDecimalOrNull(),
+        rAvlMm = state.rAvlText.value.toDecimalOrNull(),
+        sV3Mm = state.sV3Text.value.toDecimalOrNull(),
+        qrsDurationMs = state.qrsText.value.toDecimalOrNull()
+    )
+    val lvhPositive = lvh.sokolowPositive == true || lvh.cornellVoltagePositive == true || lvh.cornellProductPositive == true
+    val sourceNote = when {
+        directRate != null -> "FC directa"
+        rateCandidates.isNotEmpty() -> "FC calculada"
+        else -> "Ejemplo 75 lpm"
+    }
+    return EcgPreviewModel(
+        heartRateBpm = heartRate,
+        rrMs = rrMs,
+        prMs = (state.prText.value.toDecimalOrNull() ?: 160.0).coerceIn(60.0, 360.0),
+        qrsMs = (state.qrsText.value.toDecimalOrNull() ?: 90.0).coerceIn(45.0, 240.0),
+        qtMs = (state.qtText.value.toDecimalOrNull() ?: 390.0).coerceIn(180.0, 720.0),
+        stMm = state.stElevationText.value.toDecimalOrNull()?.coerceIn(-5.0, 8.0) ?: 0.0,
+        axisDegrees = state.axisText.value.toDecimalOrNull() ?: axisFromCalculator,
+        rhythmSinus = state.sinusRhythm.value,
+        rhythmRegular = state.regularRhythm.value,
+        lvhPositive = lvhPositive,
+        sourceNote = sourceNote
+    )
 }
 
 @Composable
@@ -1546,6 +1816,34 @@ private fun EcgTool.info(): EcgInfoContent = when (this) {
             "No identifica automáticamente equivalentes de IAMCEST ni patrones sutiles.",
             "No sustituye protocolo de dolor torácico, ECG seriados, biomarcadores ni valoración urgente.",
             "El contexto clínico pesa más que una casilla aislada. Trágico, pero cierto."
+        )
+    )
+
+    EcgTool.PREVIEW -> EcgInfoContent(
+        title = "Vista previa ECG · referencias",
+        purpose = "Dibuja una tira de ritmo simulada, configurada por los valores capturados en las calculadoras ECG.",
+        method = "No interpreta imágenes ni reconstruye un ECG real. Usa FC/RR para separar complejos, PR para ubicar P-QRS, QRS para anchura del complejo, QT para duración de repolarización, ST para desplazamiento visual, eje para polaridad aproximada en DII y HVI para aumentar voltaje didáctico.",
+        references = listOf(
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Part I: the electrocardiogram and its technology. J Am Coll Cardiol. 2007;49:1109–1127.",
+                useInApp = "Base técnica de calibración, velocidad de papel y representación temporal del ECG."
+            ),
+            EcgReferenceItem(
+                source = "AHA/ACCF/HRS",
+                citation = "Recommendations for the Standardization and Interpretation of the Electrocardiogram. Part IV: ST segment, T and U waves, and QT interval. J Am Coll Cardiol. 2009;53:982–991.",
+                useInApp = "Relación visual de ST, onda T y QT dentro de la tira simulada."
+            ),
+            EcgReferenceItem(
+                source = "Life in the Fast Lane",
+                citation = "ECG Basics y ECG Rate Interpretation: papel estándar, velocidad 25 mm/s, cuadros de 40 ms/200 ms y construcción visual de complejos.",
+                useInApp = "Cotejo educativo para escala de tiempo y lectura de la tira."
+            )
+        ),
+        limitations = listOf(
+            "La imagen es una simulación didáctica generada por parámetros, no una señal clínica adquirida.",
+            "No representa morfología específica por derivación ni sustitución de un ECG de 12 derivaciones.",
+            "El dibujo puede ser coherente con los datos capturados y aun así no corresponder a un paciente real. Qué conveniente y peligroso a la vez."
         )
     )
 }
