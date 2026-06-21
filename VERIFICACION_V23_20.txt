@@ -1,0 +1,6 @@
+VERIFICACION V23.20
+- Mobitz I: PR visible progresivo por latido.
+- P fija al ciclo auricular, QRS retrasado por PR.
+- Series editables PR/RR/QRS/QT agregadas al analizador.
+- Patologías variables cargan series didácticas automáticamente.
+- Marcadores visuales usan tiempos reales por latido.

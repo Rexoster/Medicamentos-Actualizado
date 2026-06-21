@@ -271,7 +271,11 @@ private data class EcgSharedInputState(
     val variablePr: MutableState<Boolean>,
     val variableQrs: MutableState<Boolean>,
     val variableQt: MutableState<Boolean>,
-    val variableMorphology: MutableState<Boolean>
+    val variableMorphology: MutableState<Boolean>,
+    val prSeriesText: MutableState<String>,
+    val rrSeriesText: MutableState<String>,
+    val qrsSeriesText: MutableState<String>,
+    val qtSeriesText: MutableState<String>
 )
 
 private data class EcgPreviewModel(
@@ -293,7 +297,11 @@ private data class EcgPreviewModel(
     val variablePr: Boolean,
     val variableQrs: Boolean,
     val variableQt: Boolean,
-    val variableMorphology: Boolean
+    val variableMorphology: Boolean,
+    val prSeriesMs: List<Double>,
+    val rrSeriesMs: List<Double>,
+    val qrsSeriesMs: List<Double>,
+    val qtSeriesMs: List<Double>
 )
 
 private enum class EcgPreviewMode(val label: String, val description: String) {
@@ -670,7 +678,11 @@ private fun rememberEcgSharedInputState(): EcgSharedInputState = EcgSharedInputS
     variablePr = rememberSaveable { mutableStateOf(false) },
     variableQrs = rememberSaveable { mutableStateOf(false) },
     variableQt = rememberSaveable { mutableStateOf(false) },
-    variableMorphology = rememberSaveable { mutableStateOf(false) }
+    variableMorphology = rememberSaveable { mutableStateOf(false) },
+    prSeriesText = rememberSaveable { mutableStateOf("") },
+    rrSeriesText = rememberSaveable { mutableStateOf("") },
+    qrsSeriesText = rememberSaveable { mutableStateOf("") },
+    qtSeriesText = rememberSaveable { mutableStateOf("") }
 )
 
 @Composable
@@ -1451,6 +1463,23 @@ private fun EcgAnalyzerContent(state: EcgSharedInputState) {
         CheckRow("QRS variable por latido", state.variableQrs.value) { state.variableQrs.value = it }
         CheckRow("QT/ST-T variable por latido", state.variableQt.value) { state.variableQt.value = it }
         CheckRow("Morfología variable de ondas", state.variableMorphology.value) { state.variableMorphology.value = it }
+        Text(
+            "Series por latido para el ECG de muestra",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "Escribe valores separados por coma. Ejemplo Mobitz I: PR 140, 230, 320; RR 960, 960, 1500. La patología carga estos datos sola, pero puedes editarlos.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ResponsiveFields {
+            SeriesField("Serie PR", state.prSeriesText.value, { state.prSeriesText.value = it }, suffix = "ms")
+            SeriesField("Serie RR/PP", state.rrSeriesText.value, { state.rrSeriesText.value = it }, suffix = "ms")
+            SeriesField("Serie QRS", state.qrsSeriesText.value, { state.qrsSeriesText.value = it }, suffix = "ms")
+            SeriesField("Serie QT", state.qtSeriesText.value, { state.qtSeriesText.value = it }, suffix = "ms")
+        }
     }
 
     EcgCard(
@@ -2076,6 +2105,10 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
     state.variableQrs.value = false
     state.variableQt.value = false
     state.variableMorphology.value = false
+    state.prSeriesText.value = ""
+    state.rrSeriesText.value = ""
+    state.qrsSeriesText.value = ""
+    state.qtSeriesText.value = ""
 
     when (example.pattern) {
         EcgPathologyPattern.NORMAL_SINUS -> Unit
@@ -2093,6 +2126,8 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qtText.value = "340"
             state.sinusRhythm.value = false
             state.regularRhythm.value = false
+            state.rrSeriesText.value = "480, 760, 430, 900, 550, 710"
+            state.qrsSeriesText.value = "86, 92, 88, 90, 94, 86"
         }
         EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK -> {
             state.heartRateText.value = "68"
@@ -2106,6 +2141,9 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qrsText.value = "92"
             state.qtText.value = "410"
             state.variablePr.value = true
+            state.prSeriesText.value = "170, 170, 170, 170"
+            state.rrSeriesText.value = "960, 960, 960, 960"
+            state.qrsSeriesText.value = "92, bloqueado, 92, bloqueado"
         }
         EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> {
             state.heartRateText.value = "76"
@@ -2136,6 +2174,8 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.regularRhythm.value = false
             state.variablePr.value = true
             state.variableMorphology.value = true
+            state.prSeriesText.value = "150, 110, 150, 150"
+            state.rrSeriesText.value = "770, 520, 900, 770"
         }
         EcgPathologyPattern.JUNCTIONAL_RHYTHM -> {
             state.heartRateText.value = "52"
@@ -2152,6 +2192,7 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qtText.value = "400"
             state.regularRhythm.value = false
             state.variablePr.value = true
+            state.rrSeriesText.value = "940, 940, 1900, 940"
         }
         EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> {
             state.heartRateText.value = "78"
@@ -2213,6 +2254,12 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qrsText.value = "130"
             state.qtText.value = "320"
             state.regularRhythm.value = true
+            state.variablePr.value = true
+            state.variableQrs.value = true
+            state.variableQt.value = true
+            state.prSeriesText.value = "190, 220, 250"
+            state.qrsSeriesText.value = "110, 130, 155"
+            state.qtSeriesText.value = "340, 320, 300"
         }
         EcgPathologyPattern.LONG_QT -> {
             state.heartRateText.value = "70"
@@ -2221,12 +2268,15 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qtText.value = "520"
         }
         EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> {
-            state.heartRateText.value = "62"
-            state.prText.value = "160"
+            state.heartRateText.value = "55"
+            state.prText.value = "140"
             state.qrsText.value = "90"
             state.qtText.value = "410"
             state.regularRhythm.value = false
             state.variablePr.value = true
+            state.prSeriesText.value = "140, 230, 320, 340"
+            state.rrSeriesText.value = "980, 980, 980, 1500"
+            state.qrsSeriesText.value = "90, 90, 90, bloqueado"
         }
         EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> {
             state.heartRateText.value = "54"
@@ -2235,6 +2285,9 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qtText.value = "420"
             state.regularRhythm.value = false
             state.variablePr.value = true
+            state.prSeriesText.value = "170, 170, 170, 170"
+            state.rrSeriesText.value = "1100, 1100, 1100, 1650"
+            state.qrsSeriesText.value = "100, 100, 100, bloqueado"
         }
         EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> {
             state.heartRateText.value = "38"
@@ -2245,6 +2298,9 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.regularRhythm.value = true
             state.variablePr.value = true
             state.variableQrs.value = true
+            state.prSeriesText.value = "sin relación"
+            state.rrSeriesText.value = "1580, 1580, 1580"
+            state.qrsSeriesText.value = "140, 150, 140"
         }
         EcgPathologyPattern.SINUS_BRADYCARDIA -> {
             state.heartRateText.value = "45"
@@ -2265,6 +2321,7 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qtText.value = "320"
             state.sinusRhythm.value = false
             state.regularRhythm.value = true
+            state.rrSeriesText.value = "400, 400, 400, 400"
         }
         EcgPathologyPattern.SVT -> {
             state.heartRateText.value = "180"
@@ -2281,6 +2338,9 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qtText.value = "360"
             state.sinusRhythm.value = false
             state.regularRhythm.value = true
+            state.variableQrs.value = true
+            state.qrsSeriesText.value = "170, 185, 160, 180"
+            state.rrSeriesText.value = "350, 350, 350, 350"
         }
         EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> {
             state.heartRateText.value = "88"
@@ -2303,6 +2363,8 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.prText.value = "170"
             state.qrsText.value = "92"
             state.qtText.value = "500"
+            state.variableQt.value = true
+            state.qtSeriesText.value = "480, 520, 500"
         }
         EcgPathologyPattern.LATERAL_STEMI -> {
             state.heartRateText.value = "92"
@@ -2803,7 +2865,11 @@ private fun normalComparatorModel(model: EcgPreviewModel): EcgPreviewModel {
         variablePr = false,
         variableQrs = false,
         variableQt = false,
-        variableMorphology = false
+        variableMorphology = false,
+        prSeriesMs = emptyList(),
+        rrSeriesMs = emptyList(),
+        qrsSeriesMs = emptyList(),
+        qtSeriesMs = emptyList()
     )
 }
 
@@ -3527,7 +3593,7 @@ private fun DrawScope.drawLeadTrace(
         pattern == EcgPathologyPattern.ATRIAL_FLUTTER -> 0.0
         pattern == EcgPathologyPattern.SVT -> 0.0
         pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> 0.0
-        pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> 0.0
+        pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> 1.15 * qrsSign
         pattern == EcgPathologyPattern.JUNCTIONAL_RHYTHM -> 0.0
         pattern == EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> 1.35 * qrsSign
         pattern == EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> 2.45 * qrsSign
@@ -3552,16 +3618,14 @@ private fun DrawScope.drawLeadTrace(
     var beatStart = 80.0
     var beatIndex = 0
     while (beatStart + model.rrMs < segmentStartMs - 260.0) {
-        val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
-        val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+        val rr = rrForBeat(model, beatIndex, irregularFactors)
         beatStart += rr
         beatIndex += 1
     }
     val path = Path().apply {
         moveTo(topLeft.x, baseline)
         while (beatStart < segmentEndMs + model.rrMs) {
-            val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
-            val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+            val rr = rrForBeat(model, beatIndex, irregularFactors)
             val isPvcBeat = pattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
             val isPacBeat = pattern == EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION && beatIndex % 4 == 1
             val isSinusPause = pattern == EcgPathologyPattern.SINUS_PAUSE && beatIndex % 5 == 2
@@ -3573,51 +3637,40 @@ private fun DrawScope.drawLeadTrace(
             }
 
             if (isSinusPause) {
-                lineTo(xFor(beatStart + rr * 1.85), yFor(0.0))
-                beatStart += rr * 1.85
+                lineTo(xFor(beatStart + rr), yFor(0.0))
+                beatStart += rr
                 beatIndex += 1
             } else {
-                val pr = when {
-                    isPvcBeat -> 0.0
-                    pattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> (150.0 + (beatIndex % 4) * 48.0).coerceIn(120.0, 340.0)
-                    pattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> 175.0
-                    pattern == EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> 170.0
-                    pattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> 85.0
-                    model.variablePr -> (model.prMs + ((beatIndex % 4) - 1) * 28.0).coerceIn(80.0, 340.0)
-                    else -> model.prMs.coerceIn(80.0, 340.0)
-                }
-                val qrs = (when {
-                    isPvcBeat -> model.qrsMs.coerceAtLeast(160.0)
-                    pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> model.qrsMs.coerceAtLeast(160.0)
-                    model.variableQrs -> model.qrsMs + ((beatIndex % 3) - 1) * 18.0
-                    else -> model.qrsMs
-                }).coerceIn(50.0, 230.0)
-                val qt = (when {
-                    model.variableQt -> model.qtMs + ((beatIndex % 3) - 1) * 35.0
-                    else -> model.qtMs
-                }).coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
+                val pr = prForBeat(model, beatIndex, isPvcBeat)
+                val qrs = qrsForBeat(model, beatIndex, isPvcBeat)
+                val qt = qtForBeat(model, beatIndex, qrs, rr)
+                val pStart = pStartForBeat(beatStart, rr, isPacBeat)
                 val qrsOn = when {
                     isPvcBeat -> beatStart + rr * 0.30
-                    isPacBeat -> beatStart + rr * 0.23 + pr
-                    droppedQrs -> beatStart + rr * 0.42 + pr
-                    else -> beatStart + pr
+                    isPacBeat -> pStart + pr
+                    droppedQrs -> pStart + pr
+                    pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> beatStart + rr * 0.62
+                    else -> pStart + pr
                 }
                 val qrsEnd = qrsOn + qrs
-                val pStart = when {
-                    isPacBeat -> (beatStart + rr * 0.16).coerceAtLeast(beatStart + 8.0)
-                    droppedQrs -> (qrsOn - 105.0).coerceAtLeast(beatStart + 24.0)
-                    else -> (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
-                }
                 val pPeak = pStart + 42.0
-                val pEnd = (qrsOn - 24.0).coerceAtLeast(pPeak + 20.0)
+                val pEnd = pEndForBeat(pStart, qrsOn, pattern, constrainedByQrs = !droppedQrs && !isPvcBeat && pattern != EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK)
                 val rPeak = qrsOn + qrs * 0.45
                 val stEnd = qrsEnd + 115.0
                 val tEnd = qrsOn + qt
                 val tPeak = (stEnd + (tEnd - stEnd) * 0.45).coerceAtLeast(stEnd + 35.0)
                 val showP = pAmplitude != 0.0 && !isPvcBeat &&
                     pattern != EcgPathologyPattern.JUNCTIONAL_RHYTHM &&
+                    pattern != EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK &&
                     pattern != EcgPathologyPattern.VENTRICULAR_TACHYCARDIA
 
+                if (pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK) {
+                    listOf(beatStart + 55.0, beatStart + rr * 0.48).forEach { atrialStart ->
+                        val atrialEnd = atrialStart + 86.0
+                        lineTo(xFor(atrialStart), yFor(0.0))
+                        quadraticBezierTo(xFor(atrialStart + 42.0), yFor(1.15 * qrsSign), xFor(atrialEnd), yFor(0.0))
+                    }
+                }
                 if (showP || droppedQrs || isPacBeat) {
                     val atrialSign = if (isPacBeat) -qrsSign else qrsSign
                     lineTo(xFor(pStart), yFor(0.0))
@@ -3803,8 +3856,7 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
     var beatStart = 80.0
     var beatIndex = 0
     while (beatStart + model.rrMs < segmentStartMs - 260.0) {
-        val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
-        val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+        val rr = rrForBeat(model, beatIndex, irregularFactors)
         beatStart += rr
         beatIndex += 1
     }
@@ -3821,8 +3873,7 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
         return true
     }
     while (beatStart < segmentEndMs + model.rrMs && boxes.size < 18) {
-        val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
-        val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+        val rr = rrForBeat(model, beatIndex, irregularFactors)
         val isPvcBeat = model.pathologyPattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
         val isPacBeat = model.pathologyPattern == EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION && beatIndex % 4 == 1
         val isSinusPause = model.pathologyPattern == EcgPathologyPattern.SINUS_PAUSE && beatIndex % 5 == 2
@@ -3832,40 +3883,25 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
             EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> beatIndex % 2 == 1
             else -> false
         }
-        val pr = when {
-            isPvcBeat -> 0.0
-            model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> (150.0 + (beatIndex % 4) * 48.0).coerceIn(120.0, 340.0)
-            model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> 175.0
-            model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> 170.0
-            model.pathologyPattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> 85.0
-            model.variablePr -> (model.prMs + ((beatIndex % 4) - 1) * 28.0).coerceIn(80.0, 340.0)
-            else -> model.prMs.coerceIn(80.0, 340.0)
-        }
-        val qrs = (when {
-            isPvcBeat -> model.qrsMs.coerceAtLeast(160.0)
-            model.pathologyPattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> model.qrsMs.coerceAtLeast(160.0)
-            model.variableQrs -> model.qrsMs + ((beatIndex % 3) - 1) * 18.0
-            else -> model.qrsMs
-        }).coerceIn(50.0, 230.0)
+        val pr = prForBeat(model, beatIndex, isPvcBeat)
+        val qrs = qrsForBeat(model, beatIndex, isPvcBeat)
+        val qt = qtForBeat(model, beatIndex, qrs, rr)
+        val pStart = pStartForBeat(beatStart, rr, isPacBeat)
         val qrsOn = when {
             isPvcBeat -> beatStart + rr * 0.30
-            isPacBeat -> beatStart + rr * 0.23 + pr
-            droppedQrs -> beatStart + rr * 0.42 + pr
-            else -> beatStart + pr
+            isPacBeat -> pStart + pr
+            droppedQrs -> pStart + pr
+            model.pathologyPattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> beatStart + rr * 0.62
+            else -> pStart + pr
         }
-        val pStart = when {
-            isPacBeat -> (beatStart + rr * 0.16).coerceAtLeast(beatStart + 8.0)
-            droppedQrs -> (qrsOn - 105.0).coerceAtLeast(beatStart + 24.0)
-            else -> (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
-        }
-        val pEnd = (qrsOn - 24.0).coerceAtLeast(pStart + 70.0)
+        val pEnd = pEndForBeat(pStart, qrsOn, model.pathologyPattern, constrainedByQrs = !droppedQrs && !isPvcBeat && model.pathologyPattern != EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK)
         val qrsEnd = qrsOn + qrs
         val stEnd = qrsEnd + 115.0
-        val qtEnd = qrsOn + model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
+        val qtEnd = qrsOn + qt
 
         if (isSinusPause) {
             leadMarkers.filter { it.region == EcgCriterionRegion.WHOLE_STRIP && canPlaceMarker(it, beatIndex) }.forEach { marker ->
-                val (o, s) = rectForTimes(beatStart, beatStart + rr * 1.85, 0.18f, 0.84f)
+                val (o, s) = rectForTimes(beatStart, beatStart + rr, 0.18f, 0.84f)
                 boxes.add(Triple(marker, o, s))
             }
         } else {
@@ -3889,7 +3925,7 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
         }
 
         beatStart += when {
-            isSinusPause -> rr * 1.85
+            isSinusPause -> rr
             isPvcBeat -> rr * 1.35
             isPacBeat -> rr * 1.08
             else -> rr
@@ -3956,6 +3992,67 @@ private fun ecgStForLead(model: EcgPreviewModel, lead: EcgLead): Double = when (
         else -> model.stMm.takeIf { it != 0.0 } ?: 1.5
     }
     else -> model.stMm
+}
+
+private fun parseEcgSeries(raw: String): List<Double> = raw
+    .split(',', ';', '|', '/', '\n')
+    .mapNotNull { part ->
+        val cleaned = part.trim().replace("ms", "", ignoreCase = true)
+        cleaned.toDoubleOrNull()
+    }
+    .filter { it.isFinite() && it > 0.0 }
+
+private fun seriesValue(series: List<Double>, beatIndex: Int, fallback: Double): Double =
+    if (series.isNotEmpty()) series[beatIndex % series.size] else fallback
+
+private fun rrForBeat(model: EcgPreviewModel, beatIndex: Int, irregularFactors: List<Double>): Double {
+    val fallback = (model.rrMs * if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]).coerceAtLeast(260.0)
+    return seriesValue(model.rrSeriesMs, beatIndex, fallback).coerceIn(260.0, 3000.0)
+}
+
+private fun prForBeat(model: EcgPreviewModel, beatIndex: Int, isPvcBeat: Boolean): Double {
+    val fallback = when {
+        isPvcBeat -> 0.0
+        model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> listOf(140.0, 230.0, 320.0, 340.0)[beatIndex % 4]
+        model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> 170.0
+        model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> 170.0
+        model.pathologyPattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> 85.0
+        model.variablePr -> (model.prMs + ((beatIndex % 4) - 1) * 45.0).coerceIn(80.0, 340.0)
+        else -> model.prMs.coerceIn(80.0, 340.0)
+    }
+    return seriesValue(model.prSeriesMs, beatIndex, fallback).coerceIn(0.0, 360.0)
+}
+
+private fun qrsForBeat(model: EcgPreviewModel, beatIndex: Int, isPvcBeat: Boolean): Double {
+    val fallback = when {
+        isPvcBeat -> model.qrsMs.coerceAtLeast(160.0)
+        model.pathologyPattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> model.qrsMs.coerceAtLeast(160.0)
+        model.variableQrs -> model.qrsMs + ((beatIndex % 3) - 1) * 22.0
+        else -> model.qrsMs
+    }
+    return seriesValue(model.qrsSeriesMs, beatIndex, fallback).coerceIn(45.0, 240.0)
+}
+
+private fun qtForBeat(model: EcgPreviewModel, beatIndex: Int, qrs: Double, rr: Double): Double {
+    val fallback = when {
+        model.variableQt -> model.qtMs + ((beatIndex % 3) - 1) * 45.0
+        else -> model.qtMs
+    }
+    return seriesValue(model.qtSeriesMs, beatIndex, fallback).coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
+}
+
+private fun pWaveDurationForPattern(pattern: EcgPathologyPattern): Double = when (pattern) {
+    EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> 140.0
+    EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> 145.0
+    else -> 88.0
+}
+
+private fun pStartForBeat(beatStart: Double, rr: Double, isPacBeat: Boolean): Double =
+    if (isPacBeat) (beatStart + rr * 0.16).coerceAtLeast(beatStart + 8.0) else beatStart + 45.0
+
+private fun pEndForBeat(pStart: Double, qrsOn: Double, pattern: EcgPathologyPattern, constrainedByQrs: Boolean): Double {
+    val naturalEnd = pStart + pWaveDurationForPattern(pattern)
+    return if (constrainedByQrs && qrsOn - pStart > 58.0) naturalEnd.coerceAtMost(qrsOn - 18.0) else naturalEnd
 }
 
 private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
@@ -4026,7 +4123,11 @@ private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
         variablePr = state.variablePr.value,
         variableQrs = state.variableQrs.value,
         variableQt = state.variableQt.value,
-        variableMorphology = state.variableMorphology.value
+        variableMorphology = state.variableMorphology.value,
+        prSeriesMs = parseEcgSeries(state.prSeriesText.value),
+        rrSeriesMs = parseEcgSeries(state.rrSeriesText.value),
+        qrsSeriesMs = parseEcgSeries(state.qrsSeriesText.value),
+        qtSeriesMs = parseEcgSeries(state.qtSeriesText.value)
     )
 }
 
@@ -4095,6 +4196,27 @@ private fun NumericField(
         suffix = suffix?.let { { Text(it) } },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun SeriesField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier.width(300.dp),
+    suffix: String? = null
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        suffix = suffix?.let { { Text(it) } },
+        singleLine = false,
+        minLines = 1,
+        maxLines = 2,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
         modifier = modifier
     )
 }
