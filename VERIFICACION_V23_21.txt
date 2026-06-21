@@ -1,0 +1,5 @@
+VERIFICACION V23.21
+- Sombreado de criterios ajustado a eventos reales por latido.
+- Corrección de recorte temporal en ECG completo/áreas/irrigación.
+- P bloqueada, QRS caído, PR progresivo, pausas y RR variable ya no cubren toda la celda salvo cuando corresponde como banda didáctica.
+- Se incrementó visibilidad de criterios en ECG completo sin saturar la pantalla.

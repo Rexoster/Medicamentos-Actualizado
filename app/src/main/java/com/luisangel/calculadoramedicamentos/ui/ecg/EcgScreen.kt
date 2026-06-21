@@ -3838,18 +3838,29 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
     segmentStartMs: Double = 0.0,
     smallSquarePx: Float
 ) {
-    val leadMarkers = markers.filter { lead in it.leads }
+    val leadMarkers = markers.filter { marker ->
+        lead in marker.leads || (compactLabel && marker.isGlobalRhythmMarker())
+    }
     if (leadMarkers.isEmpty()) return
 
-    val baseline = topLeft.y + height * 0.56f
     val displayMs = displayMsOverride ?: ecgPreviewDisplayMs(model)
     val paperPxPerMs = ((ECG_PAPER_SPEED_MM_PER_SECOND / 1000.0) * smallSquarePx).toFloat()
     val segmentEndMs = segmentStartMs + displayMs
     fun xFor(globalMs: Double): Float = topLeft.x + ((globalMs - segmentStartMs).toFloat() * paperPxPerMs)
-    fun rectForTimes(startMs: Double, endMs: Double, yTop: Float, yBottom: Float): Pair<Offset, Size> {
-        val x0 = xFor(startMs).coerceIn(topLeft.x, topLeft.x + width)
-        val x1 = xFor(endMs).coerceIn(topLeft.x, topLeft.x + width)
-        return Offset(x0, topLeft.y + height * yTop) to Size((x1 - x0).coerceAtLeast(10f), height * (yBottom - yTop))
+    fun rectForTimesOrNull(
+        startMs: Double,
+        endMs: Double,
+        yTop: Float,
+        yBottom: Float,
+        minWidth: Float = if (compactLabel) 7f else 10f
+    ): Pair<Offset, Size>? {
+        val clippedStart = startMs.coerceAtLeast(segmentStartMs)
+        val clippedEnd = endMs.coerceAtMost(segmentEndMs)
+        if (clippedEnd <= clippedStart) return null
+        val x0 = xFor(clippedStart).coerceIn(topLeft.x, topLeft.x + width)
+        val x1 = xFor(clippedEnd).coerceIn(topLeft.x, topLeft.x + width)
+        if (x1 <= x0) return null
+        return Offset(x0, topLeft.y + height * yTop) to Size((x1 - x0).coerceAtLeast(minWidth), height * (yBottom - yTop))
     }
 
     val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
@@ -3863,16 +3874,23 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
 
     val boxes = mutableListOf<Triple<EcgCriterionMarker, Offset, Size>>()
     val occurrenceCounts = mutableMapOf<String, Int>()
+    val maxBoxes = if (compactLabel) 32 else 22
     fun canPlaceMarker(marker: EcgCriterionMarker, beatIndexValue: Int): Boolean {
         val target = marker.targetBeatModulo
         if (target != null && beatIndexValue % marker.targetBeatCycle != target) return false
-        val key = "${marker.label}|${marker.detail}|${marker.leads.joinToString { it.name }}"
+        val key = "${marker.label}|${marker.detail}|${marker.leads.joinToString { it.name }}|${lead.name}"
         val count = occurrenceCounts[key] ?: 0
-        if (count >= marker.maxOccurrences) return false
+        val occurrenceLimit = if (compactLabel && marker.isGlobalRhythmMarker()) {
+            marker.maxOccurrences.coerceAtLeast(2)
+        } else {
+            marker.maxOccurrences
+        }
+        if (count >= occurrenceLimit) return false
         occurrenceCounts[key] = count + 1
         return true
     }
-    while (beatStart < segmentEndMs + model.rrMs && boxes.size < 18) {
+
+    while (beatStart < segmentEndMs + model.rrMs && boxes.size < maxBoxes) {
         val rr = rrForBeat(model, beatIndex, irregularFactors)
         val isPvcBeat = model.pathologyPattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
         val isPacBeat = model.pathologyPattern == EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION && beatIndex % 4 == 1
@@ -3894,33 +3912,57 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
             model.pathologyPattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> beatStart + rr * 0.62
             else -> pStart + pr
         }
-        val pEnd = pEndForBeat(pStart, qrsOn, model.pathologyPattern, constrainedByQrs = !droppedQrs && !isPvcBeat && model.pathologyPattern != EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK)
+        val pEnd = pEndForBeat(
+            pStart,
+            qrsOn,
+            model.pathologyPattern,
+            constrainedByQrs = !droppedQrs && !isPvcBeat && model.pathologyPattern != EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK
+        )
         val qrsEnd = qrsOn + qrs
         val stEnd = qrsEnd + 115.0
         val qtEnd = qrsOn + qt
 
+        val markersForBeat = leadMarkers.filter { canPlaceMarker(it, beatIndex) }
         if (isSinusPause) {
-            leadMarkers.filter { it.region == EcgCriterionRegion.WHOLE_STRIP && canPlaceMarker(it, beatIndex) }.forEach { marker ->
-                val (o, s) = rectForTimes(beatStart, beatStart + rr, 0.18f, 0.84f)
-                boxes.add(Triple(marker, o, s))
+            markersForBeat.forEach { marker ->
+                val rect = when {
+                    marker.label.contains("Pausa", ignoreCase = true) || marker.detail.contains("pausa", ignoreCase = true) ->
+                        rectForTimesOrNull(beatStart, beatStart + rr, 0.22f, 0.78f)
+                    else -> rectForTimesOrNull(beatStart, beatStart + rr, 0.08f, 0.18f)
+                }
+                if (rect != null) boxes.add(Triple(marker, rect.first, rect.second))
             }
         } else {
-            leadMarkers.filter { canPlaceMarker(it, beatIndex) }.forEach { marker ->
-                val rect = when (marker.region) {
-                    EcgCriterionRegion.P_WAVE -> rectForTimes(pStart, pEnd, 0.26f, 0.74f)
-                    EcgCriterionRegion.PR_INTERVAL -> rectForTimes(pStart, qrsOn, 0.32f, 0.72f)
-                    EcgCriterionRegion.QRS_COMPLEX -> rectForTimes(qrsOn, qrsEnd, 0.10f, 0.86f)
-                    EcgCriterionRegion.ST_SEGMENT -> rectForTimes(qrsEnd, stEnd, 0.33f, 0.73f)
-                    EcgCriterionRegion.T_WAVE -> rectForTimes(stEnd, qtEnd, 0.18f, 0.78f)
-                    EcgCriterionRegion.QT_INTERVAL -> rectForTimes(qrsOn, qtEnd, 0.18f, 0.80f)
-                    EcgCriterionRegion.VOLTAGE_ZONE -> rectForTimes(qrsOn, qrsEnd, 0.08f, 0.90f)
-                    EcgCriterionRegion.WHOLE_STRIP -> if (droppedQrs) {
-                        rectForTimes(pStart, beatStart + rr, 0.18f, 0.84f)
-                    } else {
-                        rectForTimes(beatStart, beatStart + rr, 0.18f, 0.84f)
-                    }
+            markersForBeat.forEach { marker ->
+                val rect = when {
+                    marker.label.contains("P bloqueada", ignoreCase = true) || marker.detail.contains("sin QRS", ignoreCase = true) ->
+                        rectForTimesOrNull(pStart, pEnd, 0.24f, 0.74f)
+                    marker.label.contains("QRS ca", ignoreCase = true) || marker.detail.contains("QRS ca", ignoreCase = true) ->
+                        rectForTimesOrNull(qrsOn, qrsEnd, 0.18f, 0.82f)
+                    marker.label.contains("Relación", ignoreCase = true) || marker.label.contains("Wenckebach", ignoreCase = true) || marker.label.contains("2:1", ignoreCase = true) ->
+                        rectForTimesOrNull(beatStart, beatStart + rr, 0.06f, 0.18f)
+                    marker.label.contains("Disociación", ignoreCase = true) || marker.detail.contains("no guardan relación", ignoreCase = true) ->
+                        rectForTimesOrNull(beatStart, beatStart + rr, 0.06f, 0.22f)
+                    marker.label.contains("RR", ignoreCase = true) || marker.detail.contains("RR", ignoreCase = true) ->
+                        rectForTimesOrNull(beatStart, beatStart + rr, 0.78f, 0.92f)
+                    marker.region == EcgCriterionRegion.P_WAVE ->
+                        rectForTimesOrNull(pStart, pEnd, 0.25f, 0.74f)
+                    marker.region == EcgCriterionRegion.PR_INTERVAL ->
+                        rectForTimesOrNull(pStart, qrsOn, 0.31f, 0.72f)
+                    marker.region == EcgCriterionRegion.QRS_COMPLEX ->
+                        rectForTimesOrNull(qrsOn, qrsEnd, 0.10f, 0.86f)
+                    marker.region == EcgCriterionRegion.ST_SEGMENT ->
+                        rectForTimesOrNull(qrsEnd, stEnd, 0.33f, 0.73f)
+                    marker.region == EcgCriterionRegion.T_WAVE ->
+                        rectForTimesOrNull(stEnd, qtEnd, 0.18f, 0.78f)
+                    marker.region == EcgCriterionRegion.QT_INTERVAL ->
+                        rectForTimesOrNull(qrsOn, qtEnd, 0.18f, 0.80f)
+                    marker.region == EcgCriterionRegion.VOLTAGE_ZONE ->
+                        rectForTimesOrNull(qrsOn, qrsEnd, 0.08f, 0.90f)
+                    marker.region == EcgCriterionRegion.WHOLE_STRIP ->
+                        rectForTimesOrNull(beatStart, beatStart + rr, 0.08f, 0.22f)
                 }
-                boxes.add(Triple(marker, rect.first, rect.second))
+                if (rect != null) boxes.add(Triple(marker, rect.first, rect.second))
             }
         }
 
@@ -3934,31 +3976,46 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
     }
 
     boxes.forEachIndexed { index, (marker, offset, size) ->
-        val shifted = Offset(offset.x, offset.y + (index % 2) * if (compactLabel) 7f else 10f)
+        val shifted = Offset(offset.x, offset.y + (index % 3) * if (compactLabel) 5f else 8f)
         drawRect(
-            color = marker.tint.copy(alpha = 0.13f),
+            color = marker.tint.copy(alpha = if (compactLabel) 0.11f else 0.13f),
             topLeft = shifted,
             size = size
         )
         drawRect(
-            color = marker.tint.copy(alpha = 0.80f),
+            color = marker.tint.copy(alpha = 0.78f),
             topLeft = shifted,
             size = size,
-            style = Stroke(width = if (compactLabel) 1.5f else 2.0f)
+            style = Stroke(width = if (compactLabel) 1.35f else 2.0f)
         )
         val paint = android.graphics.Paint().apply {
             color = marker.tint.toArgb()
-            textSize = if (compactLabel) 15f else 18f
+            textSize = if (compactLabel) 13f else 18f
             isAntiAlias = true
             isFakeBoldText = true
         }
+        val labelText = if (compactLabel && marker.label.length > 18) marker.label.take(17) + "…" else marker.label
         drawContext.canvas.nativeCanvas.drawText(
-            marker.label,
+            labelText,
             shifted.x + 4f,
-            (shifted.y - 4f).coerceAtLeast(topLeft.y + 15f),
+            (shifted.y - 4f).coerceAtLeast(topLeft.y + 13f),
             paint
         )
     }
+}
+
+private fun EcgCriterionMarker.isGlobalRhythmMarker(): Boolean {
+    val text = "$label $detail"
+    return region == EcgCriterionRegion.WHOLE_STRIP ||
+        text.contains("PR", ignoreCase = true) ||
+        text.contains("P bloqueada", ignoreCase = true) ||
+        text.contains("QRS ca", ignoreCase = true) ||
+        text.contains("RR", ignoreCase = true) ||
+        text.contains("Pausa", ignoreCase = true) ||
+        text.contains("Wenckebach", ignoreCase = true) ||
+        text.contains("Disociación", ignoreCase = true) ||
+        text.contains("2:1", ignoreCase = true) ||
+        text.contains("Conducción", ignoreCase = true)
 }
 
 private fun leadProjection(axisDegrees: Double?, lead: EcgLead): Double {
