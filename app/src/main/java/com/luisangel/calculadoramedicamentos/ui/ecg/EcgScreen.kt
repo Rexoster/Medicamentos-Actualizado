@@ -593,7 +593,6 @@ private fun pathologyDiagnosticCriteria(pattern: EcgPathologyPattern): List<Stri
 }
 
 private val twelveLeadLayout = listOf(
-private val twelveLeadLayout = listOf(
     listOf(EcgLead.DI, EcgLead.AVR, EcgLead.V1, EcgLead.V4),
     listOf(EcgLead.DII, EcgLead.AVL, EcgLead.V2, EcgLead.V5),
     listOf(EcgLead.DIII, EcgLead.AVF, EcgLead.V3, EcgLead.V6)
@@ -1687,7 +1686,7 @@ private val ecgPathologyExamples = listOf(
         description = "FC 75 lpm, PR 160 ms, QRS 90 ms y QT 390 ms. Útil como punto de partida para comparar cambios.",
         pattern = EcgPathologyPattern.NORMAL_SINUS,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part IV; ECG basics."
+        references = "UNAM Electrocardiografía Clínica 2024; AHA/ACCF/HRS Part IV."
     ),
     EcgPathologyExample(
         id = "pvc",
@@ -1696,7 +1695,7 @@ private val ecgPathologyExamples = listOf(
         description = "Simula latidos ventriculares prematuros: QRS ancho, sin P previa clara y pausa compensadora. Se cargan QRS 160 ms y ritmo irregular.",
         pattern = EcgPathologyPattern.PVC,
         focusLead = EcgLead.DII,
-        references = "LITFL ECG Library: premature ventricular complexes; NCBI/StatPearls arrhythmias."
+        references = "AHA/ACCF/HRS rhythm interpretation; StatPearls/NCBI premature ventricular complexes; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "afib",
@@ -1705,7 +1704,7 @@ private val ecgPathologyExamples = listOf(
         description = "Carga ritmo no sinusal e irregular, con FC 125 lpm y QRS estrecho para revisar la tira y el cálculo de frecuencia.",
         pattern = EcgPathologyPattern.ATRIAL_FIBRILLATION,
         focusLead = EcgLead.DII,
-        references = "AHA/ACC/HRS AF guidance; ECG rhythm basics."
+        references = "ACC/AHA/HRS AF guidance; AHA/ACCF/HRS rhythm interpretation; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "first_degree_avb",
@@ -1714,7 +1713,7 @@ private val ecgPathologyExamples = listOf(
         description = "Conducción 1:1 con PR de 240 ms. Sirve para ver cómo se desplaza la onda P respecto al QRS.",
         pattern = EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part III conduction disturbances."
+        references = "AHA/ACCF/HRS Part III conduction disturbances; ACC/AHA/HRS 2018 bradycardia/conduction guideline."
     ),
     EcgPathologyExample(
         id = "second_degree_2to1",
@@ -1723,7 +1722,7 @@ private val ecgPathologyExamples = listOf(
         description = "Muestra alternancia de latidos conducidos y P bloqueada. Ayuda a comparar bloqueos AV cuando no puede distinguirse Mobitz I vs II con un trazo corto.",
         pattern = EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part III; AV block patterns."
+        references = "ACC/AHA/HRS 2018 bradycardia/conduction guideline; AHA/ACCF/HRS Part III; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "left_atrial_enlargement",
@@ -1732,7 +1731,7 @@ private val ecgPathologyExamples = listOf(
         description = "Onda P ancha y mellada en DII, con morfología de dos montañas. Útil para entrenar la forma de la onda P, no solo intervalos.",
         pattern = EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS chamber enlargement criteria."
+        references = "AHA/ACCF/HRS Part V chamber hypertrophy/enlargement; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "right_atrial_enlargement",
@@ -1741,7 +1740,7 @@ private val ecgPathologyExamples = listOf(
         description = "Onda P alta y picuda en derivaciones inferiores. Se representa con P estrecha y puntiaguda.",
         pattern = EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS chamber enlargement criteria."
+        references = "AHA/ACCF/HRS Part V chamber hypertrophy/enlargement; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "biatrial_enlargement",
@@ -1750,7 +1749,7 @@ private val ecgPathologyExamples = listOf(
         description = "Combina elementos de crecimiento auricular derecho e izquierdo: P alta con duración/muesca aumentada.",
         pattern = EcgPathologyPattern.BIATRIAL_ENLARGEMENT,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS chamber enlargement criteria."
+        references = "AHA/ACCF/HRS Part V chamber hypertrophy/enlargement; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "pac",
@@ -1786,7 +1785,7 @@ private val ecgPathologyExamples = listOf(
         description = "PR progresivamente más largo hasta una P bloqueada. Útil para comparar el PR y el latido no conducido.",
         pattern = EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part III; AV block patterns."
+        references = "ACC/AHA/HRS 2018 bradycardia/conduction guideline; AHA/ACCF/HRS Part III; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "mobitz_ii",
@@ -1795,7 +1794,7 @@ private val ecgPathologyExamples = listOf(
         description = "PR constante en latidos conducidos con caída súbita de QRS. Se representa como bloqueo 3:1/4:1 didáctico.",
         pattern = EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part III; Mobitz II."
+        references = "ACC/AHA/HRS 2018 bradycardia/conduction guideline; AHA/ACCF/HRS Part III."
     ),
     EcgPathologyExample(
         id = "third_degree_avb",
@@ -1804,7 +1803,7 @@ private val ecgPathologyExamples = listOf(
         description = "Ondas P y QRS independientes, con ritmo de escape lento. Se usa para practicar reconocimiento de disociación AV.",
         pattern = EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part III; complete AV block."
+        references = "ACC/AHA/HRS 2018 bradycardia/conduction guideline; AHA/ACCF/HRS Part III."
     ),
     EcgPathologyExample(
         id = "sinus_brady",
@@ -1813,7 +1812,7 @@ private val ecgPathologyExamples = listOf(
         description = "P sinusal antes de cada QRS con frecuencia baja y RR largo.",
         pattern = EcgPathologyPattern.SINUS_BRADYCARDIA,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS rhythm interpretation."
+        references = "AHA/ACCF/HRS rhythm interpretation; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "sinus_tachy",
@@ -1822,7 +1821,7 @@ private val ecgPathologyExamples = listOf(
         description = "P sinusal antes de cada QRS con frecuencia elevada, útil para compararla con TSV.",
         pattern = EcgPathologyPattern.SINUS_TACHYCARDIA,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS rhythm interpretation."
+        references = "AHA/ACCF/HRS rhythm interpretation; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "atrial_flutter",
@@ -1831,7 +1830,7 @@ private val ecgPathologyExamples = listOf(
         description = "Actividad auricular en serrucho, mejor vista en derivaciones inferiores.",
         pattern = EcgPathologyPattern.ATRIAL_FLUTTER,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS rhythm interpretation; atrial flutter ECG."
+        references = "AHA/ACCF/HRS rhythm interpretation; ACC/AHA/HRS arrhythmia guidance; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "svt",
@@ -1840,7 +1839,7 @@ private val ecgPathologyExamples = listOf(
         description = "Taquicardia regular rápida con QRS estrecho y P no evidente o retrógrada.",
         pattern = EcgPathologyPattern.SVT,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS rhythm interpretation; SVT."
+        references = "AHA/ACCF/HRS rhythm interpretation; ACC/AHA/HRS arrhythmia guidance; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "vt",
@@ -1849,7 +1848,7 @@ private val ecgPathologyExamples = listOf(
         description = "Taquicardia regular de complejo ancho. Se representa como patrón monomórfico didáctico.",
         pattern = EcgPathologyPattern.VENTRICULAR_TACHYCARDIA,
         focusLead = EcgLead.V1,
-        references = "AHA/ACCF/HRS rhythm interpretation; wide complex tachycardia."
+        references = "AHA/ACCF/HRS rhythm interpretation; ACC/AHA/HRS ventricular arrhythmia guidance; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "wpw",
@@ -1858,7 +1857,7 @@ private val ecgPathologyExamples = listOf(
         description = "PR corto, onda delta y QRS algo ancho por preexcitación.",
         pattern = EcgPathologyPattern.WOLFF_PARKINSON_WHITE,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part III; preexcitation/WPW."
+        references = "AHA/ACCF/HRS Part III conduction/preexcitation criteria; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "lvh",
@@ -1867,7 +1866,7 @@ private val ecgPathologyExamples = listOf(
         description = "Carga S en V1 y R en V5/V6 altos para activar Sokolow-Lyon y Cornell. El trazo aumenta voltaje de forma didáctica.",
         pattern = EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY,
         focusLead = EcgLead.V5,
-        references = "AHA/ACCF/HRS Part V; Sokolow-Lyon/Cornell."
+        references = "AHA/ACCF/HRS Part V; Sokolow-Lyon/Cornell voltage criteria."
     ),
     EcgPathologyExample(
         id = "rvh",
@@ -1876,7 +1875,7 @@ private val ecgPathologyExamples = listOf(
         description = "Carga eje derecho y morfología orientativa con predominio anterior derecho, útil para comparar V1 y derivaciones inferiores.",
         pattern = EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY,
         focusLead = EcgLead.V1,
-        references = "AHA/ACCF/HRS Part V chamber hypertrophy."
+        references = "AHA/ACCF/HRS Part V chamber hypertrophy; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "rbbb",
@@ -1885,7 +1884,7 @@ private val ecgPathologyExamples = listOf(
         description = "QRS 140 ms, patrón terminal derecho. El ejemplo se aprecia mejor en V1 y V6.",
         pattern = EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK,
         focusLead = EcgLead.V1,
-        references = "AHA/ACCF/HRS Part III; bundle branch block criteria."
+        references = "AHA/ACCF/HRS Part III intraventricular conduction disturbances; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "lbbb",
@@ -1894,7 +1893,7 @@ private val ecgPathologyExamples = listOf(
         description = "QRS 150 ms, V1 negativo y laterales con R ancha/notchada de manera didáctica.",
         pattern = EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK,
         focusLead = EcgLead.V6,
-        references = "AHA/ACCF/HRS Part III; LBBB criteria."
+        references = "AHA/ACCF/HRS Part III intraventricular conduction disturbances; UNAM ECG clínica."
     ),
     EcgPathologyExample(
         id = "anterior_stemi",
@@ -1903,7 +1902,7 @@ private val ecgPathologyExamples = listOf(
         description = "Carga elevación del ST de 3 mm en precordiales anteriores y permite revisar criterios ST por edad/sexo.",
         pattern = EcgPathologyPattern.ANTERIOR_STEMI,
         focusLead = EcgLead.V3,
-        references = "Fourth Universal Definition of MI; AHA/ACCF/HRS Part VI."
+        references = "Fourth Universal Definition of MI 2018; AHA/ACCF/HRS Part VI acute ischemia/infarction."
     ),
     EcgPathologyExample(
         id = "inferior_stemi",
@@ -1912,7 +1911,7 @@ private val ecgPathologyExamples = listOf(
         description = "Carga elevación del ST inferior y descenso recíproco orientativo en lateral alta.",
         pattern = EcgPathologyPattern.INFERIOR_STEMI,
         focusLead = EcgLead.DIII,
-        references = "Fourth Universal Definition of MI; STEMI territories."
+        references = "Fourth Universal Definition of MI 2018; AHA/ACCF/HRS Part VI acute ischemia/infarction."
     ),
     EcgPathologyExample(
         id = "hyperkalemia",
@@ -1921,7 +1920,7 @@ private val ecgPathologyExamples = listOf(
         description = "Carga QRS 130 ms, QT más corto y ondas T altas/picudas. No estima potasio sérico, solo representa patrón educativo.",
         pattern = EcgPathologyPattern.HYPERKALEMIA,
         focusLead = EcgLead.V4,
-        references = "NCBI/StatPearls Hyperkalemia; ECG electrolyte patterns."
+        references = "KDIGO dyskalemia consensus; AHA/ACCF/HRS Part IV ST-T/QT; StatPearls/NCBI hyperkalemia."
     ),
     EcgPathologyExample(
         id = "long_qt",
@@ -1930,7 +1929,7 @@ private val ecgPathologyExamples = listOf(
         description = "Carga QT 520 ms con FC 70 lpm para revisar QTc por Bazett y Fridericia.",
         pattern = EcgPathologyPattern.LONG_QT,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part IV; QT interval measurement."
+        references = "AHA/ACCF/HRS Part IV ST segment, T waves, QT interval."
     ),
     EcgPathologyExample(
         id = "pericarditis",
@@ -1939,7 +1938,7 @@ private val ecgPathologyExamples = listOf(
         description = "Elevación cóncava difusa del ST y depresión del PR de forma didáctica.",
         pattern = EcgPathologyPattern.PERICARDITIS,
         focusLead = EcgLead.DII,
-        references = "AHA/ACCF/HRS Part VI; pericarditis ECG pattern."
+        references = "ESC pericardial disease guidance; AHA/ACCF/HRS ST segment differential."
     ),
     EcgPathologyExample(
         id = "hypokalemia",
@@ -1948,7 +1947,7 @@ private val ecgPathologyExamples = listOf(
         description = "Aplana T y prolonga la repolarización aparente con onda U didáctica.",
         pattern = EcgPathologyPattern.HYPOKALEMIA,
         focusLead = EcgLead.V5,
-        references = "ECG electrolyte patterns; hypokalemia."
+        references = "AHA/ACCF/HRS Part IV ST-T/QT; StatPearls/NCBI hypokalemia ECG changes."
     ),
     EcgPathologyExample(
         id = "lateral_stemi",
@@ -1957,7 +1956,7 @@ private val ecgPathologyExamples = listOf(
         description = "Elevación del ST lateral con cambios recíprocos inferiores de forma orientativa.",
         pattern = EcgPathologyPattern.LATERAL_STEMI,
         focusLead = EcgLead.V5,
-        references = "Fourth Universal Definition of MI; STEMI territories."
+        references = "Fourth Universal Definition of MI 2018; AHA/ACCF/HRS Part VI acute ischemia/infarction."
     ),
     EcgPathologyExample(
         id = "posterior_stemi",
@@ -1966,7 +1965,7 @@ private val ecgPathologyExamples = listOf(
         description = "Descenso de ST en V1-V3 y R anterior como espejo de lesión posterior.",
         pattern = EcgPathologyPattern.POSTERIOR_STEMI,
         focusLead = EcgLead.V2,
-        references = "Fourth Universal Definition of MI; posterior MI ECG."
+        references = "Fourth Universal Definition of MI 2018; AHA/ACCF/HRS Part VI; posterior leads V7-V9."
     )
 )
 

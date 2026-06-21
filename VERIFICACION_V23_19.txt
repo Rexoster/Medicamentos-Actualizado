@@ -1,0 +1,6 @@
+VERIFICACION V23.19
+- Actualizada bibliografía ECG.
+- Retirada referencia a Wikipedia.
+- Registrada playlist UNAM como fuente docente.
+- Referencias por patología reforzadas con AHA/ACCF/HRS, ACC/AHA/HRS, Fourth Universal Definition of MI, NCBI/StatPearls, KDIGO y ESC.
+- Corregida duplicación accidental de twelveLeadLayout.
