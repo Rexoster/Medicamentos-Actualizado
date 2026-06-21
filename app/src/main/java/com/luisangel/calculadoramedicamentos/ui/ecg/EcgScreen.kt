@@ -110,6 +110,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 private const val ECG_PAPER_SPEED_MM_PER_SECOND = 25.0
 private const val ECG_SMALL_SQUARE_DP = 5f
@@ -3622,6 +3623,7 @@ private fun DrawScope.drawLeadTrace(
         beatStart += rr
         beatIndex += 1
     }
+    val atrialOverlayPath = Path()
     val path = Path().apply {
         moveTo(topLeft.x, baseline)
         while (beatStart < segmentEndMs + model.rrMs) {
@@ -3698,18 +3700,30 @@ private fun DrawScope.drawLeadTrace(
                     }
                 }
 
-                if (pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION) {
-                    lineTo(xFor(qrsOn - 52.0), yFor(0.25 * kotlin.math.sin(beatIndex.toDouble() * 1.7)))
-                    lineTo(xFor(qrsOn - 28.0), yFor(-0.18 * kotlin.math.cos(beatIndex.toDouble() * 1.4)))
-                }
-                if (pattern == EcgPathologyPattern.ATRIAL_FLUTTER) {
-                    val flutterStart = qrsOn - 220.0
-                    repeat(5) { flutterIndex ->
-                        val base = flutterStart + flutterIndex * 48.0
-                        lineTo(xFor(base), yFor(0.0))
-                        lineTo(xFor(base + 22.0), yFor(1.35 * qrsSign))
-                        lineTo(xFor(base + 48.0), yFor(0.0))
-                    }
+                when (pattern) {
+                    EcgPathologyPattern.ATRIAL_FIBRILLATION -> appendAtrialFibrillationActivity(
+                        path = atrialOverlayPath,
+                        xFor = ::xFor,
+                        yFor = ::yFor,
+                        lead = lead,
+                        beatStart = beatStart,
+                        rr = rr,
+                        qrsOn = qrsOn,
+                        qrsEnd = qrsEnd,
+                        beatIndex = beatIndex
+                    )
+                    EcgPathologyPattern.ATRIAL_FLUTTER -> appendFlutterActivity(
+                        path = atrialOverlayPath,
+                        xFor = ::xFor,
+                        yFor = ::yFor,
+                        lead = lead,
+                        beatStart = beatStart,
+                        rr = rr,
+                        qrsOn = qrsOn,
+                        qrsEnd = qrsEnd,
+                        beatIndex = beatIndex
+                    )
+                    else -> Unit
                 }
                 if (pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK) {
                     val pBase = beatStart + (beatIndex % 2) * 210.0 + 55.0
@@ -3805,6 +3819,13 @@ private fun DrawScope.drawLeadTrace(
         right = topLeft.x + width,
         bottom = topLeft.y + height
     ) {
+        if (pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION || pattern == EcgPathologyPattern.ATRIAL_FLUTTER) {
+            drawPath(
+                path = atrialOverlayPath,
+                color = traceColor.copy(alpha = 0.82f),
+                style = Stroke(width = if (compactLabel) 1.45f else 1.95f, cap = StrokeCap.Round)
+            )
+        }
         drawPath(path = path, color = traceColor, style = Stroke(width = if (compactLabel) 2.45f else 3.2f, cap = StrokeCap.Round))
     }
 
@@ -3873,8 +3894,9 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
     }
 
     val boxes = mutableListOf<Triple<EcgCriterionMarker, Offset, Size>>()
+    var previousRPeak: Double? = null
     val occurrenceCounts = mutableMapOf<String, Int>()
-    val maxBoxes = if (compactLabel) 32 else 22
+    val maxBoxes = if (compactLabel) 42 else 24
     fun canPlaceMarker(marker: EcgCriterionMarker, beatIndexValue: Int): Boolean {
         val target = marker.targetBeatModulo
         if (target != null && beatIndexValue % marker.targetBeatCycle != target) return false
@@ -3919,6 +3941,7 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
             constrainedByQrs = !droppedQrs && !isPvcBeat && model.pathologyPattern != EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK
         )
         val qrsEnd = qrsOn + qrs
+        val rPeak = qrsOn + qrs * 0.45
         val stEnd = qrsEnd + 115.0
         val qtEnd = qrsOn + qt
 
@@ -3935,6 +3958,14 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
         } else {
             markersForBeat.forEach { marker ->
                 val rect = when {
+                    model.pathologyPattern == EcgPathologyPattern.ATRIAL_FIBRILLATION && marker.label.contains("Sin P", ignoreCase = true) ->
+                        rectForTimesOrNull(beatStart + 22.0, beatStart + rr - 22.0, 0.40f, 0.62f)
+                    model.pathologyPattern == EcgPathologyPattern.ATRIAL_FIBRILLATION && (marker.label.contains("RR", ignoreCase = true) || marker.detail.contains("RR", ignoreCase = true)) -> {
+                        val rrStart = previousRPeak ?: (rPeak - rr * 0.82)
+                        rectForTimesOrNull(rrStart, rPeak, 0.78f, 0.90f)
+                    }
+                    model.pathologyPattern == EcgPathologyPattern.ATRIAL_FLUTTER && marker.label.contains("Ondas F", ignoreCase = true) ->
+                        rectForTimesOrNull(qrsEnd + 26.0, beatStart + rr - 24.0, 0.40f, 0.64f)
                     marker.label.contains("P bloqueada", ignoreCase = true) || marker.detail.contains("sin QRS", ignoreCase = true) ->
                         rectForTimesOrNull(pStart, pEnd, 0.24f, 0.74f)
                     marker.label.contains("QRS ca", ignoreCase = true) || marker.detail.contains("QRS ca", ignoreCase = true) ->
@@ -3943,8 +3974,10 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
                         rectForTimesOrNull(beatStart, beatStart + rr, 0.06f, 0.18f)
                     marker.label.contains("Disociación", ignoreCase = true) || marker.detail.contains("no guardan relación", ignoreCase = true) ->
                         rectForTimesOrNull(beatStart, beatStart + rr, 0.06f, 0.22f)
-                    marker.label.contains("RR", ignoreCase = true) || marker.detail.contains("RR", ignoreCase = true) ->
-                        rectForTimesOrNull(beatStart, beatStart + rr, 0.78f, 0.92f)
+                    marker.label.contains("RR", ignoreCase = true) || marker.detail.contains("RR", ignoreCase = true) -> {
+                        val rrStart = previousRPeak ?: beatStart
+                        rectForTimesOrNull(rrStart, rPeak, 0.78f, 0.90f)
+                    }
                     marker.region == EcgCriterionRegion.P_WAVE ->
                         rectForTimesOrNull(pStart, pEnd, 0.25f, 0.74f)
                     marker.region == EcgCriterionRegion.PR_INTERVAL ->
@@ -3967,6 +4000,9 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
             }
         }
 
+        if (!isSinusPause && !droppedQrs) {
+            previousRPeak = rPeak
+        }
         beatStart += when {
             isSinusPause -> rr
             isPvcBeat -> rr * 1.35
@@ -4050,6 +4086,90 @@ private fun ecgStForLead(model: EcgPreviewModel, lead: EcgLead): Double = when (
         else -> model.stMm.takeIf { it != 0.0 } ?: 1.5
     }
     else -> model.stMm
+}
+
+private fun appendAtrialFibrillationActivity(
+    path: Path,
+    xFor: (Double) -> Float,
+    yFor: (Double) -> Float,
+    lead: EcgLead,
+    beatStart: Double,
+    rr: Double,
+    qrsOn: Double,
+    qrsEnd: Double,
+    beatIndex: Int
+) {
+    val amplitude = when (lead) {
+        EcgLead.V1 -> 0.85
+        EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> 0.60
+        else -> 0.40
+    }
+    val start = beatStart + 12.0
+    val end = beatStart + rr - 12.0
+    var t = start
+    var drawing = false
+    while (t <= end) {
+        val inQrsWindow = t in (qrsOn - 16.0)..(qrsEnd + 18.0)
+        if (inQrsWindow) {
+            drawing = false
+            t += 18.0
+            continue
+        }
+        val phase = (t / 22.0) + beatIndex * 0.65 + lead.ordinal * 0.35
+        val value = amplitude * (0.62 * sin(phase) + 0.38 * sin(phase * 1.85 + 0.7))
+        if (!drawing) {
+            path.moveTo(xFor(t), yFor(value))
+            drawing = true
+        } else {
+            path.lineTo(xFor(t), yFor(value))
+        }
+        t += 18.0
+    }
+}
+
+private fun appendFlutterActivity(
+    path: Path,
+    xFor: (Double) -> Float,
+    yFor: (Double) -> Float,
+    lead: EcgLead,
+    beatStart: Double,
+    rr: Double,
+    qrsOn: Double,
+    qrsEnd: Double,
+    beatIndex: Int
+) {
+    val amplitude = when (lead) {
+        EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> 1.15
+        EcgLead.V1 -> 0.95
+        else -> 0.55
+    }
+    val period = 200.0
+    val start = beatStart + 8.0
+    val end = beatStart + rr - 8.0
+    var t = start
+    var drawing = false
+    while (t <= end) {
+        val inQrsWindow = t in (qrsOn - 16.0)..(qrsEnd + 18.0)
+        if (inQrsWindow) {
+            drawing = false
+            t += 12.0
+            continue
+        }
+        val phase = (((t - beatStart) + beatIndex * 18.0) % period) / period
+        val saw = when {
+            phase < 0.74 -> -0.30 + (phase / 0.74) * 1.30
+            else -> 1.00 - ((phase - 0.74) / 0.26) * 1.55
+        }
+        val sign = if (lead == EcgLead.V1) -1.0 else 1.0
+        val value = amplitude * saw * sign
+        if (!drawing) {
+            path.moveTo(xFor(t), yFor(value))
+            drawing = true
+        } else {
+            path.lineTo(xFor(t), yFor(value))
+        }
+        t += 14.0
+    }
 }
 
 private fun parseEcgSeries(raw: String): List<Double> = raw

@@ -1,0 +1,10 @@
+VERIFICACION V23.23
+
+- Se actualizó VERSION_CODE a 59
+- Se actualizó VERSION_NAME a 3.16.23-native
+- Se corrigió dibujo de actividad auricular en fibrilación auricular
+- Se corrigió dibujo de ondas F en flutter auricular
+- Se corrigió colocación de sombreado para RR irregular
+- Se aumentó el número máximo de criterios visibles en vistas compactas
+
+Nota: la compilación no pudo ejecutarse en este entorno porque el wrapper intenta descargar Gradle 8.11.1 y la sesión no tiene acceso de red.
