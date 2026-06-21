@@ -1,0 +1,13 @@
+VERIFICACION V23.17
+
+- Menú compacto de patologías ECG: agregado.
+- Analizador con PR/QRS/QT/morfología variable: agregado.
+- Mobitz I con PR progresivo y P bloqueada: agregado.
+- Mobitz II con PR constante y QRS caído: agregado.
+- BAV 2:1: agregado.
+- P mitrale, P pulmonale y crecimiento biauricular: agregados.
+- Marcadores calculados por tiempos del latido: corregido.
+- Comparación normal vs patología: conservada.
+- Zoom, áreas, irrigación y ECG completo: conservado.
+
+Gradle no se pudo ejecutar completo en este entorno por descarga de Gradle sin internet.

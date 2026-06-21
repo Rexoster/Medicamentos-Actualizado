@@ -181,6 +181,13 @@ private enum class EcgPathologyPattern(
     PVC("Extrasístole ventricular", "Latido prematuro de QRS ancho, sin P previa clara y con pausa compensadora en la tira."),
     ATRIAL_FIBRILLATION("Fibrilación auricular", "Ritmo irregularmente irregular, sin ondas P organizadas y QRS habitualmente estrecho."),
     FIRST_DEGREE_AV_BLOCK("BAV de primer grado", "PR prolongado con conducción 1:1 entre P y QRS."),
+    SECOND_DEGREE_TWO_TO_ONE("BAV 2:1", "Una P conducida y otra bloqueada, útil cuando no se distingue Mobitz I vs II."),
+    LEFT_ATRIAL_ENLARGEMENT("Crecimiento auricular izquierdo", "P mitrale: onda P ancha y mellada en DII, con componente terminal negativo en V1."),
+    RIGHT_ATRIAL_ENLARGEMENT("Crecimiento auricular derecho", "P pulmonale: onda P alta y picuda en derivaciones inferiores."),
+    BIATRIAL_ENLARGEMENT("Crecimiento biauricular", "Combinación didáctica de P alta y mellada."),
+    PREMATURE_ATRIAL_CONTRACTION("Extrasístole auricular", "Latido auricular prematuro con P adelantada y QRS estrecho."),
+    JUNCTIONAL_RHYTHM("Ritmo nodal", "QRS estrecho con P ausente o retrógrada cerca del QRS."),
+    SINUS_PAUSE("Pausa sinusal", "Pausa súbita sin P ni QRS durante un intervalo prolongado."),
     LEFT_VENTRICULAR_HYPERTROPHY("Crecimiento ventricular izquierdo", "Voltajes aumentados y posible repolarización secundaria; se cargan criterios de Sokolow-Lyon/Cornell."),
     RIGHT_VENTRICULAR_HYPERTROPHY("Crecimiento ventricular derecho", "Eje derecho y predominio de R en V1 con transición precordial alterada de forma didáctica."),
     RIGHT_BUNDLE_BRANCH_BLOCK("Bloqueo de rama derecha", "QRS ancho, patrón rSR' en V1 y S terminal ancha en DI/V6."),
@@ -260,7 +267,11 @@ private data class EcgSharedInputState(
     val axisMethodName: MutableState<String>,
     val axisFirstText: MutableState<String>,
     val axisSecondText: MutableState<String>,
-    val pathologyPatternName: MutableState<String>
+    val pathologyPatternName: MutableState<String>,
+    val variablePr: MutableState<Boolean>,
+    val variableQrs: MutableState<Boolean>,
+    val variableQt: MutableState<Boolean>,
+    val variableMorphology: MutableState<Boolean>
 )
 
 private data class EcgPreviewModel(
@@ -278,7 +289,11 @@ private data class EcgPreviewModel(
     val rhythmRegular: Boolean,
     val lvhPositive: Boolean,
     val pathologyPattern: EcgPathologyPattern,
-    val sourceNote: String
+    val sourceNote: String,
+    val variablePr: Boolean,
+    val variableQrs: Boolean,
+    val variableQt: Boolean,
+    val variableMorphology: Boolean
 )
 
 private enum class EcgPreviewMode(val label: String, val description: String) {
@@ -377,6 +392,32 @@ private fun pathologyCriteria(pattern: EcgPathologyPattern): List<EcgCriterionMa
     )
     EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK -> listOf(
         EcgCriterionMarker("PR prolongado", "PR > 200 ms", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> listOf(
+        EcgCriterionMarker("P conducida", "Una P conduce a QRS", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0)),
+        EcgCriterionMarker("P bloqueada", "La siguiente P no tiene QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
+    )
+    EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> listOf(
+        EcgCriterionMarker("P mitrale", "P ancha y mellada en DII", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A)),
+        EcgCriterionMarker("Terminal negativa", "Componente terminal negativo en V1", setOf(EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> listOf(
+        EcgCriterionMarker("P pulmonale", "P alta y picuda inferior", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00))
+    )
+    EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> listOf(
+        EcgCriterionMarker("P alta", "Componente derecho aumentado", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00)),
+        EcgCriterionMarker("P mellada", "Componente izquierdo prolongado", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION -> listOf(
+        EcgCriterionMarker("P prematura", "P adelantada y de forma distinta", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
+        EcgCriterionMarker("QRS estrecho", "QRS sigue siendo estrecho", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
+    )
+    EcgPathologyPattern.JUNCTIONAL_RHYTHM -> listOf(
+        EcgCriterionMarker("P retrógrada", "P invertida o pegada al QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A)),
+        EcgCriterionMarker("QRS estrecho", "Escape nodal con QRS estrecho", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
+    )
+    EcgPathologyPattern.SINUS_PAUSE -> listOf(
+        EcgCriterionMarker("Pausa", "Intervalo sin P ni QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
     )
     EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> listOf(
         EcgCriterionMarker("S profunda", "S en V1 elevada", setOf(EcgLead.V1), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF2E7D32)),
@@ -538,7 +579,11 @@ private fun rememberEcgSharedInputState(): EcgSharedInputState = EcgSharedInputS
     axisMethodName = rememberSaveable { mutableStateOf(EcgAxisMethod.LEAD_I_AVF.name) },
     axisFirstText = rememberSaveable { mutableStateOf("") },
     axisSecondText = rememberSaveable { mutableStateOf("") },
-    pathologyPatternName = rememberSaveable { mutableStateOf(EcgPathologyPattern.NORMAL_SINUS.name) }
+    pathologyPatternName = rememberSaveable { mutableStateOf(EcgPathologyPattern.NORMAL_SINUS.name) },
+    variablePr = rememberSaveable { mutableStateOf(false) },
+    variableQrs = rememberSaveable { mutableStateOf(false) },
+    variableQt = rememberSaveable { mutableStateOf(false) },
+    variableMorphology = rememberSaveable { mutableStateOf(false) }
 )
 
 @Composable
@@ -1308,6 +1353,17 @@ private fun EcgAnalyzerContent(state: EcgSharedInputState) {
         }
         CheckRow("Ritmo sinusal", state.sinusRhythm.value) { state.sinusRhythm.value = it }
         CheckRow("Ritmo regular", state.regularRhythm.value) { state.regularRhythm.value = it }
+        HorizontalDivider()
+        Text(
+            "Variabilidad para ECG didáctico",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        CheckRow("PR variable por latido", state.variablePr.value) { state.variablePr.value = it }
+        CheckRow("QRS variable por latido", state.variableQrs.value) { state.variableQrs.value = it }
+        CheckRow("QT/ST-T variable por latido", state.variableQt.value) { state.variableQt.value = it }
+        CheckRow("Morfología variable de ondas", state.variableMorphology.value) { state.variableMorphology.value = it }
     }
 
     EcgCard(
@@ -1573,6 +1629,69 @@ private val ecgPathologyExamples = listOf(
         references = "AHA/ACCF/HRS Part III conduction disturbances."
     ),
     EcgPathologyExample(
+        id = "second_degree_2to1",
+        title = "BAV 2:1",
+        subtitle = "Una P conduce y otra no",
+        description = "Muestra alternancia de latidos conducidos y P bloqueada. Ayuda a comparar bloqueos AV cuando no puede distinguirse Mobitz I vs II con un trazo corto.",
+        pattern = EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part III; AV block patterns."
+    ),
+    EcgPathologyExample(
+        id = "left_atrial_enlargement",
+        title = "Crecimiento auricular izquierdo",
+        subtitle = "P mitrale",
+        description = "Onda P ancha y mellada en DII, con morfología de dos montañas. Útil para entrenar la forma de la onda P, no solo intervalos.",
+        pattern = EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS chamber enlargement criteria."
+    ),
+    EcgPathologyExample(
+        id = "right_atrial_enlargement",
+        title = "Crecimiento auricular derecho",
+        subtitle = "P pulmonale",
+        description = "Onda P alta y picuda en derivaciones inferiores. Se representa con P estrecha y puntiaguda.",
+        pattern = EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS chamber enlargement criteria."
+    ),
+    EcgPathologyExample(
+        id = "biatrial_enlargement",
+        title = "Crecimiento biauricular",
+        subtitle = "P alta y mellada",
+        description = "Combina elementos de crecimiento auricular derecho e izquierdo: P alta con duración/muesca aumentada.",
+        pattern = EcgPathologyPattern.BIATRIAL_ENLARGEMENT,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS chamber enlargement criteria."
+    ),
+    EcgPathologyExample(
+        id = "pac",
+        title = "Extrasístole auricular",
+        subtitle = "P prematura + QRS estrecho",
+        description = "Latido adelantado con onda P de morfología distinta y QRS estrecho, seguido de pausa no completamente compensadora.",
+        pattern = EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION,
+        focusLead = EcgLead.DII,
+        references = "ECG rhythm interpretation basics."
+    ),
+    EcgPathologyExample(
+        id = "junctional",
+        title = "Ritmo nodal",
+        subtitle = "P ausente o retrógrada",
+        description = "QRS estrecho con onda P ausente, invertida o pegada al QRS. Se muestra como P retrógrada didáctica.",
+        pattern = EcgPathologyPattern.JUNCTIONAL_RHYTHM,
+        focusLead = EcgLead.DII,
+        references = "ECG rhythm interpretation basics."
+    ),
+    EcgPathologyExample(
+        id = "sinus_pause",
+        title = "Pausa sinusal",
+        subtitle = "Pausa sin P ni QRS",
+        description = "Pausa súbita donde desaparece un ciclo completo P-QRS-T. Sirve para comparar irregularidad real contra simple variación RR.",
+        pattern = EcgPathologyPattern.SINUS_PAUSE,
+        focusLead = EcgLead.DII,
+        references = "ECG rhythm interpretation basics."
+    ),
+    EcgPathologyExample(
         id = "mobitz_i",
         title = "BAV 2º Mobitz I",
         subtitle = "Wenckebach",
@@ -1769,27 +1888,22 @@ private fun EcgPathologiesContent(state: EcgSharedInputState) {
     var selectedId by rememberSaveable { mutableStateOf(ecgPathologyExamples.first().id) }
     val selected = ecgPathologyExamples.firstOrNull { it.id == selectedId } ?: ecgPathologyExamples.first()
     val model = buildEcgPreviewModel(state)
+    var pathologyMenuExpanded by rememberSaveable { mutableStateOf(false) }
 
     EcgCard(
         title = "Ejemplos de patologías ECG",
-        note = "Toca una patología para cargar valores en las calculadoras del módulo ECG y ver un trazo didáctico. Sí, por fin las calculadoras dejan de vivir aisladas como residentes postguardia."
+        note = "Elige una patología desde la lista compacta. La app carga valores y ajusta morfología/intervalos en el ECG didáctico; milagrosamente, sin gastar media pantalla en botones."
     ) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            ecgPathologyExamples.forEach { example ->
-                PreviewChoiceChip(
-                    text = example.title,
-                    selected = selectedId == example.id,
-                    onClick = {
-                        selectedId = example.id
-                        applyEcgPathologyExample(example, state)
-                    }
-                )
+        EcgPathologyPicker(
+            selected = selected,
+            expanded = pathologyMenuExpanded,
+            onToggle = { pathologyMenuExpanded = !pathologyMenuExpanded },
+            onSelected = { example ->
+                selectedId = example.id
+                pathologyMenuExpanded = false
+                applyEcgPathologyExample(example, state)
             }
-        }
+        )
 
         Surface(
             shape = RoundedCornerShape(18.dp),
@@ -1869,6 +1983,10 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
     state.axisMethodName.value = EcgAxisMethod.LEAD_I_AVF.name
     state.axisFirstText.value = "5"
     state.axisSecondText.value = "9"
+    state.variablePr.value = false
+    state.variableQrs.value = false
+    state.variableQt.value = false
+    state.variableMorphology.value = false
 
     when (example.pattern) {
         EcgPathologyPattern.NORMAL_SINUS -> Unit
@@ -1892,6 +2010,59 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.prText.value = "240"
             state.qrsText.value = "90"
             state.qtText.value = "410"
+        }
+        EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> {
+            state.heartRateText.value = "62"
+            state.prText.value = "170"
+            state.qrsText.value = "92"
+            state.qtText.value = "410"
+            state.variablePr.value = true
+        }
+        EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> {
+            state.heartRateText.value = "76"
+            state.prText.value = "170"
+            state.qrsText.value = "90"
+            state.qtText.value = "390"
+            state.variableMorphology.value = true
+        }
+        EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> {
+            state.heartRateText.value = "84"
+            state.prText.value = "160"
+            state.qrsText.value = "88"
+            state.qtText.value = "370"
+            state.variableMorphology.value = true
+        }
+        EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> {
+            state.heartRateText.value = "82"
+            state.prText.value = "175"
+            state.qrsText.value = "92"
+            state.qtText.value = "390"
+            state.variableMorphology.value = true
+        }
+        EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION -> {
+            state.heartRateText.value = "78"
+            state.prText.value = "150"
+            state.qrsText.value = "88"
+            state.qtText.value = "380"
+            state.regularRhythm.value = false
+            state.variablePr.value = true
+            state.variableMorphology.value = true
+        }
+        EcgPathologyPattern.JUNCTIONAL_RHYTHM -> {
+            state.heartRateText.value = "52"
+            state.prText.value = "90"
+            state.qrsText.value = "86"
+            state.qtText.value = "420"
+            state.sinusRhythm.value = false
+            state.variableMorphology.value = true
+        }
+        EcgPathologyPattern.SINUS_PAUSE -> {
+            state.heartRateText.value = "64"
+            state.prText.value = "160"
+            state.qrsText.value = "90"
+            state.qtText.value = "400"
+            state.regularRhythm.value = false
+            state.variablePr.value = true
         }
         EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> {
             state.heartRateText.value = "78"
@@ -1962,10 +2133,11 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
         }
         EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> {
             state.heartRateText.value = "62"
-            state.prText.value = "260"
+            state.prText.value = "160"
             state.qrsText.value = "90"
             state.qtText.value = "410"
             state.regularRhythm.value = false
+            state.variablePr.value = true
         }
         EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> {
             state.heartRateText.value = "54"
@@ -1973,6 +2145,7 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qrsText.value = "100"
             state.qtText.value = "420"
             state.regularRhythm.value = false
+            state.variablePr.value = true
         }
         EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> {
             state.heartRateText.value = "38"
@@ -1981,6 +2154,8 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.qtText.value = "520"
             state.sinusRhythm.value = false
             state.regularRhythm.value = true
+            state.variablePr.value = true
+            state.variableQrs.value = true
         }
         EcgPathologyPattern.SINUS_BRADYCARDIA -> {
             state.heartRateText.value = "45"
@@ -2023,6 +2198,7 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.prText.value = "90"
             state.qrsText.value = "125"
             state.qtText.value = "390"
+            state.variableMorphology.value = true
         }
         EcgPathologyPattern.PERICARDITIS -> {
             state.heartRateText.value = "96"
@@ -2059,6 +2235,75 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
     }
 }
 
+
+
+@Composable
+private fun EcgPathologyPicker(
+    selected: EcgPathologyExample,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onSelected: (EcgPathologyExample) -> Unit
+) {
+    Surface(
+        onClick = onToggle,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(Icons.Default.MonitorHeart, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Patología seleccionada", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(selected.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                Text(selected.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null)
+        }
+    }
+    AnimatedVisibility(
+        visible = expanded,
+        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 380.dp)
+        ) {
+            LazyColumn(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(ecgPathologyExamples) { example ->
+                    Surface(
+                        onClick = { onSelected(example) },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (selected.id == example.id) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceContainerLow,
+                        border = BorderStroke(
+                            width = if (selected.id == example.id) 1.4.dp else 0.8.dp,
+                            color = if (selected.id == example.id) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(example.title, fontWeight = FontWeight.Black)
+                            Text(example.subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            Text(example.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun EcgPathologyInteractivePreview(
@@ -2396,7 +2641,11 @@ private fun normalComparatorModel(model: EcgPreviewModel): EcgPreviewModel {
         rhythmRegular = true,
         lvhPositive = false,
         pathologyPattern = EcgPathologyPattern.NORMAL_SINUS,
-        sourceNote = "Comparador normal didáctico"
+        sourceNote = "Comparador normal didáctico",
+        variablePr = false,
+        variableQrs = false,
+        variableQt = false,
+        variableMorphology = false
     )
 }
 
@@ -2904,12 +3153,14 @@ private fun DynamicEcgStrip(
                 smallSquarePx = smallSquarePx
             )
             drawCriteriaHighlightsForLead(
+                model = model,
                 lead = lead,
                 markers = criteriaMarkers,
                 topLeft = Offset(0f, 0f),
                 width = size.width,
                 height = size.height,
-                labelColor = labelColor
+                labelColor = labelColor,
+                smallSquarePx = smallSquarePx
             )
         }
     }
@@ -2996,13 +3247,17 @@ private fun DynamicTwelveLeadEcg(
                         smallSquarePx = smallSquarePx
                     )
                     drawCriteriaHighlightsForLead(
+                        model = model,
                         lead = lead,
                         markers = criteriaMarkers,
                         topLeft = Offset(left + 8f, top + 14f),
                         width = cellW - 16f,
                         height = cellH - 22f,
                         labelColor = labelColor,
-                        compactLabel = true
+                        compactLabel = true,
+                        displayMsOverride = segmentMs,
+                        segmentStartMs = segmentStartMs,
+                        smallSquarePx = smallSquarePx
                     )
                 }
             }
@@ -3115,6 +3370,10 @@ private fun DrawScope.drawLeadTrace(
         pattern == EcgPathologyPattern.SVT -> 0.0
         pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> 0.0
         pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> 0.0
+        pattern == EcgPathologyPattern.JUNCTIONAL_RHYTHM -> 0.0
+        pattern == EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> 1.35 * qrsSign
+        pattern == EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> 2.45 * qrsSign
+        pattern == EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> 2.25 * qrsSign
         model.rhythmSinus -> 1.25 * qrsSign
         else -> 0.20
     }
@@ -3146,108 +3405,186 @@ private fun DrawScope.drawLeadTrace(
             val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
             val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
             val isPvcBeat = pattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
-            val pr = when {
-                isPvcBeat -> 0.0
-                pattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> (170.0 + (beatIndex % 4) * 40.0).coerceIn(120.0, 340.0)
-                pattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> 90.0
-                else -> model.prMs.coerceIn(80.0, 340.0)
+            val isPacBeat = pattern == EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION && beatIndex % 4 == 1
+            val isSinusPause = pattern == EcgPathologyPattern.SINUS_PAUSE && beatIndex % 5 == 2
+            val droppedQrs = when (pattern) {
+                EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> beatIndex % 4 == 3
+                EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> beatIndex % 4 == 3
+                EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> beatIndex % 2 == 1
+                else -> false
             }
-            val qrs = (if (isPvcBeat) model.qrsMs.coerceAtLeast(160.0) else model.qrsMs).coerceIn(50.0, 230.0)
-            val qt = model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
-            val qrsOn = if (isPvcBeat) beatStart + rr * 0.30 else beatStart + pr
-            val qrsEnd = qrsOn + qrs
-            val pStart = (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
-            val pPeak = pStart + 42.0
-            val pEnd = (qrsOn - 24.0).coerceAtLeast(pPeak + 20.0)
-            val rPeak = qrsOn + qrs * 0.45
-            val stEnd = qrsEnd + 115.0
-            val tEnd = qrsOn + qt
-            val tPeak = (stEnd + (tEnd - stEnd) * 0.45).coerceAtLeast(stEnd + 35.0)
-            val showP = pAmplitude != 0.0 && !isPvcBeat
 
-            if (showP) {
-                lineTo(xFor(pStart), yFor(0.0))
-                quadraticBezierTo(xFor(pPeak), yFor(pAmplitude), xFor(pEnd), yFor(0.0))
-            }
-            if (pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION) {
-                lineTo(xFor(qrsOn - 52.0), yFor(0.25 * kotlin.math.sin(beatIndex.toDouble() * 1.7)))
-                lineTo(xFor(qrsOn - 28.0), yFor(-0.18 * kotlin.math.cos(beatIndex.toDouble() * 1.4)))
-            }
-            if (pattern == EcgPathologyPattern.ATRIAL_FLUTTER) {
-                val flutterStart = qrsOn - 180.0
-                repeat(3) { flutterIndex ->
-                    val base = flutterStart + flutterIndex * 55.0
-                    lineTo(xFor(base), yFor(0.0))
-                    lineTo(xFor(base + 25.0), yFor(1.25 * qrsSign))
-                    lineTo(xFor(base + 55.0), yFor(0.0))
+            if (isSinusPause) {
+                lineTo(xFor(beatStart + rr * 1.85), yFor(0.0))
+                beatStart += rr * 1.85
+                beatIndex += 1
+            } else {
+                val pr = when {
+                    isPvcBeat -> 0.0
+                    pattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> (150.0 + (beatIndex % 4) * 48.0).coerceIn(120.0, 340.0)
+                    pattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> 175.0
+                    pattern == EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> 170.0
+                    pattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> 85.0
+                    model.variablePr -> (model.prMs + ((beatIndex % 4) - 1) * 28.0).coerceIn(80.0, 340.0)
+                    else -> model.prMs.coerceIn(80.0, 340.0)
                 }
-            }
-            if (pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK) {
-                val pBase = beatStart + (beatIndex % 2) * 260.0 + 70.0
-                lineTo(xFor(pBase), yFor(0.0))
-                quadraticBezierTo(xFor(pBase + 35.0), yFor(1.0 * qrsSign), xFor(pBase + 72.0), yFor(0.0))
-            }
-            lineTo(xFor(qrsOn), yFor(0.0))
-            when {
-                isPvcBeat -> {
-                    val pvcSign = -qrsSign
-                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(-2.4 * pvcSign))
-                    lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * 1.25 * pvcSign))
-                    lineTo(xFor(qrsOn + qrs * 0.86), yFor(-5.0 * pvcSign))
+                val qrs = (when {
+                    isPvcBeat -> model.qrsMs.coerceAtLeast(160.0)
+                    pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> model.qrsMs.coerceAtLeast(160.0)
+                    model.variableQrs -> model.qrsMs + ((beatIndex % 3) - 1) * 18.0
+                    else -> model.qrsMs
+                }).coerceIn(50.0, 230.0)
+                val qt = (when {
+                    model.variableQt -> model.qtMs + ((beatIndex % 3) - 1) * 35.0
+                    else -> model.qtMs
+                }).coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
+                val qrsOn = when {
+                    isPvcBeat -> beatStart + rr * 0.30
+                    isPacBeat -> beatStart + rr * 0.23 + pr
+                    droppedQrs -> beatStart + rr * 0.42 + pr
+                    else -> beatStart + pr
                 }
-                pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> {
-                    lineTo(xFor(qrsOn + qrs * 0.15), yFor(-3.0 * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.45), yFor(qrsAmplitude * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.84), yFor(-6.5 * qrsSign))
+                val qrsEnd = qrsOn + qrs
+                val pStart = when {
+                    isPacBeat -> (beatStart + rr * 0.16).coerceAtLeast(beatStart + 8.0)
+                    droppedQrs -> (qrsOn - 105.0).coerceAtLeast(beatStart + 24.0)
+                    else -> (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
                 }
-                pattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> {
-                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(2.2 * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.45), yFor(qrsAmplitude * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.76), yFor(-3.0 * qrsSign))
-                }
-                pattern == EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK && lead == EcgLead.V1 -> {
-                    lineTo(xFor(qrsOn + qrs * 0.16), yFor(3.5))
-                    lineTo(xFor(qrsOn + qrs * 0.36), yFor(-3.2))
-                    lineTo(xFor(qrsOn + qrs * 0.76), yFor(qrsAmplitude * 1.10))
-                }
-                pattern == EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK && lateralLead -> {
-                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(-1.4 * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.42), yFor(qrsAmplitude * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.88), yFor(-5.2))
-                }
-                pattern == EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK && lead == EcgLead.V1 -> {
-                    lineTo(xFor(qrsOn + qrs * 0.22), yFor(-qrsAmplitude * 0.70))
-                    lineTo(xFor(qrsOn + qrs * 0.55), yFor(-qrsAmplitude * 1.05))
-                    lineTo(xFor(qrsOn + qrs * 0.86), yFor(-qrsAmplitude * 0.70))
-                }
-                pattern == EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK && lateralLead -> {
-                    lineTo(xFor(qrsOn + qrs * 0.20), yFor(qrsAmplitude * 0.75))
-                    lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * 1.10))
-                    lineTo(xFor(qrsOn + qrs * 0.66), yFor(qrsAmplitude * 0.82))
-                    lineTo(xFor(qrsOn + qrs * 0.88), yFor(qrsAmplitude * 1.02))
-                }
-                pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lead == EcgLead.V1 -> {
-                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(-1.2))
-                    lineTo(xFor(rPeak), yFor(qrsAmplitude * 1.18))
-                    lineTo(xFor(qrsOn + qrs * 0.78), yFor(-2.0))
-                }
-                pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lateralLowLead -> {
-                    lineTo(xFor(qrsOn + qrs * 0.20), yFor(3.0))
-                    lineTo(xFor(qrsOn + qrs * 0.72), yFor(-7.5))
-                }
-                else -> {
-                    lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.6 * qrsSign))
-                    lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
-                    lineTo(xFor(qrsOn + qrs * 0.72), yFor(-3.0 * qrsSign))
-                }
-            }
-            lineTo(xFor(qrsEnd), yFor(stVisual))
-            lineTo(xFor(stEnd), yFor(stVisual))
-            quadraticBezierTo(xFor(tPeak), yFor(tAmplitude + stVisual * 0.18), xFor(tEnd), yFor(0.0))
-            lineTo(xFor(beatStart + rr), yFor(0.0))
+                val pPeak = pStart + 42.0
+                val pEnd = (qrsOn - 24.0).coerceAtLeast(pPeak + 20.0)
+                val rPeak = qrsOn + qrs * 0.45
+                val stEnd = qrsEnd + 115.0
+                val tEnd = qrsOn + qt
+                val tPeak = (stEnd + (tEnd - stEnd) * 0.45).coerceAtLeast(stEnd + 35.0)
+                val showP = pAmplitude != 0.0 && !isPvcBeat &&
+                    pattern != EcgPathologyPattern.JUNCTIONAL_RHYTHM &&
+                    pattern != EcgPathologyPattern.VENTRICULAR_TACHYCARDIA
 
-            beatStart += if (isPvcBeat) rr * 1.35 else rr
-            beatIndex += 1
+                if (showP || droppedQrs || isPacBeat) {
+                    val atrialSign = if (isPacBeat) -qrsSign else qrsSign
+                    lineTo(xFor(pStart), yFor(0.0))
+                    when (pattern) {
+                        EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> {
+                            quadraticBezierTo(xFor(pStart + 34.0), yFor(1.35 * atrialSign), xFor(pStart + 72.0), yFor(0.24 * atrialSign))
+                            quadraticBezierTo(xFor(pStart + 108.0), yFor(1.22 * atrialSign), xFor(pEnd + 28.0), yFor(0.0))
+                        }
+                        EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> {
+                            quadraticBezierTo(xFor(pStart + 28.0), yFor(2.65 * atrialSign), xFor(pEnd), yFor(0.0))
+                        }
+                        EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> {
+                            quadraticBezierTo(xFor(pStart + 28.0), yFor(2.30 * atrialSign), xFor(pStart + 70.0), yFor(0.38 * atrialSign))
+                            quadraticBezierTo(xFor(pStart + 112.0), yFor(1.70 * atrialSign), xFor(pEnd + 24.0), yFor(0.0))
+                        }
+                        else -> {
+                            val pAmp = when {
+                                isPacBeat -> 1.15 * atrialSign
+                                droppedQrs -> 1.25 * atrialSign
+                                model.variableMorphology && beatIndex % 2 == 1 -> pAmplitude * 1.35
+                                else -> pAmplitude
+                            }
+                            quadraticBezierTo(xFor(pPeak), yFor(pAmp), xFor(pEnd), yFor(0.0))
+                        }
+                    }
+                }
+
+                if (pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION) {
+                    lineTo(xFor(qrsOn - 52.0), yFor(0.25 * kotlin.math.sin(beatIndex.toDouble() * 1.7)))
+                    lineTo(xFor(qrsOn - 28.0), yFor(-0.18 * kotlin.math.cos(beatIndex.toDouble() * 1.4)))
+                }
+                if (pattern == EcgPathologyPattern.ATRIAL_FLUTTER) {
+                    val flutterStart = qrsOn - 220.0
+                    repeat(5) { flutterIndex ->
+                        val base = flutterStart + flutterIndex * 48.0
+                        lineTo(xFor(base), yFor(0.0))
+                        lineTo(xFor(base + 22.0), yFor(1.35 * qrsSign))
+                        lineTo(xFor(base + 48.0), yFor(0.0))
+                    }
+                }
+                if (pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK) {
+                    val pBase = beatStart + (beatIndex % 2) * 210.0 + 55.0
+                    lineTo(xFor(pBase), yFor(0.0))
+                    quadraticBezierTo(xFor(pBase + 35.0), yFor(1.0 * qrsSign), xFor(pBase + 72.0), yFor(0.0))
+                }
+
+                if (droppedQrs) {
+                    lineTo(xFor(beatStart + rr), yFor(0.0))
+                    beatStart += rr
+                    beatIndex += 1
+                } else {
+                    lineTo(xFor(qrsOn), yFor(0.0))
+                    when {
+                        isPvcBeat -> {
+                            val pvcSign = -qrsSign
+                            lineTo(xFor(qrsOn + qrs * 0.18), yFor(-2.4 * pvcSign))
+                            lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * 1.25 * pvcSign))
+                            lineTo(xFor(qrsOn + qrs * 0.86), yFor(-5.0 * pvcSign))
+                        }
+                        pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> {
+                            lineTo(xFor(qrsOn + qrs * 0.15), yFor(-3.0 * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.45), yFor(qrsAmplitude * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.84), yFor(-6.5 * qrsSign))
+                        }
+                        pattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> {
+                            lineTo(xFor(qrsOn + qrs * 0.14), yFor(1.7 * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.30), yFor(3.8 * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.76), yFor(-3.0 * qrsSign))
+                        }
+                        pattern == EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK && lead == EcgLead.V1 -> {
+                            lineTo(xFor(qrsOn + qrs * 0.14), yFor(4.8))
+                            lineTo(xFor(qrsOn + qrs * 0.34), yFor(-3.4))
+                            lineTo(xFor(qrsOn + qrs * 0.58), yFor(2.8))
+                            lineTo(xFor(qrsOn + qrs * 0.82), yFor(qrsAmplitude * 1.15))
+                        }
+                        pattern == EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK && lateralLead -> {
+                            lineTo(xFor(qrsOn + qrs * 0.18), yFor(-1.4 * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.42), yFor(qrsAmplitude * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.88), yFor(-5.2))
+                        }
+                        pattern == EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK && lead == EcgLead.V1 -> {
+                            lineTo(xFor(qrsOn + qrs * 0.22), yFor(-qrsAmplitude * 0.70))
+                            lineTo(xFor(qrsOn + qrs * 0.55), yFor(-qrsAmplitude * 1.05))
+                            lineTo(xFor(qrsOn + qrs * 0.86), yFor(-qrsAmplitude * 0.70))
+                        }
+                        pattern == EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK && lateralLead -> {
+                            lineTo(xFor(qrsOn + qrs * 0.20), yFor(qrsAmplitude * 0.75))
+                            lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * 1.10))
+                            lineTo(xFor(qrsOn + qrs * 0.66), yFor(qrsAmplitude * 0.82))
+                            lineTo(xFor(qrsOn + qrs * 0.88), yFor(qrsAmplitude * 1.02))
+                        }
+                        pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lead == EcgLead.V1 -> {
+                            lineTo(xFor(qrsOn + qrs * 0.18), yFor(-1.2))
+                            lineTo(xFor(rPeak), yFor(qrsAmplitude * 1.18))
+                            lineTo(xFor(qrsOn + qrs * 0.78), yFor(-2.0))
+                        }
+                        pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lateralLowLead -> {
+                            lineTo(xFor(qrsOn + qrs * 0.20), yFor(3.0))
+                            lineTo(xFor(qrsOn + qrs * 0.72), yFor(-7.5))
+                        }
+                        else -> {
+                            lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.6 * qrsSign))
+                            lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
+                            lineTo(xFor(qrsOn + qrs * 0.72), yFor(-3.0 * qrsSign))
+                        }
+                    }
+                    lineTo(xFor(qrsEnd), yFor(stVisual))
+                    if (pattern == EcgPathologyPattern.JUNCTIONAL_RHYTHM) {
+                        quadraticBezierTo(xFor(qrsEnd + 28.0), yFor(-0.9 * qrsSign), xFor(qrsEnd + 62.0), yFor(0.0))
+                    }
+                    lineTo(xFor(stEnd), yFor(stVisual))
+                    quadraticBezierTo(xFor(tPeak), yFor(tAmplitude + stVisual * 0.18), xFor(tEnd), yFor(0.0))
+                    if (pattern == EcgPathologyPattern.HYPOKALEMIA) {
+                        quadraticBezierTo(xFor(tEnd + 90.0), yFor(1.55 * qrsSign), xFor(tEnd + 165.0), yFor(0.0))
+                    }
+                    lineTo(xFor(beatStart + rr), yFor(0.0))
+                    beatStart += when {
+                        isPvcBeat -> rr * 1.35
+                        isPacBeat -> rr * 1.08
+                        else -> rr
+                    }
+                    beatIndex += 1
+                }
+            }
         }
         lineTo(topLeft.x + width, baseline)
     }
@@ -3278,75 +3615,143 @@ private fun DrawScope.drawLeadTrace(
 }
 
 private fun DrawScope.drawCriteriaHighlightsForLead(
+    model: EcgPreviewModel,
     lead: EcgLead,
     markers: List<EcgCriterionMarker>,
     topLeft: Offset,
     width: Float,
     height: Float,
     labelColor: Color,
-    compactLabel: Boolean = false
+    compactLabel: Boolean = false,
+    displayMsOverride: Double? = null,
+    segmentStartMs: Double = 0.0,
+    smallSquarePx: Float
 ) {
     val leadMarkers = markers.filter { lead in it.leads }
     if (leadMarkers.isEmpty()) return
 
-    fun regionBox(region: EcgCriterionRegion): Pair<Offset, Size> {
-        val x0: Float
-        val x1: Float
-        val y0: Float
-        val y1: Float
-        when (region) {
-            EcgCriterionRegion.P_WAVE -> {
-                x0 = 0.14f; x1 = 0.23f; y0 = 0.30f; y1 = 0.72f
-            }
-            EcgCriterionRegion.PR_INTERVAL -> {
-                x0 = 0.13f; x1 = 0.29f; y0 = 0.34f; y1 = 0.74f
-            }
-            EcgCriterionRegion.QRS_COMPLEX -> {
-                x0 = 0.27f; x1 = 0.36f; y0 = 0.14f; y1 = 0.82f
-            }
-            EcgCriterionRegion.ST_SEGMENT -> {
-                x0 = 0.36f; x1 = 0.46f; y0 = 0.34f; y1 = 0.74f
-            }
-            EcgCriterionRegion.T_WAVE -> {
-                x0 = 0.46f; x1 = 0.58f; y0 = 0.18f; y1 = 0.78f
-            }
-            EcgCriterionRegion.QT_INTERVAL -> {
-                x0 = 0.27f; x1 = 0.58f; y0 = 0.18f; y1 = 0.78f
-            }
-            EcgCriterionRegion.VOLTAGE_ZONE -> {
-                x0 = 0.24f; x1 = 0.38f; y0 = 0.10f; y1 = 0.88f
-            }
-            EcgCriterionRegion.WHOLE_STRIP -> {
-                x0 = 0.08f; x1 = 0.92f; y0 = 0.16f; y1 = 0.84f
-            }
-        }
-        return Offset(topLeft.x + width * x0, topLeft.y + height * y0) to Size(width * (x1 - x0), height * (y1 - y0))
+    val baseline = topLeft.y + height * 0.56f
+    val displayMs = displayMsOverride ?: ecgPreviewDisplayMs(model)
+    val paperPxPerMs = ((ECG_PAPER_SPEED_MM_PER_SECOND / 1000.0) * smallSquarePx).toFloat()
+    val segmentEndMs = segmentStartMs + displayMs
+    fun xFor(globalMs: Double): Float = topLeft.x + ((globalMs - segmentStartMs).toFloat() * paperPxPerMs)
+    fun rectForTimes(startMs: Double, endMs: Double, yTop: Float, yBottom: Float): Pair<Offset, Size> {
+        val x0 = xFor(startMs).coerceIn(topLeft.x, topLeft.x + width)
+        val x1 = xFor(endMs).coerceIn(topLeft.x, topLeft.x + width)
+        return Offset(x0, topLeft.y + height * yTop) to Size((x1 - x0).coerceAtLeast(10f), height * (yBottom - yTop))
     }
 
-    leadMarkers.forEachIndexed { index, marker ->
-        val (offset, size) = regionBox(marker.region)
-        val shifted = Offset(offset.x, offset.y + index * if (compactLabel) 10f else 14f)
+    val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
+    var beatStart = 80.0
+    var beatIndex = 0
+    while (beatStart + model.rrMs < segmentStartMs - 260.0) {
+        val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
+        val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+        beatStart += rr
+        beatIndex += 1
+    }
+
+    val boxes = mutableListOf<Triple<EcgCriterionMarker, Offset, Size>>()
+    while (beatStart < segmentEndMs + model.rrMs && boxes.size < 8) {
+        val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
+        val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
+        val isPvcBeat = model.pathologyPattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
+        val isPacBeat = model.pathologyPattern == EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION && beatIndex % 4 == 1
+        val isSinusPause = model.pathologyPattern == EcgPathologyPattern.SINUS_PAUSE && beatIndex % 5 == 2
+        val droppedQrs = when (model.pathologyPattern) {
+            EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> beatIndex % 4 == 3
+            EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> beatIndex % 4 == 3
+            EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> beatIndex % 2 == 1
+            else -> false
+        }
+        val pr = when {
+            isPvcBeat -> 0.0
+            model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> (150.0 + (beatIndex % 4) * 48.0).coerceIn(120.0, 340.0)
+            model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> 175.0
+            model.pathologyPattern == EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> 170.0
+            model.pathologyPattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> 85.0
+            model.variablePr -> (model.prMs + ((beatIndex % 4) - 1) * 28.0).coerceIn(80.0, 340.0)
+            else -> model.prMs.coerceIn(80.0, 340.0)
+        }
+        val qrs = (when {
+            isPvcBeat -> model.qrsMs.coerceAtLeast(160.0)
+            model.pathologyPattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> model.qrsMs.coerceAtLeast(160.0)
+            model.variableQrs -> model.qrsMs + ((beatIndex % 3) - 1) * 18.0
+            else -> model.qrsMs
+        }).coerceIn(50.0, 230.0)
+        val qrsOn = when {
+            isPvcBeat -> beatStart + rr * 0.30
+            isPacBeat -> beatStart + rr * 0.23 + pr
+            droppedQrs -> beatStart + rr * 0.42 + pr
+            else -> beatStart + pr
+        }
+        val pStart = when {
+            isPacBeat -> (beatStart + rr * 0.16).coerceAtLeast(beatStart + 8.0)
+            droppedQrs -> (qrsOn - 105.0).coerceAtLeast(beatStart + 24.0)
+            else -> (qrsOn - 115.0).coerceAtLeast(beatStart + 10.0)
+        }
+        val pEnd = (qrsOn - 24.0).coerceAtLeast(pStart + 70.0)
+        val qrsEnd = qrsOn + qrs
+        val stEnd = qrsEnd + 115.0
+        val qtEnd = qrsOn + model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
+
+        if (isSinusPause) {
+            leadMarkers.filter { it.region == EcgCriterionRegion.WHOLE_STRIP }.forEach { marker ->
+                val (o, s) = rectForTimes(beatStart, beatStart + rr * 1.85, 0.18f, 0.84f)
+                boxes.add(Triple(marker, o, s))
+            }
+        } else {
+            leadMarkers.forEach { marker ->
+                val rect = when (marker.region) {
+                    EcgCriterionRegion.P_WAVE -> rectForTimes(pStart, pEnd, 0.26f, 0.74f)
+                    EcgCriterionRegion.PR_INTERVAL -> rectForTimes(pStart, qrsOn, 0.32f, 0.72f)
+                    EcgCriterionRegion.QRS_COMPLEX -> rectForTimes(qrsOn, qrsEnd, 0.10f, 0.86f)
+                    EcgCriterionRegion.ST_SEGMENT -> rectForTimes(qrsEnd, stEnd, 0.33f, 0.73f)
+                    EcgCriterionRegion.T_WAVE -> rectForTimes(stEnd, qtEnd, 0.18f, 0.78f)
+                    EcgCriterionRegion.QT_INTERVAL -> rectForTimes(qrsOn, qtEnd, 0.18f, 0.80f)
+                    EcgCriterionRegion.VOLTAGE_ZONE -> rectForTimes(qrsOn, qrsEnd, 0.08f, 0.90f)
+                    EcgCriterionRegion.WHOLE_STRIP -> if (droppedQrs) {
+                        rectForTimes(pStart, beatStart + rr, 0.18f, 0.84f)
+                    } else {
+                        rectForTimes(beatStart, beatStart + rr, 0.18f, 0.84f)
+                    }
+                }
+                boxes.add(Triple(marker, rect.first, rect.second))
+            }
+        }
+
+        beatStart += when {
+            isSinusPause -> rr * 1.85
+            isPvcBeat -> rr * 1.35
+            isPacBeat -> rr * 1.08
+            else -> rr
+        }
+        beatIndex += 1
+    }
+
+    boxes.forEachIndexed { index, (marker, offset, size) ->
+        val shifted = Offset(offset.x, offset.y + (index % 2) * if (compactLabel) 7f else 10f)
         drawRect(
-            color = marker.tint.copy(alpha = 0.14f),
+            color = marker.tint.copy(alpha = 0.13f),
             topLeft = shifted,
             size = size
         )
         drawRect(
-            color = marker.tint.copy(alpha = 0.78f),
+            color = marker.tint.copy(alpha = 0.80f),
             topLeft = shifted,
             size = size,
-            style = Stroke(width = if (compactLabel) 1.6f else 2.0f)
+            style = Stroke(width = if (compactLabel) 1.5f else 2.0f)
         )
         val paint = android.graphics.Paint().apply {
             color = marker.tint.toArgb()
-            textSize = if (compactLabel) 16f else 19f
+            textSize = if (compactLabel) 15f else 18f
             isAntiAlias = true
             isFakeBoldText = true
         }
         drawContext.canvas.nativeCanvas.drawText(
             marker.label,
             shifted.x + 4f,
-            (shifted.y - 4f).coerceAtLeast(topLeft.y + 16f),
+            (shifted.y - 4f).coerceAtLeast(topLeft.y + 15f),
             paint
         )
     }
@@ -3449,7 +3854,11 @@ private fun buildEcgPreviewModel(state: EcgSharedInputState): EcgPreviewModel {
         rhythmRegular = state.regularRhythm.value,
         lvhPositive = lvhPositive,
         pathologyPattern = runCatching { EcgPathologyPattern.valueOf(state.pathologyPatternName.value) }.getOrDefault(EcgPathologyPattern.NORMAL_SINUS),
-        sourceNote = sourceNote
+        sourceNote = sourceNote,
+        variablePr = state.variablePr.value,
+        variableQrs = state.variableQrs.value,
+        variableQt = state.variableQt.value,
+        variableMorphology = state.variableMorphology.value
     )
 }
 
