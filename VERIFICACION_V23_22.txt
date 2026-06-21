@@ -1,0 +1,4 @@
+VERIFICACION V23.22
+- Corregido `when expression must be exhaustive` en EcgScreen.kt.
+- Se agregó rama `else -> null` en sombreado de criterios.
+- No se modificaron fórmulas ni patologías.

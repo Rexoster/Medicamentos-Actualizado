@@ -3961,6 +3961,7 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
                         rectForTimesOrNull(qrsOn, qrsEnd, 0.08f, 0.90f)
                     marker.region == EcgCriterionRegion.WHOLE_STRIP ->
                         rectForTimesOrNull(beatStart, beatStart + rr, 0.08f, 0.22f)
+                    else -> null
                 }
                 if (rect != null) boxes.add(Triple(marker, rect.first, rect.second))
             }
