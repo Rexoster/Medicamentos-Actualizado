@@ -347,7 +347,10 @@ private data class EcgCriterionMarker(
     val detail: String,
     val leads: Set<EcgLead>,
     val region: EcgCriterionRegion,
-    val tint: Color
+    val tint: Color,
+    val targetBeatModulo: Int? = null,
+    val targetBeatCycle: Int = 4,
+    val maxOccurrences: Int = 1
 )
 
 private enum class EcgComparisonSample(
@@ -378,133 +381,218 @@ private val ecgCoronaryGroups = listOf(
 
 private fun pathologyCriteria(pattern: EcgPathologyPattern): List<EcgCriterionMarker> = when (pattern) {
     EcgPathologyPattern.NORMAL_SINUS -> listOf(
-        EcgCriterionMarker("Onda P", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
-        EcgCriterionMarker("QRS estrecho", "Conducción intraventricular conservada", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32)),
-        EcgCriterionMarker("T normal", "Repolarización habitual", setOf(EcgLead.DII), EcgCriterionRegion.T_WAVE, Color(0xFF6A1B9A))
+        EcgCriterionMarker("P sinusal", "P positiva en DII antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), maxOccurrences = 2),
+        EcgCriterionMarker("PR normal", "Conducción AV 120-200 ms", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF00838F), maxOccurrences = 1),
+        EcgCriterionMarker("QRS estrecho", "QRS < 120 ms", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("T normal", "Repolarización sin patrón patológico", setOf(EcgLead.DII), EcgCriterionRegion.T_WAVE, Color(0xFF6A1B9A), maxOccurrences = 1)
     )
     EcgPathologyPattern.PVC -> listOf(
-        EcgCriterionMarker("QRS ancho prematuro", "Complejo ventricular adelantado", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
-        EcgCriterionMarker("Pausa compensadora", "Intervalo largo tras el latido ectópico", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFEF6C00))
+        EcgCriterionMarker("QRS prematuro", "Latido ventricular adelantado", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828), targetBeatModulo = 1),
+        EcgCriterionMarker("QRS ancho", "Duración ≥ 120 ms", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A), targetBeatModulo = 1),
+        EcgCriterionMarker("Sin P previa", "No hay P sinusal antes del QRS ectópico", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), targetBeatModulo = 1),
+        EcgCriterionMarker("Pausa", "Pausa compensadora posterior", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFEF6C00), targetBeatModulo = 1)
     )
     EcgPathologyPattern.ATRIAL_FIBRILLATION -> listOf(
-        EcgCriterionMarker("Sin onda P", "No hay P organizada", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFFC62828)),
-        EcgCriterionMarker("RR irregular", "Ritmo irregularmente irregular", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF6A1B9A))
+        EcgCriterionMarker("Sin P", "No hay ondas P organizadas", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFFC62828), maxOccurrences = 2),
+        EcgCriterionMarker("RR irregular", "Intervalos RR variables", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF6A1B9A), maxOccurrences = 3),
+        EcgCriterionMarker("QRS estrecho", "Respuesta ventricular usualmente estrecha", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1)
     )
     EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK -> listOf(
-        EcgCriterionMarker("PR prolongado", "PR > 200 ms", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0))
-    )
-    EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> listOf(
-        EcgCriterionMarker("P conducida", "Una P conduce a QRS", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0)),
-        EcgCriterionMarker("P bloqueada", "La siguiente P no tiene QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
-    )
-    EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> listOf(
-        EcgCriterionMarker("P mitrale", "P ancha y mellada en DII", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A)),
-        EcgCriterionMarker("Terminal negativa", "Componente terminal negativo en V1", setOf(EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0))
-    )
-    EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> listOf(
-        EcgCriterionMarker("P pulmonale", "P alta y picuda inferior", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00))
-    )
-    EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> listOf(
-        EcgCriterionMarker("P alta", "Componente derecho aumentado", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00)),
-        EcgCriterionMarker("P mellada", "Componente izquierdo prolongado", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A))
-    )
-    EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION -> listOf(
-        EcgCriterionMarker("P prematura", "P adelantada y de forma distinta", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
-        EcgCriterionMarker("QRS estrecho", "QRS sigue siendo estrecho", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
-    )
-    EcgPathologyPattern.JUNCTIONAL_RHYTHM -> listOf(
-        EcgCriterionMarker("P retrógrada", "P invertida o pegada al QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A)),
-        EcgCriterionMarker("QRS estrecho", "Escape nodal con QRS estrecho", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
-    )
-    EcgPathologyPattern.SINUS_PAUSE -> listOf(
-        EcgCriterionMarker("Pausa", "Intervalo sin P ni QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
-    )
-    EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> listOf(
-        EcgCriterionMarker("S profunda", "S en V1 elevada", setOf(EcgLead.V1), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF2E7D32)),
-        EcgCriterionMarker("R alta", "R alta en V5/V6", setOf(EcgLead.V5, EcgLead.V6), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFFC62828)),
-        EcgCriterionMarker("aVL alto", "Cornell / voltaje lateral", setOf(EcgLead.AVL), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF6A1B9A))
-    )
-    EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY -> listOf(
-        EcgCriterionMarker("R dominante en V1", "Predominio de R precordial derecha", setOf(EcgLead.V1), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFFC62828)),
-        EcgCriterionMarker("Eje derecho", "Desviación del eje a la derecha", setOf(EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0))
-    )
-    EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK -> listOf(
-        EcgCriterionMarker("rSR'", "Complejo en V1 compatible con BRD", setOf(EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
-        EcgCriterionMarker("S terminal ancha", "S en DI/V6", setOf(EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
-    )
-    EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK -> listOf(
-        EcgCriterionMarker("QRS ancho", "Retraso de conducción", setOf(EcgLead.V1, EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
-        EcgCriterionMarker("R ancha/notchada", "Morfología lateral", setOf(EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A))
-    )
-    EcgPathologyPattern.ANTERIOR_STEMI -> listOf(
-        EcgCriterionMarker("ST elevado", "Elevación en territorio anterior", setOf(EcgLead.V2, EcgLead.V3, EcgLead.V4, EcgLead.V5), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
-        EcgCriterionMarker("Recíproco", "Descenso opuesto", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0))
-    )
-    EcgPathologyPattern.INFERIOR_STEMI -> listOf(
-        EcgCriterionMarker("ST elevado", "Elevación en DII, DIII, aVF", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
-        EcgCriterionMarker("Recíproco", "Descenso en DI/aVL", setOf(EcgLead.DI, EcgLead.AVL), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0))
-    )
-    EcgPathologyPattern.HYPERKALEMIA -> listOf(
-        EcgCriterionMarker("T picuda", "Ondas T altas y apiculadas", setOf(EcgLead.DII, EcgLead.V2, EcgLead.V3, EcgLead.V4), EcgCriterionRegion.T_WAVE, Color(0xFFEF6C00)),
-        EcgCriterionMarker("QRS ensanchado", "Progresión de hiperkalemia", setOf(EcgLead.DII, EcgLead.V2), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828))
-    )
-    EcgPathologyPattern.LONG_QT -> listOf(
-        EcgCriterionMarker("QT prolongado", "Desde inicio de QRS hasta final de T", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.QT_INTERVAL, Color(0xFF6A1B9A))
+        EcgCriterionMarker("PR > 200 ms", "PR prolongado pero constante", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0), maxOccurrences = 2),
+        EcgCriterionMarker("Conducción 1:1", "Cada P conduce a un QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("QRS presente", "No hay latidos bloqueados", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF00838F), maxOccurrences = 1)
     )
     EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> listOf(
-        EcgCriterionMarker("PR progresivo", "PR se alarga antes del latido bloqueado", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0)),
-        EcgCriterionMarker("P no conducida", "Se observa una P sin QRS posterior", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
+        EcgCriterionMarker("PR 1", "Primer PR corto", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0), targetBeatModulo = 0),
+        EcgCriterionMarker("PR 2", "Segundo PR más largo", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF00838F), targetBeatModulo = 1),
+        EcgCriterionMarker("PR 3", "Tercer PR todavía más largo", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF6A1B9A), targetBeatModulo = 2),
+        EcgCriterionMarker("P bloqueada", "P sin QRS posterior", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828), targetBeatModulo = 3),
+        EcgCriterionMarker("Wenckebach", "El ciclo se reinicia tras la pausa", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFEF6C00), targetBeatModulo = 0, maxOccurrences = 1)
     )
     EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> listOf(
-        EcgCriterionMarker("PR constante", "PR estable antes de los latidos conducidos", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF2E7D32)),
-        EcgCriterionMarker("QRS caído", "Bloqueo súbito de conducción", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
+        EcgCriterionMarker("PR constante", "PR estable antes de QRS conducidos", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF2E7D32), targetBeatModulo = 0, maxOccurrences = 2),
+        EcgCriterionMarker("P bloqueada", "P súbita sin QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828), targetBeatModulo = 3),
+        EcgCriterionMarker("QRS caído", "Falla de conducción sin alargamiento previo", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A), targetBeatModulo = 3),
+        EcgCriterionMarker("Relación", "Puede verse 3:2, 4:3 o variable", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0), targetBeatModulo = 3)
+    )
+    EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> listOf(
+        EcgCriterionMarker("P conducida", "Una P seguida de QRS", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0), targetBeatModulo = 0, targetBeatCycle = 2, maxOccurrences = 2),
+        EcgCriterionMarker("P bloqueada", "La siguiente P no conduce", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828), targetBeatModulo = 1, targetBeatCycle = 2, maxOccurrences = 2),
+        EcgCriterionMarker("2:1", "Dos P por cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF6A1B9A), targetBeatModulo = 1, targetBeatCycle = 2, maxOccurrences = 1)
     )
     EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> listOf(
-        EcgCriterionMarker("Disociación AV", "P y QRS marchan independientes", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF6A1B9A)),
-        EcgCriterionMarker("Escape ventricular", "QRS lento/regular sin relación fija con P", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828))
+        EcgCriterionMarker("Disociación AV", "P y QRS no guardan relación fija", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF6A1B9A), maxOccurrences = 2),
+        EcgCriterionMarker("P independiente", "P marchan a su propio ritmo", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), maxOccurrences = 3),
+        EcgCriterionMarker("Escape", "QRS de escape regular y más lento", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828), maxOccurrences = 2)
     )
-    EcgPathologyPattern.SINUS_BRADYCARDIA -> listOf(
-        EcgCriterionMarker("P sinusal", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
-        EcgCriterionMarker("RR largo", "Frecuencia menor de 60 lpm", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF2E7D32))
+    EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> listOf(
+        EcgCriterionMarker("P mitrale", "P ancha y mellada, doble montaña", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A), maxOccurrences = 2),
+        EcgCriterionMarker("P ≥ 120 ms", "Duración aumentada", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("V1 terminal", "Componente terminal negativo en V1", setOf(EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFFC62828), maxOccurrences = 1)
     )
-    EcgPathologyPattern.SINUS_TACHYCARDIA -> listOf(
-        EcgCriterionMarker("P sinusal", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
-        EcgCriterionMarker("RR corto", "Frecuencia elevada con QRS estrecho", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
+    EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> listOf(
+        EcgCriterionMarker("P pulmonale", "P alta y picuda", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00), maxOccurrences = 2),
+        EcgCriterionMarker("P inferior", "Mejor visible en DII, DIII y aVF", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("V1 positivo", "Componente inicial positivo aumentado", setOf(EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFF2E7D32), maxOccurrences = 1)
     )
-    EcgPathologyPattern.ATRIAL_FLUTTER -> listOf(
-        EcgCriterionMarker("Ondas F", "Actividad auricular en serrucho", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00)),
-        EcgCriterionMarker("Conducción AV", "Respuesta ventricular regular o variable", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0))
+    EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> listOf(
+        EcgCriterionMarker("P alta", "Componente derecho aumentado", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00), maxOccurrences = 1),
+        EcgCriterionMarker("P mellada", "Componente izquierdo prolongado", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("V1 bifásica", "Componentes derecho e izquierdo", setOf(EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFFC62828), maxOccurrences = 1)
     )
-    EcgPathologyPattern.SVT -> listOf(
-        EcgCriterionMarker("QRS estrecho", "Taquicardia regular de QRS estrecho", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
-        EcgCriterionMarker("P oculta", "P no visible o retrógrada", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A))
+    EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION -> listOf(
+        EcgCriterionMarker("P prematura", "P adelantada y de forma distinta", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), targetBeatModulo = 1),
+        EcgCriterionMarker("QRS estrecho", "Conducción ventricular normal", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), targetBeatModulo = 1),
+        EcgCriterionMarker("Pausa incompleta", "Pausa no totalmente compensadora", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFEF6C00), targetBeatModulo = 1)
     )
-    EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> listOf(
-        EcgCriterionMarker("QRS ancho", "Taquicardia regular de complejo ancho", setOf(EcgLead.DII, EcgLead.V1, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
-        EcgCriterionMarker("Sin P clara", "No hay conducción sinusal organizada", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A))
+    EcgPathologyPattern.JUNCTIONAL_RHYTHM -> listOf(
+        EcgCriterionMarker("P retrógrada", "P invertida o cercana al QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A), maxOccurrences = 2),
+        EcgCriterionMarker("QRS estrecho", "Origen nodal con conducción intraventricular normal", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("FC 40-60", "Ritmo de escape nodal típico", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0), maxOccurrences = 1)
     )
-    EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> listOf(
-        EcgCriterionMarker("PR corto", "Conducción AV aparente rápida", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0)),
-        EcgCriterionMarker("Onda delta", "Ascenso inicial empastado del QRS", setOf(EcgLead.DII, EcgLead.V2, EcgLead.V5), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828))
+    EcgPathologyPattern.SINUS_PAUSE -> listOf(
+        EcgCriterionMarker("Pausa", "Intervalo sin P ni QRS", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828), targetBeatModulo = 2, targetBeatCycle = 5),
+        EcgCriterionMarker("Reinicio", "Retorno del ritmo sinusal", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF2E7D32), targetBeatModulo = 3, targetBeatCycle = 5)
     )
-    EcgPathologyPattern.PERICARDITIS -> listOf(
-        EcgCriterionMarker("ST difuso", "Elevación cóncava generalizada", setOf(EcgLead.DI, EcgLead.DII, EcgLead.AVL, EcgLead.AVF, EcgLead.V4, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
-        EcgCriterionMarker("PR bajo", "Depresión de PR didáctica", setOf(EcgLead.DII, EcgLead.AVF, EcgLead.V5), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0))
+    EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> listOf(
+        EcgCriterionMarker("S V1", "S profunda en V1", setOf(EcgLead.V1), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("R V5/V6", "R alta lateral baja", setOf(EcgLead.V5, EcgLead.V6), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("Sokolow", "S V1 + R V5/V6 ≥ 35 mm", setOf(EcgLead.V1, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("Cornell", "R aVL + S V3 aumentado", setOf(EcgLead.AVL, EcgLead.V3), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("Strain", "ST-T discordante lateral posible", setOf(EcgLead.DI, EcgLead.AVL, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFEF6C00), maxOccurrences = 1)
     )
-    EcgPathologyPattern.HYPOKALEMIA -> listOf(
-        EcgCriterionMarker("T aplanada", "Repolarización disminuida", setOf(EcgLead.DII, EcgLead.V4, EcgLead.V5), EcgCriterionRegion.T_WAVE, Color(0xFFEF6C00)),
-        EcgCriterionMarker("U/QT aparente", "Prolongación aparente de repolarización", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.QT_INTERVAL, Color(0xFF6A1B9A))
+    EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY -> listOf(
+        EcgCriterionMarker("R V1", "R dominante en V1", setOf(EcgLead.V1), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("S V5/V6", "S profunda lateral baja", setOf(EcgLead.V5, EcgLead.V6), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("Eje derecho", "Desviación del eje a la derecha", setOf(EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("T negativa", "Repolarización derecha posible", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.T_WAVE, Color(0xFF6A1B9A), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK -> listOf(
+        EcgCriterionMarker("rSR'", "Orejas de conejo en V1/V2", setOf(EcgLead.V1, EcgLead.V2), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("QRS ≥ 120", "Bloqueo completo si QRS ≥ 120 ms", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("S terminal", "S ancha en DI y V6", setOf(EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("T discordante", "ST-T opuestos a R' terminal", setOf(EcgLead.V1, EcgLead.V2), EcgCriterionRegion.T_WAVE, Color(0xFFEF6C00), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK -> listOf(
+        EcgCriterionMarker("QRS ≥ 120", "Bloqueo completo si QRS ≥ 120 ms", setOf(EcgLead.DII, EcgLead.V1, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("V1 negativo", "QS o rS en V1", setOf(EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("R lateral", "R amplia o mellada en DI/V6", setOf(EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("Sin q lateral", "Ausencia de q septal lateral", setOf(EcgLead.DI, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("ST-T discordante", "Repolarización secundaria", setOf(EcgLead.V1, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFEF6C00), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.ANTERIOR_STEMI -> listOf(
+        EcgCriterionMarker("ST V2-V4", "Elevación anterior/anteroseptal", setOf(EcgLead.V2, EcgLead.V3, EcgLead.V4), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("Derivaciones contiguas", "V2-V4/V5 relacionadas", setOf(EcgLead.V2, EcgLead.V3, EcgLead.V4, EcgLead.V5), EcgCriterionRegion.ST_SEGMENT, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("Recíproco", "Descenso inferior posible", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.INFERIOR_STEMI -> listOf(
+        EcgCriterionMarker("ST inferior", "Elevación en DII, DIII, aVF", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("Contiguidad", "Inferiores son derivaciones relacionadas", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("Recíproco", "Descenso en DI/aVL", setOf(EcgLead.DI, EcgLead.AVL), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("VD posible", "V1 puede orientar a VD", setOf(EcgLead.V1), EcgCriterionRegion.ST_SEGMENT, Color(0xFF2E7D32), maxOccurrences = 1)
     )
     EcgPathologyPattern.LATERAL_STEMI -> listOf(
-        EcgCriterionMarker("ST lateral", "Elevación en DI, aVL, V5 y V6", setOf(EcgLead.DI, EcgLead.AVL, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
-        EcgCriterionMarker("Recíproco", "Cambios opuestos inferiores", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0))
+        EcgCriterionMarker("ST lateral alto", "Elevación en DI/aVL", setOf(EcgLead.DI, EcgLead.AVL), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("ST lateral bajo", "Elevación en V5/V6", setOf(EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("Recíproco", "Cambios opuestos inferiores", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0), maxOccurrences = 1)
     )
     EcgPathologyPattern.POSTERIOR_STEMI -> listOf(
-        EcgCriterionMarker("ST descendido", "V1-V3 como espejo posterior", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
-        EcgCriterionMarker("R anterior", "R relativamente alta en V1-V3", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
+        EcgCriterionMarker("ST ↓ V1-V3", "Descenso anterior como espejo posterior", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("R alta", "R relativamente alta en V1-V3", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("T positiva", "T anterior prominente posible", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.T_WAVE, Color(0xFF6A1B9A), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.HYPERKALEMIA -> listOf(
+        EcgCriterionMarker("T picuda", "Ondas T altas y estrechas", setOf(EcgLead.DII, EcgLead.V2, EcgLead.V3, EcgLead.V4), EcgCriterionRegion.T_WAVE, Color(0xFFEF6C00), maxOccurrences = 2),
+        EcgCriterionMarker("PR largo", "Conducción AV lenta posible", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("QRS ancho", "Ensanchamiento progresivo", setOf(EcgLead.DII, EcgLead.V2), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("QT corto", "QT relativamente corto", setOf(EcgLead.DII), EcgCriterionRegion.QT_INTERVAL, Color(0xFF2E7D32), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.HYPOKALEMIA -> listOf(
+        EcgCriterionMarker("T plana", "Aplanamiento/inversión de T", setOf(EcgLead.DII, EcgLead.V4, EcgLead.V5), EcgCriterionRegion.T_WAVE, Color(0xFFEF6C00), maxOccurrences = 1),
+        EcgCriterionMarker("ST ↓", "Depresión del ST posible", setOf(EcgLead.DII, EcgLead.V4, EcgLead.V5), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("U", "Onda U posterior a T", setOf(EcgLead.DII, EcgLead.V3, EcgLead.V5), EcgCriterionRegion.QT_INTERVAL, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("QU largo", "QT aparente/QU prolongado", setOf(EcgLead.DII), EcgCriterionRegion.QT_INTERVAL, Color(0xFF1565C0), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.LONG_QT -> listOf(
+        EcgCriterionMarker("QT largo", "Desde inicio de QRS hasta fin de T", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.QT_INTERVAL, Color(0xFF6A1B9A), maxOccurrences = 2),
+        EcgCriterionMarker("T tardía", "Repolarización prolongada", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.T_WAVE, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("QTc", "Confirmar con corrección por FC", setOf(EcgLead.DII), EcgCriterionRegion.QT_INTERVAL, Color(0xFFC62828), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.SINUS_BRADYCARDIA -> listOf(
+        EcgCriterionMarker("P sinusal", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("RR largo", "Frecuencia < 60 lpm", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF2E7D32), maxOccurrences = 2),
+        EcgCriterionMarker("QRS estrecho", "Ritmo de origen sinusal", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.SINUS_TACHYCARDIA -> listOf(
+        EcgCriterionMarker("P sinusal", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("RR corto", "Frecuencia elevada", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828), maxOccurrences = 2),
+        EcgCriterionMarker("QRS estrecho", "Conducción ventricular normal", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.ATRIAL_FLUTTER -> listOf(
+        EcgCriterionMarker("Ondas F", "Serrucho inferior", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00), maxOccurrences = 3),
+        EcgCriterionMarker("Conducción 2:1", "Respuesta ventricular organizada", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("QRS estrecho", "Si no hay aberrancia", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.SVT -> listOf(
+        EcgCriterionMarker("FC alta", "Taquicardia regular", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828), maxOccurrences = 2),
+        EcgCriterionMarker("QRS estrecho", "Complejo estrecho", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32), maxOccurrences = 1),
+        EcgCriterionMarker("P oculta", "P no visible o retrógrada", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> listOf(
+        EcgCriterionMarker("QRS ancho", "Complejo ancho regular", setOf(EcgLead.DII, EcgLead.V1, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828), maxOccurrences = 2),
+        EcgCriterionMarker("FC alta", "Taquicardia ventricular", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFEF6C00), maxOccurrences = 1),
+        EcgCriterionMarker("Disociación posible", "P no relacionada puede existir", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> listOf(
+        EcgCriterionMarker("PR corto", "PR < 120 ms", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("Delta", "Empastamiento inicial del QRS", setOf(EcgLead.DII, EcgLead.V2, EcgLead.V5), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828), maxOccurrences = 2),
+        EcgCriterionMarker("QRS ancho", "Preexcitación ensancha el QRS", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("ST-T secundario", "Repolarización puede alterarse", setOf(EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFEF6C00), maxOccurrences = 1)
+    )
+    EcgPathologyPattern.PERICARDITIS -> listOf(
+        EcgCriterionMarker("ST difuso", "Elevación cóncava generalizada", setOf(EcgLead.DI, EcgLead.DII, EcgLead.AVL, EcgLead.AVF, EcgLead.V4, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828), maxOccurrences = 1),
+        EcgCriterionMarker("PR bajo", "Depresión de PR", setOf(EcgLead.DII, EcgLead.AVF, EcgLead.V5), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0), maxOccurrences = 1),
+        EcgCriterionMarker("aVR opuesto", "ST bajo/PR alto relativo en aVR", setOf(EcgLead.AVR), EcgCriterionRegion.ST_SEGMENT, Color(0xFF6A1B9A), maxOccurrences = 1),
+        EcgCriterionMarker("Sin territorio único", "No respeta un solo territorio coronario", setOf(EcgLead.DI, EcgLead.DII, EcgLead.V5), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF2E7D32), maxOccurrences = 1)
     )
 }
 
+private fun pathologyDiagnosticCriteria(pattern: EcgPathologyPattern): List<String> = when (pattern) {
+    EcgPathologyPattern.NORMAL_SINUS -> listOf("Frecuencia entre 60 y 100 lpm.", "Cada QRS está precedido por onda P sinusal.", "Onda P positiva en DI, DII y aVF y negativa en aVR.", "Intervalo PR entre 120 y 200 ms.", "QRS estrecho menor de 120 ms.", "Ritmo regular, con RR estable.")
+    EcgPathologyPattern.PVC -> listOf("Latido prematuro respecto al ciclo basal.", "QRS ancho, usualmente ≥ 120 ms.", "Morfología QRS diferente al latido sinusal.", "No suele existir onda P sinusal inmediatamente antes del complejo.", "ST-T discordante respecto al QRS ectópico.", "Pausa compensadora posterior frecuente.")
+    EcgPathologyPattern.ATRIAL_FIBRILLATION -> listOf("Ausencia de ondas P organizadas.", "Intervalos RR irregularmente irregulares.", "Actividad auricular fina o gruesa en la línea de base.", "QRS generalmente estrecho si no hay bloqueo de rama o preexcitación.", "Frecuencia ventricular variable.")
+    EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK -> listOf("Intervalo PR mayor de 200 ms.", "Todas las ondas P conducen a QRS.", "Relación P:QRS 1:1.", "El PR prolongado es constante.", "QRS puede ser estrecho o ancho según el sitio del trastorno.")
+    EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> listOf("Alargamiento progresivo del PR.", "Después del PR más largo aparece una onda P no conducida.", "Tras el QRS bloqueado el ciclo reinicia con PR más corto.", "Intervalo RR se acorta progresivamente antes de la pausa.", "Ritmo auricular regularmente organizado.")
+    EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> listOf("PR constante en latidos conducidos.", "Una o más ondas P no conducen súbitamente.", "No hay alargamiento progresivo del PR antes del bloqueo.", "Puede tener QRS ancho si el bloqueo es infranodal.", "Puede progresar a bloqueo AV completo.")
+    EcgPathologyPattern.SECOND_DEGREE_TWO_TO_ONE -> listOf("Dos ondas P por cada QRS conducido.", "Una P conducida alterna con una P bloqueada.", "No permite distinguir con certeza Mobitz I vs Mobitz II si no hay más contexto.", "Requiere valorar anchura de QRS, clínica y trazos más largos.")
+    EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> listOf("Disociación completa entre ondas P y complejos QRS.", "Frecuencia auricular y ventricular independientes.", "Más ondas P que QRS.", "Intervalos PP regulares y RR regulares, pero sin relación fija.", "QRS estrecho si escape nodal; ancho si escape ventricular.", "Frecuencia ventricular de escape lenta.")
+    EcgPathologyPattern.LEFT_ATRIAL_ENLARGEMENT -> listOf("Onda P ancha, usualmente ≥ 120 ms.", "P mellada en DII, apariencia de doble montaña o P mitrale.", "Componente terminal negativo en V1 aumentado.", "Puede observarse duración aumentada de la porción terminal de P.")
+    EcgPathologyPattern.RIGHT_ATRIAL_ENLARGEMENT -> listOf("P alta y picuda en derivaciones inferiores.", "Amplitud de P aumentada, especialmente en DII, DIII y aVF.", "Componente inicial positivo de P en V1 puede estar aumentado.", "Duración de P puede ser normal.")
+    EcgPathologyPattern.BIATRIAL_ENLARGEMENT -> listOf("Criterios de crecimiento auricular derecho e izquierdo al mismo tiempo.", "P alta y también ancha/mellada.", "V1 puede mostrar componente inicial positivo y terminal negativo aumentados.")
+    EcgPathologyPattern.PREMATURE_ATRIAL_CONTRACTION -> listOf("Onda P prematura, antes de lo esperado.", "Morfología de P distinta a la sinusal.", "QRS habitualmente estrecho.", "Puede haber pausa no compensadora.", "El latido prematuro puede deformar la onda T previa.")
+    EcgPathologyPattern.JUNCTIONAL_RHYTHM -> listOf("Frecuencia típica de escape nodal cercana a 40-60 lpm.", "QRS estrecho salvo aberrancia.", "P ausente, invertida o retrógrada.", "P puede aparecer antes, dentro o después del QRS.", "PR corto si la P retrógrada precede al QRS.")
+    EcgPathologyPattern.SINUS_PAUSE -> listOf("Pausa súbita sin ondas P ni QRS.", "No hay actividad sinusal durante el intervalo.", "El ritmo puede reiniciar con onda P sinusal.", "La pausa no siempre es múltiplo exacto del PP basal.")
+    EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> listOf("Voltajes aumentados en precordiales o laterales.", "Sokolow-Lyon: S en V1 + R en V5/V6 elevado.", "Cornell: R en aVL + S en V3 elevado según sexo.", "Puede haber desviación izquierda del eje.", "Puede existir patrón de strain lateral: ST descendido y T negativa/asimétrica.")
+    EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY -> listOf("Eje eléctrico derecho.", "R dominante en V1 o relación R/S alta en V1.", "S persistente en V5-V6.", "Puede haber datos de sobrecarga derecha con T negativa en V1-V3.", "Debe correlacionarse con edad y contexto clínico.")
+    EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK -> listOf("QRS ≥ 120 ms en bloqueo completo.", "Morfología rSR’, rsR’ o R terminal en V1-V2, orejas de conejo.", "S terminal ancha en DI y V6.", "Tiempo de activación terminal derecho prolongado.", "ST-T discordante secundario en precordiales derechas.")
+    EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK -> listOf("QRS ≥ 120 ms.", "QS o rS en V1.", "R amplia, empastada o mellada en DI, aVL, V5 y V6.", "Ausencia de q septal en derivaciones laterales.", "ST-T discordante secundario.", "La presencia de BRI limita interpretación de HVI e infarto con criterios usuales.")
+    EcgPathologyPattern.ANTERIOR_STEMI -> listOf("Elevación del ST en derivaciones precordiales anteriores contiguas.", "Predominio en V2-V4, con posible extensión a V5.", "Puede haber cambios recíprocos inferiores.", "Debe valorarse punto J, edad, sexo y clínica.", "Puede sugerir territorio de arteria descendente anterior.")
+    EcgPathologyPattern.INFERIOR_STEMI -> listOf("Elevación del ST en DII, DIII y aVF.", "Derivaciones inferiores son contiguas anatómicamente.", "Descenso recíproco en DI y aVL puede apoyar el diagnóstico.", "Elevación mayor en DIII que DII puede sugerir coronaria derecha.", "Considerar derivaciones derechas si sospecha compromiso de VD.")
+    EcgPathologyPattern.LATERAL_STEMI -> listOf("Elevación del ST en DI y aVL, y/o V5-V6.", "Puede coexistir con infarto anterior o inferior según arteria afectada.", "Cambios recíprocos inferiores pueden estar presentes.", "Debe confirmarse con clínica, biomarcadores y seriación.")
+    EcgPathologyPattern.POSTERIOR_STEMI -> listOf("Descenso horizontal del ST en V1-V3.", "R relativamente alta en V1-V3 como imagen espejo.", "T positiva prominente en precordiales derechas puede aparecer.", "Confirmar idealmente con derivaciones posteriores V7-V9.")
+    EcgPathologyPattern.HYPERKALEMIA -> listOf("Ondas T altas, simétricas y picudas.", "Acortamiento relativo del QT inicial.", "Prolongación del PR y disminución de P conforme progresa.", "Ensanchamiento del QRS en fases avanzadas.", "Puede evolucionar a patrón sinusoidal y arritmias graves.")
+    EcgPathologyPattern.HYPOKALEMIA -> listOf("Aplanamiento o inversión de onda T.", "Depresión del ST.", "Onda U prominente, especialmente en precordiales.", "Aparente prolongación QU o QT medido erróneamente si se incluye U.", "Riesgo de arritmias ventriculares.")
+    EcgPathologyPattern.LONG_QT -> listOf("Intervalo QT medido prolongado.", "QTc elevado tras corregir por frecuencia cardiaca.", "La onda T puede verse tardía o prolongada.", "Debe evitarse confundir onda U con final de T.", "Aumenta riesgo de torsades de pointes según contexto.")
+    EcgPathologyPattern.SINUS_BRADYCARDIA -> listOf("Frecuencia menor de 60 lpm.", "Onda P sinusal antes de cada QRS.", "Ritmo regular.", "PR constante y QRS usualmente estrecho.", "Puede ser fisiológica o secundaria a fármacos/enfermedad.")
+    EcgPathologyPattern.SINUS_TACHYCARDIA -> listOf("Frecuencia mayor de 100 lpm.", "P sinusal antes de cada QRS.", "Ritmo regular.", "QRS estrecho si no hay trastorno de conducción.", "Buscar causa fisiológica o patológica subyacente.")
+    EcgPathologyPattern.ATRIAL_FLUTTER -> listOf("Ondas F en serrucho, típicas en derivaciones inferiores.", "Frecuencia auricular cercana a 250-350 lpm.", "Conducción AV 2:1 frecuente, aunque puede variar.", "QRS usualmente estrecho.", "La línea de base no vuelve claramente a isoeléctrica entre ondas F.")
+    EcgPathologyPattern.SVT -> listOf("Taquicardia regular de QRS estrecho.", "Frecuencia usualmente 150-250 lpm.", "Ondas P ausentes, retrógradas u ocultas en QRS/T.", "Inicio y terminación suelen ser súbitos.", "Considerar aberrancia si QRS ancho.")
+    EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> listOf("Taquicardia de QRS ancho.", "Frecuencia usualmente mayor de 120 lpm.", "Ritmo generalmente regular.", "Puede existir disociación AV, latidos de captura o fusión.", "Tratar como TV hasta demostrar lo contrario si hay taquicardia de complejo ancho.")
+    EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> listOf("PR corto menor de 120 ms.", "Onda delta: ascenso inicial lento del QRS.", "QRS ancho por preexcitación.", "Cambios ST-T secundarios posibles.", "Riesgo de taquiarritmias por vía accesoria.")
+    EcgPathologyPattern.PERICARDITIS -> listOf("Elevación difusa y cóncava del ST.", "Depresión del PR en varias derivaciones.", "Cambios opuestos en aVR pueden aparecer.", "No respeta un territorio coronario único.", "Evoluciona por fases y debe correlacionarse con clínica.")
+}
+
+private val twelveLeadLayout = listOf(
 private val twelveLeadLayout = listOf(
     listOf(EcgLead.DI, EcgLead.AVR, EcgLead.V1, EcgLead.V4),
     listOf(EcgLead.DII, EcgLead.AVL, EcgLead.V2, EcgLead.V5),
@@ -1928,6 +2016,8 @@ private fun EcgPathologiesContent(state: EcgSharedInputState) {
             }
         }
 
+        EcgPathologyCriteriaPanel(pattern = selected.pattern)
+
         EcgPathologyInteractivePreview(
             selected = selected,
             model = model
@@ -2236,6 +2326,75 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
 }
 
 
+
+
+@Composable
+private fun EcgPathologyCriteriaPanel(pattern: EcgPathologyPattern) {
+    var expanded by rememberSaveable(pattern.name) { mutableStateOf(false) }
+    val criteria = pathologyDiagnosticCriteria(pattern)
+    val markers = pathologyCriteria(pattern)
+
+    Surface(
+        onClick = { expanded = !expanded },
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Criterios diagnósticos descritos", fontWeight = FontWeight.Black)
+                    Text(
+                        "${criteria.size} criterios clínicos · ${markers.size} zonas/ondas señalables en el ECG didáctico",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null)
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HorizontalDivider()
+                    criteria.forEachIndexed { index, criterion ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Text(
+                                    "${index + 1}",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                            Text(criterion, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    Text(
+                        "Nota: no todos los criterios pueden dibujarse al mismo tiempo sin volver ilegible el ECG; por eso algunos se describen en lista y otros se resaltan sobre ondas/intervalos.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun EcgPathologyPicker(
@@ -3652,7 +3811,17 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
     }
 
     val boxes = mutableListOf<Triple<EcgCriterionMarker, Offset, Size>>()
-    while (beatStart < segmentEndMs + model.rrMs && boxes.size < 8) {
+    val occurrenceCounts = mutableMapOf<String, Int>()
+    fun canPlaceMarker(marker: EcgCriterionMarker, beatIndexValue: Int): Boolean {
+        val target = marker.targetBeatModulo
+        if (target != null && beatIndexValue % marker.targetBeatCycle != target) return false
+        val key = "${marker.label}|${marker.detail}|${marker.leads.joinToString { it.name }}"
+        val count = occurrenceCounts[key] ?: 0
+        if (count >= marker.maxOccurrences) return false
+        occurrenceCounts[key] = count + 1
+        return true
+    }
+    while (beatStart < segmentEndMs + model.rrMs && boxes.size < 18) {
         val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
         val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
         val isPvcBeat = model.pathologyPattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
@@ -3696,12 +3865,12 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
         val qtEnd = qrsOn + model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
 
         if (isSinusPause) {
-            leadMarkers.filter { it.region == EcgCriterionRegion.WHOLE_STRIP }.forEach { marker ->
+            leadMarkers.filter { it.region == EcgCriterionRegion.WHOLE_STRIP && canPlaceMarker(it, beatIndex) }.forEach { marker ->
                 val (o, s) = rectForTimes(beatStart, beatStart + rr * 1.85, 0.18f, 0.84f)
                 boxes.add(Triple(marker, o, s))
             }
         } else {
-            leadMarkers.forEach { marker ->
+            leadMarkers.filter { canPlaceMarker(it, beatIndex) }.forEach { marker ->
                 val rect = when (marker.region) {
                     EcgCriterionRegion.P_WAVE -> rectForTimes(pStart, pEnd, 0.26f, 0.74f)
                     EcgCriterionRegion.PR_INTERVAL -> rectForTimes(pStart, qrsOn, 0.32f, 0.72f)

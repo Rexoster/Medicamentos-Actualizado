@@ -1,0 +1,7 @@
+VERIFICACION V23.18
+- Panel de criterios diagnósticos completos agregado.
+- Criterios visuales con control de ocurrencias por latido.
+- Mobitz I muestra PR1/PR2/PR3/P bloqueada como marcadores separados.
+- Mobitz II muestra PR constante y P/QRS caído.
+- BAV 2:1 usa alternancia de latidos.
+- Se amplió la lista descriptiva de criterios por patología.
