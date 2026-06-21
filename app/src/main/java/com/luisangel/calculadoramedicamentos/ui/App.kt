@@ -3232,32 +3232,35 @@ private fun ObstetricsScreen(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier) {
         val compactHeight = maxHeight < 560.dp
         val landscape = maxWidth > maxHeight
-        val menuSpacing = if (compactHeight) 6.dp else 10.dp
+        val overlayTopSpace = if (compactHeight) 68.dp else 78.dp
 
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(menuSpacing)
-        ) {
-            ObstetricCollapsibleMenu(
-                expanded = menuExpanded,
-                selected = selected,
-                onToggle = { menuExpanded = !menuExpanded },
-                onSelected = {
-                    selected = it
-                    menuExpanded = false
-                },
-                compactHeight = compactHeight,
-                landscape = landscape,
-                modifier = Modifier.fillMaxWidth()
-            )
-
+        Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(12.dp, 0.dp, 12.dp, 40.dp)
+                contentPadding = PaddingValues(12.dp, overlayTopSpace, 12.dp, 40.dp)
             ) {
                 item { ObstetricHeaderCard() }
                 item { ObstetricCalculatorContent(selected) }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 6.dp)
+            ) {
+                ObstetricCollapsibleMenu(
+                    expanded = menuExpanded,
+                    selected = selected,
+                    onToggle = { menuExpanded = !menuExpanded },
+                    onSelected = {
+                        selected = it
+                        menuExpanded = false
+                    },
+                    compactHeight = compactHeight,
+                    landscape = landscape,
+                    modifier = Modifier.fillMaxWidth(0.96f)
+                )
             }
         }
     }
@@ -5791,29 +5794,13 @@ private fun PediatricsScreen(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier) {
         val compactHeight = maxHeight < 560.dp
         val landscape = maxWidth > maxHeight
-        val menuSpacing = if (compactHeight) 6.dp else 10.dp
+        val overlayTopSpace = if (compactHeight) 68.dp else 78.dp
 
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(menuSpacing)
-        ) {
-            PediatricToolMenu(
-                expanded = menuExpanded,
-                selectedTool = selectedTool,
-                onToggle = { menuExpanded = !menuExpanded },
-                onToolSelected = {
-                    selectedTool = it
-                    menuExpanded = false
-                },
-                compactHeight = compactHeight,
-                landscape = landscape,
-                modifier = Modifier.fillMaxWidth()
-            )
-
+        Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxSize()
+                    .padding(top = overlayTopSpace)
             ) {
                 when (selectedTool) {
                     PediatricTool.PERCENTILES -> PercentilesScreen(
@@ -5828,6 +5815,25 @@ private fun PediatricsScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 6.dp)
+            ) {
+                PediatricToolMenu(
+                    expanded = menuExpanded,
+                    selectedTool = selectedTool,
+                    onToggle = { menuExpanded = !menuExpanded },
+                    onToolSelected = {
+                        selectedTool = it
+                        menuExpanded = false
+                    },
+                    compactHeight = compactHeight,
+                    landscape = landscape,
+                    modifier = Modifier.fillMaxWidth(0.96f)
+                )
             }
         }
     }

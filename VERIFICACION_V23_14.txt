@@ -1,0 +1,7 @@
+Verificación manual sugerida v23.14
+1. Abrir ECG > Patologías ECG.
+2. Elegir IAM anterior, BRI, HVI e hiperkalemia y confirmar que aparecen sombreados/etiquetas.
+3. Tocar el ECG de patología y abrir menú de derivaciones.
+4. Cambiar entre una derivación, ECG completo, áreas e irrigación.
+5. Hacer zoom con botones y pellizco.
+6. Entrar a ECG, Pediatría y Gineco-OB y desplazar hacia abajo: el botón de menú del submódulo debe seguir visible.

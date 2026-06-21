@@ -302,6 +302,25 @@ private data class EcgLeadCluster(
     val tint: Color
 )
 
+private enum class EcgCriterionRegion {
+    P_WAVE,
+    PR_INTERVAL,
+    QRS_COMPLEX,
+    ST_SEGMENT,
+    T_WAVE,
+    QT_INTERVAL,
+    VOLTAGE_ZONE,
+    WHOLE_STRIP
+}
+
+private data class EcgCriterionMarker(
+    val label: String,
+    val detail: String,
+    val leads: Set<EcgLead>,
+    val region: EcgCriterionRegion,
+    val tint: Color
+)
+
 private val ecgAreaGroups = listOf(
     EcgLeadCluster("inferior", "Inferior", "DII, DIII y aVF", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), Color(0xFF2E7D32)),
     EcgLeadCluster("septal", "Septal", "V1 y V2", setOf(EcgLead.V1, EcgLead.V2), Color(0xFF1565C0)),
@@ -318,6 +337,57 @@ private val ecgCoronaryGroups = listOf(
     EcgLeadCluster("cd", "CD / RCA", "Inferior y posible VD: DII, DIII, aVF; V1 puede orientar a VD", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF, EcgLead.V1), Color(0xFF2E7D32)),
     EcgLeadCluster("cx", "Cx / LCx", "Lateral y posterolateral: DI, aVL, V5-V6; a veces inferior por dominancia", setOf(EcgLead.DI, EcgLead.AVL, EcgLead.V5, EcgLead.V6, EcgLead.DII, EcgLead.DIII, EcgLead.AVF), Color(0xFF6A1B9A))
 )
+
+private fun pathologyCriteria(pattern: EcgPathologyPattern): List<EcgCriterionMarker> = when (pattern) {
+    EcgPathologyPattern.NORMAL_SINUS -> listOf(
+        EcgCriterionMarker("Onda P", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
+        EcgCriterionMarker("QRS estrecho", "Conducción intraventricular conservada", setOf(EcgLead.DII), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32)),
+        EcgCriterionMarker("T normal", "Repolarización habitual", setOf(EcgLead.DII), EcgCriterionRegion.T_WAVE, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.PVC -> listOf(
+        EcgCriterionMarker("QRS ancho prematuro", "Complejo ventricular adelantado", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
+        EcgCriterionMarker("Pausa compensadora", "Intervalo largo tras el latido ectópico", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFEF6C00))
+    )
+    EcgPathologyPattern.ATRIAL_FIBRILLATION -> listOf(
+        EcgCriterionMarker("Sin onda P", "No hay P organizada", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.P_WAVE, Color(0xFFC62828)),
+        EcgCriterionMarker("RR irregular", "Ritmo irregularmente irregular", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.FIRST_DEGREE_AV_BLOCK -> listOf(
+        EcgCriterionMarker("PR prolongado", "PR > 200 ms", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY -> listOf(
+        EcgCriterionMarker("S profunda", "S en V1 elevada", setOf(EcgLead.V1), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF2E7D32)),
+        EcgCriterionMarker("R alta", "R alta en V5/V6", setOf(EcgLead.V5, EcgLead.V6), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFFC62828)),
+        EcgCriterionMarker("aVL alto", "Cornell / voltaje lateral", setOf(EcgLead.AVL), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY -> listOf(
+        EcgCriterionMarker("R dominante en V1", "Predominio de R precordial derecha", setOf(EcgLead.V1), EcgCriterionRegion.VOLTAGE_ZONE, Color(0xFFC62828)),
+        EcgCriterionMarker("Eje derecho", "Desviación del eje a la derecha", setOf(EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK -> listOf(
+        EcgCriterionMarker("rSR'", "Complejo en V1 compatible con BRD", setOf(EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
+        EcgCriterionMarker("S terminal ancha", "S en DI/V6", setOf(EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
+    )
+    EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK -> listOf(
+        EcgCriterionMarker("QRS ancho", "Retraso de conducción", setOf(EcgLead.V1, EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
+        EcgCriterionMarker("R ancha/notchada", "Morfología lateral", setOf(EcgLead.DI, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.ANTERIOR_STEMI -> listOf(
+        EcgCriterionMarker("ST elevado", "Elevación en territorio anterior", setOf(EcgLead.V2, EcgLead.V3, EcgLead.V4, EcgLead.V5), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
+        EcgCriterionMarker("Recíproco", "Descenso opuesto", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.INFERIOR_STEMI -> listOf(
+        EcgCriterionMarker("ST elevado", "Elevación en DII, DIII, aVF", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
+        EcgCriterionMarker("Recíproco", "Descenso en DI/aVL", setOf(EcgLead.DI, EcgLead.AVL), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.HYPERKALEMIA -> listOf(
+        EcgCriterionMarker("T picuda", "Ondas T altas y apiculadas", setOf(EcgLead.DII, EcgLead.V2, EcgLead.V3, EcgLead.V4), EcgCriterionRegion.T_WAVE, Color(0xFFEF6C00)),
+        EcgCriterionMarker("QRS ensanchado", "Progresión de hiperkalemia", setOf(EcgLead.DII, EcgLead.V2), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828))
+    )
+    EcgPathologyPattern.LONG_QT -> listOf(
+        EcgCriterionMarker("QT prolongado", "Desde inicio de QRS hasta final de T", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.QT_INTERVAL, Color(0xFF6A1B9A))
+    )
+}
 
 private val twelveLeadLayout = listOf(
     listOf(EcgLead.DI, EcgLead.AVR, EcgLead.V1, EcgLead.V4),
@@ -406,14 +476,22 @@ fun EcgScreen(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier) {
         val compactHeight = maxHeight < 520.dp
         val padding = if (compactHeight) 8.dp else 14.dp
+        val overlayTopSpace = if (compactHeight) 68.dp else 78.dp
 
-        EcgToolBody(
-            selected = selected,
-            sharedInput = sharedInput,
-            compact = compactHeight,
-            contentPadding = PaddingValues(padding),
-            modifier = Modifier.fillMaxSize(),
-            menu = {
+        Box(modifier = Modifier.fillMaxSize()) {
+            EcgToolBody(
+                selected = selected,
+                sharedInput = sharedInput,
+                compact = compactHeight,
+                contentPadding = PaddingValues(start = padding, top = padding + overlayTopSpace, end = padding, bottom = padding),
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 6.dp)
+            ) {
                 EcgCollapsibleToolMenu(
                     selected = selected,
                     expanded = ecgMenuExpanded,
@@ -423,10 +501,11 @@ fun EcgScreen(modifier: Modifier = Modifier) {
                         ecgMenuExpanded = false
                     },
                     compact = compactHeight,
-                    availableWidth = maxWidth
+                    availableWidth = maxWidth,
+                    modifier = Modifier.fillMaxWidth(0.96f)
                 )
             }
-        )
+        }
     }
 }
 
@@ -1542,25 +1621,10 @@ private fun EcgPathologiesContent(state: EcgSharedInputState) {
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-        ) {
-            DynamicEcgStrip(
-                model = model,
-                lead = selected.focusLead,
-                title = "${selected.focusLead.label} · ${selected.title}",
-                subtitle = selected.focusLead.region,
-                highlighted = true,
-                tint = MaterialTheme.colorScheme.primary,
-                onTap = {},
-                zoomLevel = 1.15f,
-                modifier = Modifier
-                    .width(ecgSingleLeadWidthDp(model, 1.15f))
-                    .height(ecgSingleLeadHeightDp(1.15f))
-            )
-        }
+        EcgPathologyInteractivePreview(
+            selected = selected,
+            model = model
+        )
 
         ResultGrid(
             listOfNotNull(
@@ -1702,6 +1766,185 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.prText.value = "160"
             state.qrsText.value = "92"
             state.qtText.value = "520"
+        }
+    }
+}
+
+
+@Composable
+private fun EcgPathologyInteractivePreview(
+    selected: EcgPathologyExample,
+    model: EcgPreviewModel
+) {
+    var selectorExpanded by rememberSaveable(selected.id) { mutableStateOf(false) }
+    var modeName by rememberSaveable(selected.id) { mutableStateOf(EcgPreviewMode.SINGLE_LEAD.name) }
+    var selectedLeadName by rememberSaveable(selected.id) { mutableStateOf(selected.focusLead.name) }
+    var selectedAreaIdsRaw by rememberSaveable(selected.id) { mutableStateOf(ecgAreaGroups.first().id) }
+    var selectedTerritoryIdsRaw by rememberSaveable(selected.id) { mutableStateOf(ecgCoronaryGroups.first().id) }
+    var zoomLevel by rememberSaveable(selected.id) { mutableStateOf(1.0f) }
+
+    val mode = EcgPreviewMode.valueOf(modeName)
+    val selectedLead = EcgLead.valueOf(selectedLeadName)
+    val selectedAreaIds = selectedClusterIds(selectedAreaIdsRaw, ecgAreaGroups)
+    val selectedTerritoryIds = selectedClusterIds(selectedTerritoryIdsRaw, ecgCoronaryGroups)
+    val selectedAreas = ecgAreaGroups.filter { it.id in selectedAreaIds }.ifEmpty { listOf(ecgAreaGroups.first()) }
+    val selectedTerritories = ecgCoronaryGroups.filter { it.id in selectedTerritoryIds }.ifEmpty { listOf(ecgCoronaryGroups.first()) }
+    val criteriaMarkers = pathologyCriteria(selected.pattern)
+    val activeClusters = when (mode) {
+        EcgPreviewMode.CARDIAC_AREA -> selectedAreas
+        EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritories
+        else -> emptyList()
+    }
+    val highlightedLeadColors = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> mapOf(selectedLead to listOf(MaterialTheme.colorScheme.primary))
+        EcgPreviewMode.TWELVE_LEADS -> emptyMap()
+        EcgPreviewMode.CARDIAC_AREA -> leadHighlightColors(selectedAreas)
+        EcgPreviewMode.CORONARY_TERRITORY -> leadHighlightColors(selectedTerritories)
+    }
+    val highlightedLeads = highlightedLeadColors.keys
+    val tint = activeClusters.firstOrNull()?.tint ?: MaterialTheme.colorScheme.primary
+    val displayTitle = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> "Derivación ${selectedLead.label} · ${selected.title}"
+        EcgPreviewMode.TWELVE_LEADS -> "ECG patológico completo · ${selected.title}"
+        EcgPreviewMode.CARDIAC_AREA -> clusterSummaryTitle("Área", selectedAreas)
+        EcgPreviewMode.CORONARY_TERRITORY -> clusterSummaryTitle("Territorio", selectedTerritories)
+    }
+    val displaySubtitle = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> selectedLead.region
+        EcgPreviewMode.TWELVE_LEADS -> "Toca el ECG para abrir el menú. Pellizca para zoom y revisa dónde se sombrea cada criterio."
+        EcgPreviewMode.CARDIAC_AREA -> clusterSummarySubtitle(selectedAreas)
+        EcgPreviewMode.CORONARY_TERRITORY -> clusterSummarySubtitle(selectedTerritories)
+    }
+    val visibleLeads = when (mode) {
+        EcgPreviewMode.SINGLE_LEAD -> setOf(selectedLead)
+        EcgPreviewMode.TWELVE_LEADS -> EcgLead.entries.toSet()
+        EcgPreviewMode.CARDIAC_AREA, EcgPreviewMode.CORONARY_TERRITORY -> highlightedLeads
+    }
+    val visibleMarkers = criteriaMarkers.filter { marker -> marker.leads.any { it in visibleLeads } }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        EcgPreviewModeHeader(
+            title = displayTitle,
+            subtitle = displaySubtitle,
+            mode = mode,
+            onOpenMenu = { selectorExpanded = !selectorExpanded }
+        )
+
+        AnimatedVisibility(visible = selectorExpanded) {
+            EcgPreviewSelectorPanel(
+                mode = mode,
+                onModeSelected = { modeName = it.name },
+                selectedLead = selectedLead,
+                onLeadSelected = { selectedLeadName = it.name },
+                selectedAreaIds = selectedAreaIds,
+                onAreaToggled = { selectedAreaIdsRaw = toggleClusterSelection(selectedAreaIdsRaw, it, ecgAreaGroups) },
+                selectedTerritoryIds = selectedTerritoryIds,
+                onTerritoryToggled = { selectedTerritoryIdsRaw = toggleClusterSelection(selectedTerritoryIdsRaw, it, ecgCoronaryGroups) }
+            )
+        }
+
+        ZoomControls(
+            zoomLevel = zoomLevel,
+            onZoomOut = { zoomLevel = (zoomLevel - 0.25f).coerceIn(0.75f, 3.0f) },
+            onZoomIn = { zoomLevel = (zoomLevel + 0.25f).coerceIn(0.75f, 3.0f) },
+            onReset = { zoomLevel = 1.0f }
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(selected.id, modeName) {
+                    awaitEachGesture {
+                        do {
+                            val event = awaitPointerEvent()
+                            val pressedPointers = event.changes.count { it.pressed }
+                            if (pressedPointers >= 2) {
+                                val zoomChange = event.calculateZoom()
+                                if (zoomChange.isFinite() && zoomChange > 0f && zoomChange != 1f) {
+                                    zoomLevel = (zoomLevel * zoomChange).coerceIn(0.75f, 3.0f)
+                                }
+                                event.changes.forEach { change ->
+                                    if (change.positionChanged()) change.consume()
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
+                .horizontalScroll(rememberScrollState())
+        ) {
+            if (mode == EcgPreviewMode.SINGLE_LEAD) {
+                DynamicEcgStrip(
+                    model = model,
+                    lead = selectedLead,
+                    title = displayTitle,
+                    subtitle = displaySubtitle,
+                    highlighted = true,
+                    tint = tint,
+                    onTap = { selectorExpanded = !selectorExpanded },
+                    zoomLevel = zoomLevel,
+                    criteriaMarkers = criteriaMarkers,
+                    modifier = Modifier
+                        .width(ecgSingleLeadWidthDp(model, zoomLevel))
+                        .height(ecgSingleLeadHeightDp(zoomLevel))
+                )
+            } else {
+                DynamicTwelveLeadEcg(
+                    model = model,
+                    highlightedLeadColors = highlightedLeadColors,
+                    title = displayTitle,
+                    subtitle = displaySubtitle,
+                    onTap = { selectorExpanded = !selectorExpanded },
+                    zoomLevel = zoomLevel,
+                    criteriaMarkers = criteriaMarkers,
+                    modifier = Modifier
+                        .width(ecgTwelveLeadWidthDp(zoomLevel))
+                        .height(ecgTwelveLeadHeightDp(zoomLevel))
+                )
+            }
+        }
+
+        if (mode == EcgPreviewMode.CARDIAC_AREA || mode == EcgPreviewMode.CORONARY_TERRITORY) {
+            EcgLeadLegend(
+                title = displayTitle,
+                subtitle = displaySubtitle,
+                clusters = activeClusters,
+                leads = highlightedLeads
+            )
+        }
+
+        EcgCriteriaLegend(visibleMarkers)
+    }
+}
+
+@Composable
+private fun EcgCriteriaLegend(markers: List<EcgCriterionMarker>) {
+    if (markers.isEmpty()) return
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Criterios señalados sobre el ECG", fontWeight = FontWeight.Black)
+            markers.distinctBy { it.label + it.detail + it.leads.joinToString() }.forEach { marker ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Surface(shape = RoundedCornerShape(999.dp), color = marker.tint, modifier = Modifier.size(14.dp)) {}
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(marker.label, fontWeight = FontWeight.Bold, color = marker.tint)
+                        Text(marker.detail, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Derivaciones: ${marker.leads.sortedBy { it.ordinal }.joinToString { it.label }}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -2131,6 +2374,7 @@ private fun DynamicEcgStrip(
     tint: Color,
     onTap: () -> Unit,
     zoomLevel: Float,
+    criteriaMarkers: List<EcgCriterionMarker> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val gridMinor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
@@ -2170,6 +2414,14 @@ private fun DynamicEcgStrip(
                 footer = subtitle,
                 smallSquarePx = smallSquarePx
             )
+            drawCriteriaHighlightsForLead(
+                lead = lead,
+                markers = criteriaMarkers,
+                topLeft = Offset(0f, 0f),
+                width = size.width,
+                height = size.height,
+                labelColor = labelColor
+            )
         }
     }
 }
@@ -2182,6 +2434,7 @@ private fun DynamicTwelveLeadEcg(
     subtitle: String,
     onTap: () -> Unit,
     zoomLevel: Float,
+    criteriaMarkers: List<EcgCriterionMarker> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val gridMinor = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
@@ -2247,6 +2500,15 @@ private fun DynamicTwelveLeadEcg(
                         displayMsOverride = segmentMs,
                         segmentStartMs = segmentStartMs,
                         smallSquarePx = smallSquarePx
+                    )
+                    drawCriteriaHighlightsForLead(
+                        lead = lead,
+                        markers = criteriaMarkers,
+                        topLeft = Offset(left + 8f, top + 14f),
+                        width = cellW - 16f,
+                        height = cellH - 22f,
+                        labelColor = labelColor,
+                        compactLabel = true
                     )
                 }
             }
@@ -2478,6 +2740,81 @@ private fun DrawScope.drawLeadTrace(
             alpha = 205
         }
         drawText(footer, topLeft.x + 10f, topLeft.y + height - 10f, footerPaint)
+    }
+}
+
+private fun DrawScope.drawCriteriaHighlightsForLead(
+    lead: EcgLead,
+    markers: List<EcgCriterionMarker>,
+    topLeft: Offset,
+    width: Float,
+    height: Float,
+    labelColor: Color,
+    compactLabel: Boolean = false
+) {
+    val leadMarkers = markers.filter { lead in it.leads }
+    if (leadMarkers.isEmpty()) return
+
+    fun regionBox(region: EcgCriterionRegion): Pair<Offset, Size> {
+        val x0: Float
+        val x1: Float
+        val y0: Float
+        val y1: Float
+        when (region) {
+            EcgCriterionRegion.P_WAVE -> {
+                x0 = 0.14f; x1 = 0.23f; y0 = 0.30f; y1 = 0.72f
+            }
+            EcgCriterionRegion.PR_INTERVAL -> {
+                x0 = 0.13f; x1 = 0.29f; y0 = 0.34f; y1 = 0.74f
+            }
+            EcgCriterionRegion.QRS_COMPLEX -> {
+                x0 = 0.27f; x1 = 0.36f; y0 = 0.14f; y1 = 0.82f
+            }
+            EcgCriterionRegion.ST_SEGMENT -> {
+                x0 = 0.36f; x1 = 0.46f; y0 = 0.34f; y1 = 0.74f
+            }
+            EcgCriterionRegion.T_WAVE -> {
+                x0 = 0.46f; x1 = 0.58f; y0 = 0.18f; y1 = 0.78f
+            }
+            EcgCriterionRegion.QT_INTERVAL -> {
+                x0 = 0.27f; x1 = 0.58f; y0 = 0.18f; y1 = 0.78f
+            }
+            EcgCriterionRegion.VOLTAGE_ZONE -> {
+                x0 = 0.24f; x1 = 0.38f; y0 = 0.10f; y1 = 0.88f
+            }
+            EcgCriterionRegion.WHOLE_STRIP -> {
+                x0 = 0.08f; x1 = 0.92f; y0 = 0.16f; y1 = 0.84f
+            }
+        }
+        return Offset(topLeft.x + width * x0, topLeft.y + height * y0) to Size(width * (x1 - x0), height * (y1 - y0))
+    }
+
+    leadMarkers.forEachIndexed { index, marker ->
+        val (offset, size) = regionBox(marker.region)
+        val shifted = Offset(offset.x, offset.y + index * if (compactLabel) 10f else 14f)
+        drawRect(
+            color = marker.tint.copy(alpha = 0.14f),
+            topLeft = shifted,
+            size = size
+        )
+        drawRect(
+            color = marker.tint.copy(alpha = 0.78f),
+            topLeft = shifted,
+            size = size,
+            style = Stroke(width = if (compactLabel) 1.6f else 2.0f)
+        )
+        val paint = android.graphics.Paint().apply {
+            color = marker.tint.toArgb()
+            textSize = if (compactLabel) 16f else 19f
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        drawContext.canvas.nativeCanvas.drawText(
+            marker.label,
+            shifted.x + 4f,
+            (shifted.y - 4f).coerceAtLeast(topLeft.y + 16f),
+            paint
+        )
     }
 }
 
