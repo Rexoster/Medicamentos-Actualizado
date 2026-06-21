@@ -1,0 +1,6 @@
+VERIFICACION V23.15
+- Doble toque en ECG de Patologías abre comparación Normal vs Patológico.
+- Tarjetas comparativas desplazables horizontalmente.
+- Al tocar una tarjeta se selecciona como ECG activo.
+- La vista activa conserva zoom, derivaciones, áreas, irrigación y criterios señalados.
+- No se modificaron cálculos clínicos ni medicamentos.

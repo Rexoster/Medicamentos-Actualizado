@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -320,6 +321,15 @@ private data class EcgCriterionMarker(
     val region: EcgCriterionRegion,
     val tint: Color
 )
+
+private enum class EcgComparisonSample(
+    val label: String,
+    val chipLabel: String,
+    val description: String
+) {
+    PATHOLOGY("Patológico", "Patología", "Trazo con los valores cargados para la patología seleccionada."),
+    NORMAL("Normal", "Normal", "Comparador sinusal normal para contrastar cambios de ritmo, voltaje, ST, QRS y QT.")
+}
 
 private val ecgAreaGroups = listOf(
     EcgLeadCluster("inferior", "Inferior", "DII, DIII y aVF", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), Color(0xFF2E7D32)),
@@ -1777,11 +1787,18 @@ private fun EcgPathologyInteractivePreview(
     model: EcgPreviewModel
 ) {
     var selectorExpanded by rememberSaveable(selected.id) { mutableStateOf(false) }
+    var comparisonDeckVisible by rememberSaveable(selected.id) { mutableStateOf(false) }
+    var activeSampleName by rememberSaveable(selected.id) { mutableStateOf(EcgComparisonSample.PATHOLOGY.name) }
     var modeName by rememberSaveable(selected.id) { mutableStateOf(EcgPreviewMode.SINGLE_LEAD.name) }
     var selectedLeadName by rememberSaveable(selected.id) { mutableStateOf(selected.focusLead.name) }
     var selectedAreaIdsRaw by rememberSaveable(selected.id) { mutableStateOf(ecgAreaGroups.first().id) }
     var selectedTerritoryIdsRaw by rememberSaveable(selected.id) { mutableStateOf(ecgCoronaryGroups.first().id) }
     var zoomLevel by rememberSaveable(selected.id) { mutableStateOf(1.0f) }
+
+    val normalModel = remember(model, selected.id) { normalComparatorModel(model) }
+    val activeSample = EcgComparisonSample.valueOf(activeSampleName)
+    val displayedModel = if (activeSample == EcgComparisonSample.NORMAL) normalModel else model
+    val displayedTitlePrefix = if (activeSample == EcgComparisonSample.NORMAL) "Comparador normal" else selected.title
 
     val mode = EcgPreviewMode.valueOf(modeName)
     val selectedLead = EcgLead.valueOf(selectedLeadName)
@@ -1789,7 +1806,7 @@ private fun EcgPathologyInteractivePreview(
     val selectedTerritoryIds = selectedClusterIds(selectedTerritoryIdsRaw, ecgCoronaryGroups)
     val selectedAreas = ecgAreaGroups.filter { it.id in selectedAreaIds }.ifEmpty { listOf(ecgAreaGroups.first()) }
     val selectedTerritories = ecgCoronaryGroups.filter { it.id in selectedTerritoryIds }.ifEmpty { listOf(ecgCoronaryGroups.first()) }
-    val criteriaMarkers = pathologyCriteria(selected.pattern)
+    val criteriaMarkers = pathologyCriteria(displayedModel.pathologyPattern)
     val activeClusters = when (mode) {
         EcgPreviewMode.CARDIAC_AREA -> selectedAreas
         EcgPreviewMode.CORONARY_TERRITORY -> selectedTerritories
@@ -1804,14 +1821,14 @@ private fun EcgPathologyInteractivePreview(
     val highlightedLeads = highlightedLeadColors.keys
     val tint = activeClusters.firstOrNull()?.tint ?: MaterialTheme.colorScheme.primary
     val displayTitle = when (mode) {
-        EcgPreviewMode.SINGLE_LEAD -> "Derivación ${selectedLead.label} · ${selected.title}"
-        EcgPreviewMode.TWELVE_LEADS -> "ECG patológico completo · ${selected.title}"
+        EcgPreviewMode.SINGLE_LEAD -> "Derivación ${selectedLead.label} · $displayedTitlePrefix"
+        EcgPreviewMode.TWELVE_LEADS -> "ECG completo · $displayedTitlePrefix"
         EcgPreviewMode.CARDIAC_AREA -> clusterSummaryTitle("Área", selectedAreas)
         EcgPreviewMode.CORONARY_TERRITORY -> clusterSummaryTitle("Territorio", selectedTerritories)
     }
     val displaySubtitle = when (mode) {
-        EcgPreviewMode.SINGLE_LEAD -> selectedLead.region
-        EcgPreviewMode.TWELVE_LEADS -> "Toca el ECG para abrir el menú. Pellizca para zoom y revisa dónde se sombrea cada criterio."
+        EcgPreviewMode.SINGLE_LEAD -> "${selectedLead.region} · doble toque para comparar normal vs patológico"
+        EcgPreviewMode.TWELVE_LEADS -> "Doble toque para abrir comparación. Pellizca para zoom y revisa dónde se sombrea cada criterio."
         EcgPreviewMode.CARDIAC_AREA -> clusterSummarySubtitle(selectedAreas)
         EcgPreviewMode.CORONARY_TERRITORY -> clusterSummarySubtitle(selectedTerritories)
     }
@@ -1829,6 +1846,21 @@ private fun EcgPathologyInteractivePreview(
             mode = mode,
             onOpenMenu = { selectorExpanded = !selectorExpanded }
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            EcgComparisonSample.entries.forEach { sample ->
+                PreviewChoiceChip(
+                    text = sample.chipLabel,
+                    selected = activeSample == sample,
+                    selectedColor = if (sample == EcgComparisonSample.PATHOLOGY) MaterialTheme.colorScheme.primary else Color(0xFF2E7D32),
+                    onClick = { activeSampleName = sample.name }
+                )
+            }
+        }
 
         AnimatedVisibility(visible = selectorExpanded) {
             EcgPreviewSelectorPanel(
@@ -1850,56 +1882,75 @@ private fun EcgPathologyInteractivePreview(
             onReset = { zoomLevel = 1.0f }
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(selected.id, modeName) {
-                    awaitEachGesture {
-                        do {
-                            val event = awaitPointerEvent()
-                            val pressedPointers = event.changes.count { it.pressed }
-                            if (pressedPointers >= 2) {
-                                val zoomChange = event.calculateZoom()
-                                if (zoomChange.isFinite() && zoomChange > 0f && zoomChange != 1f) {
-                                    zoomLevel = (zoomLevel * zoomChange).coerceIn(0.75f, 3.0f)
-                                }
-                                event.changes.forEach { change ->
-                                    if (change.positionChanged()) change.consume()
-                                }
-                            }
-                        } while (event.changes.any { it.pressed })
-                    }
+        if (comparisonDeckVisible) {
+            EcgComparisonDeck(
+                pathologyTitle = selected.title,
+                pathologyModel = model,
+                normalModel = normalModel,
+                mode = mode,
+                selectedLead = selectedLead,
+                zoomLevel = zoomLevel,
+                highlightedLeadColors = highlightedLeadColors,
+                selected = activeSample,
+                onSelected = { sample ->
+                    activeSampleName = sample.name
+                    comparisonDeckVisible = false
                 }
-                .horizontalScroll(rememberScrollState())
-        ) {
-            if (mode == EcgPreviewMode.SINGLE_LEAD) {
-                DynamicEcgStrip(
-                    model = model,
-                    lead = selectedLead,
-                    title = displayTitle,
-                    subtitle = displaySubtitle,
-                    highlighted = true,
-                    tint = tint,
-                    onTap = { selectorExpanded = !selectorExpanded },
-                    zoomLevel = zoomLevel,
-                    criteriaMarkers = criteriaMarkers,
-                    modifier = Modifier
-                        .width(ecgSingleLeadWidthDp(model, zoomLevel))
-                        .height(ecgSingleLeadHeightDp(zoomLevel))
-                )
-            } else {
-                DynamicTwelveLeadEcg(
-                    model = model,
-                    highlightedLeadColors = highlightedLeadColors,
-                    title = displayTitle,
-                    subtitle = displaySubtitle,
-                    onTap = { selectorExpanded = !selectorExpanded },
-                    zoomLevel = zoomLevel,
-                    criteriaMarkers = criteriaMarkers,
-                    modifier = Modifier
-                        .width(ecgTwelveLeadWidthDp(zoomLevel))
-                        .height(ecgTwelveLeadHeightDp(zoomLevel))
-                )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(selected.id, modeName, activeSampleName) {
+                        awaitEachGesture {
+                            do {
+                                val event = awaitPointerEvent()
+                                val pressedPointers = event.changes.count { it.pressed }
+                                if (pressedPointers >= 2) {
+                                    val zoomChange = event.calculateZoom()
+                                    if (zoomChange.isFinite() && zoomChange > 0f && zoomChange != 1f) {
+                                        zoomLevel = (zoomLevel * zoomChange).coerceIn(0.75f, 3.0f)
+                                    }
+                                    event.changes.forEach { change ->
+                                        if (change.positionChanged()) change.consume()
+                                    }
+                                }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
+                    .horizontalScroll(rememberScrollState())
+            ) {
+                if (mode == EcgPreviewMode.SINGLE_LEAD) {
+                    DynamicEcgStrip(
+                        model = displayedModel,
+                        lead = selectedLead,
+                        title = displayTitle,
+                        subtitle = displaySubtitle,
+                        highlighted = true,
+                        tint = tint,
+                        onTap = { selectorExpanded = !selectorExpanded },
+                        onDoubleTap = { comparisonDeckVisible = true },
+                        zoomLevel = zoomLevel,
+                        criteriaMarkers = criteriaMarkers,
+                        modifier = Modifier
+                            .width(ecgSingleLeadWidthDp(displayedModel, zoomLevel))
+                            .height(ecgSingleLeadHeightDp(zoomLevel))
+                    )
+                } else {
+                    DynamicTwelveLeadEcg(
+                        model = displayedModel,
+                        highlightedLeadColors = highlightedLeadColors,
+                        title = displayTitle,
+                        subtitle = displaySubtitle,
+                        onTap = { selectorExpanded = !selectorExpanded },
+                        onDoubleTap = { comparisonDeckVisible = true },
+                        zoomLevel = zoomLevel,
+                        criteriaMarkers = criteriaMarkers,
+                        modifier = Modifier
+                            .width(ecgTwelveLeadWidthDp(zoomLevel))
+                            .height(ecgTwelveLeadHeightDp(zoomLevel))
+                    )
+                }
             }
         }
 
@@ -1914,6 +1965,160 @@ private fun EcgPathologyInteractivePreview(
 
         EcgCriteriaLegend(visibleMarkers)
     }
+}
+
+@Composable
+private fun EcgComparisonDeck(
+    pathologyTitle: String,
+    pathologyModel: EcgPreviewModel,
+    normalModel: EcgPreviewModel,
+    mode: EcgPreviewMode,
+    selectedLead: EcgLead,
+    zoomLevel: Float,
+    highlightedLeadColors: Map<EcgLead, List<Color>>,
+    selected: EcgComparisonSample,
+    onSelected: (EcgComparisonSample) -> Unit
+) {
+    val cardWidth = if (mode == EcgPreviewMode.SINGLE_LEAD) 420.dp else 560.dp
+    val cardHeight = if (mode == EcgPreviewMode.SINGLE_LEAD) 320.dp else 520.dp
+    val deckZoom = zoomLevel.coerceIn(0.75f, 1.2f)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Comparación normal vs patológico · toca una tarjeta para usarla como vista activa",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            EcgComparisonDeckCard(
+                sample = EcgComparisonSample.NORMAL,
+                title = "Normal",
+                model = normalModel,
+                mode = mode,
+                lead = selectedLead,
+                highlightedLeadColors = emptyMap(),
+                zoomLevel = deckZoom,
+                selected = selected == EcgComparisonSample.NORMAL,
+                onSelected = onSelected,
+                modifier = Modifier.width(cardWidth).height(cardHeight)
+            )
+            EcgComparisonDeckCard(
+                sample = EcgComparisonSample.PATHOLOGY,
+                title = pathologyTitle,
+                model = pathologyModel,
+                mode = mode,
+                lead = selectedLead,
+                highlightedLeadColors = highlightedLeadColors,
+                zoomLevel = deckZoom,
+                selected = selected == EcgComparisonSample.PATHOLOGY,
+                onSelected = onSelected,
+                modifier = Modifier.width(cardWidth).height(cardHeight)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EcgComparisonDeckCard(
+    sample: EcgComparisonSample,
+    title: String,
+    model: EcgPreviewModel,
+    mode: EcgPreviewMode,
+    lead: EcgLead,
+    highlightedLeadColors: Map<EcgLead, List<Color>>,
+    zoomLevel: Float,
+    selected: Boolean,
+    onSelected: (EcgComparisonSample) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = { onSelected(sample) },
+        shape = RoundedCornerShape(24.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        tonalElevation = if (selected) 8.dp else 3.dp,
+        modifier = modifier
+    ) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                sample.label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = if (sample == EcgComparisonSample.NORMAL) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
+            )
+            Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState())
+            ) {
+                if (mode == EcgPreviewMode.SINGLE_LEAD) {
+                    DynamicEcgStrip(
+                        model = model,
+                        lead = lead,
+                        title = "${lead.label} · ${sample.label}",
+                        subtitle = lead.region,
+                        highlighted = sample == EcgComparisonSample.PATHOLOGY,
+                        tint = if (sample == EcgComparisonSample.NORMAL) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                        onTap = { onSelected(sample) },
+                        onDoubleTap = {},
+                        zoomLevel = zoomLevel,
+                        criteriaMarkers = pathologyCriteria(model.pathologyPattern),
+                        modifier = Modifier
+                            .width(ecgSingleLeadWidthDp(model, zoomLevel))
+                            .height(ecgSingleLeadHeightDp(zoomLevel))
+                    )
+                } else {
+                    DynamicTwelveLeadEcg(
+                        model = model,
+                        highlightedLeadColors = if (sample == EcgComparisonSample.NORMAL) emptyMap() else highlightedLeadColors,
+                        title = "${sample.label} · 12 derivaciones",
+                        subtitle = title,
+                        onTap = { onSelected(sample) },
+                        onDoubleTap = {},
+                        zoomLevel = zoomLevel,
+                        criteriaMarkers = pathologyCriteria(model.pathologyPattern),
+                        modifier = Modifier
+                            .width(ecgTwelveLeadWidthDp(zoomLevel))
+                            .height(ecgTwelveLeadHeightDp(zoomLevel))
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun normalComparatorModel(model: EcgPreviewModel): EcgPreviewModel {
+    val normalHeartRate = 75.0
+    val normalRr = 800.0
+    val normalQt = 390.0
+    val normalQtc = EcgCalculator.qtcFromHeartRate(normalQt, normalHeartRate).getOrNull()
+    return model.copy(
+        heartRateBpm = normalHeartRate,
+        rrMs = normalRr,
+        prMs = 160.0,
+        qrsMs = 90.0,
+        qtMs = normalQt,
+        qtcResult = normalQtc,
+        qtcPreferredMs = normalQtc?.bazettMs,
+        qtcSourceNote = "Bazett en ritmo normal simulado",
+        stMm = 0.0,
+        axisDegrees = 60.0,
+        rhythmSinus = true,
+        rhythmRegular = true,
+        lvhPositive = false,
+        pathologyPattern = EcgPathologyPattern.NORMAL_SINUS,
+        sourceNote = "Comparador normal didáctico"
+    )
 }
 
 @Composable
@@ -2374,6 +2579,7 @@ private fun DynamicEcgStrip(
     tint: Color,
     onTap: () -> Unit,
     zoomLevel: Float,
+    onDoubleTap: () -> Unit = {},
     criteriaMarkers: List<EcgCriterionMarker> = emptyList(),
     modifier: Modifier = Modifier
 ) {
@@ -2384,12 +2590,16 @@ private fun DynamicEcgStrip(
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
-        onClick = onTap,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 2.dp,
-        modifier = modifier
+        modifier = modifier.pointerInput(onTap, onDoubleTap) {
+            detectTapGestures(
+                onTap = { onTap() },
+                onDoubleTap = { onDoubleTap() }
+            )
+        }
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) {
             val smallSquarePx = ECG_SMALL_SQUARE_DP.dp.toPx() * zoomLevel
@@ -2434,6 +2644,7 @@ private fun DynamicTwelveLeadEcg(
     subtitle: String,
     onTap: () -> Unit,
     zoomLevel: Float,
+    onDoubleTap: () -> Unit = {},
     criteriaMarkers: List<EcgCriterionMarker> = emptyList(),
     modifier: Modifier = Modifier
 ) {
@@ -2444,12 +2655,16 @@ private fun DynamicTwelveLeadEcg(
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
-        onClick = onTap,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 2.dp,
-        modifier = modifier
+        modifier = modifier.pointerInput(onTap, onDoubleTap) {
+            detectTapGestures(
+                onTap = { onTap() },
+                onDoubleTap = { onDoubleTap() }
+            )
+        }
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) {
             val smallSquarePx = ECG_SMALL_SQUARE_DP.dp.toPx() * zoomLevel
