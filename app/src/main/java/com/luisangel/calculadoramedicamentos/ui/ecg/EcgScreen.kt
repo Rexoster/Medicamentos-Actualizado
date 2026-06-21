@@ -188,7 +188,20 @@ private enum class EcgPathologyPattern(
     ANTERIOR_STEMI("IAM con elevación anterior", "Elevación del ST predominante en V2-V4/V5, orientativa de territorio anterior/DA."),
     INFERIOR_STEMI("IAM con elevación inferior", "Elevación del ST en DII, DIII y aVF con posible descenso recíproco en DI/aVL."),
     HYPERKALEMIA("Hiperkalemia", "Ondas T altas y picudas, QT corto relativo y ensanchamiento progresivo del QRS en el ejemplo."),
-    LONG_QT("QT prolongado", "QT/QTc prolongado con repolarización extendida; útil para comparar fórmulas QTc.")
+    LONG_QT("QT prolongado", "QT/QTc prolongado con repolarización extendida; útil para comparar fórmulas QTc."),
+    SECOND_DEGREE_MOBITZ_I("BAV 2º Mobitz I", "PR progresivamente más largo hasta una P no conducida."),
+    SECOND_DEGREE_MOBITZ_II("BAV 2º Mobitz II", "PR constante con caídas súbitas de QRS."),
+    THIRD_DEGREE_AV_BLOCK("BAV 3º / completo", "Disociación AV: ondas P y QRS sin relación fija."),
+    SINUS_BRADYCARDIA("Bradicardia sinusal", "Ritmo sinusal regular con frecuencia menor a 60 lpm."),
+    SINUS_TACHYCARDIA("Taquicardia sinusal", "Ritmo sinusal regular con frecuencia alta y QRS estrecho."),
+    ATRIAL_FLUTTER("Flutter auricular", "Actividad auricular en serrucho con conducción AV variable o 2:1."),
+    SVT("Taquicardia supraventricular", "Taquicardia regular de QRS estrecho con P no visible o retrógrada."),
+    VENTRICULAR_TACHYCARDIA("Taquicardia ventricular", "Taquicardia regular de QRS ancho de origen ventricular."),
+    WOLFF_PARKINSON_WHITE("Wolff-Parkinson-White", "PR corto, onda delta y QRS ensanchado por preexcitación."),
+    PERICARDITIS("Pericarditis aguda", "Elevación difusa del ST y depresión del PR de forma didáctica."),
+    HYPOKALEMIA("Hipokalemia", "T aplanada, aparente QT/QU prolongado y onda U didáctica."),
+    LATERAL_STEMI("IAM con elevación lateral", "Elevación del ST en DI, aVL, V5 y V6."),
+    POSTERIOR_STEMI("IAM posterior indirecto", "Descenso de ST en V1-V3 como espejo de elevación posterior.")
 }
 
 private data class EcgPathologyExample(
@@ -397,6 +410,58 @@ private fun pathologyCriteria(pattern: EcgPathologyPattern): List<EcgCriterionMa
     EcgPathologyPattern.LONG_QT -> listOf(
         EcgCriterionMarker("QT prolongado", "Desde inicio de QRS hasta final de T", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.QT_INTERVAL, Color(0xFF6A1B9A))
     )
+    EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> listOf(
+        EcgCriterionMarker("PR progresivo", "PR se alarga antes del latido bloqueado", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0)),
+        EcgCriterionMarker("P no conducida", "Se observa una P sin QRS posterior", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
+    )
+    EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> listOf(
+        EcgCriterionMarker("PR constante", "PR estable antes de los latidos conducidos", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF2E7D32)),
+        EcgCriterionMarker("QRS caído", "Bloqueo súbito de conducción", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
+    )
+    EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> listOf(
+        EcgCriterionMarker("Disociación AV", "P y QRS marchan independientes", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF6A1B9A)),
+        EcgCriterionMarker("Escape ventricular", "QRS lento/regular sin relación fija con P", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828))
+    )
+    EcgPathologyPattern.SINUS_BRADYCARDIA -> listOf(
+        EcgCriterionMarker("P sinusal", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
+        EcgCriterionMarker("RR largo", "Frecuencia menor de 60 lpm", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF2E7D32))
+    )
+    EcgPathologyPattern.SINUS_TACHYCARDIA -> listOf(
+        EcgCriterionMarker("P sinusal", "P antes de cada QRS", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF1565C0)),
+        EcgCriterionMarker("RR corto", "Frecuencia elevada con QRS estrecho", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFFC62828))
+    )
+    EcgPathologyPattern.ATRIAL_FLUTTER -> listOf(
+        EcgCriterionMarker("Ondas F", "Actividad auricular en serrucho", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.P_WAVE, Color(0xFFEF6C00)),
+        EcgCriterionMarker("Conducción AV", "Respuesta ventricular regular o variable", setOf(EcgLead.DII), EcgCriterionRegion.WHOLE_STRIP, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.SVT -> listOf(
+        EcgCriterionMarker("QRS estrecho", "Taquicardia regular de QRS estrecho", setOf(EcgLead.DII, EcgLead.V1), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
+        EcgCriterionMarker("P oculta", "P no visible o retrógrada", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> listOf(
+        EcgCriterionMarker("QRS ancho", "Taquicardia regular de complejo ancho", setOf(EcgLead.DII, EcgLead.V1, EcgLead.V6), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828)),
+        EcgCriterionMarker("Sin P clara", "No hay conducción sinusal organizada", setOf(EcgLead.DII), EcgCriterionRegion.P_WAVE, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> listOf(
+        EcgCriterionMarker("PR corto", "Conducción AV aparente rápida", setOf(EcgLead.DII), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0)),
+        EcgCriterionMarker("Onda delta", "Ascenso inicial empastado del QRS", setOf(EcgLead.DII, EcgLead.V2, EcgLead.V5), EcgCriterionRegion.QRS_COMPLEX, Color(0xFFC62828))
+    )
+    EcgPathologyPattern.PERICARDITIS -> listOf(
+        EcgCriterionMarker("ST difuso", "Elevación cóncava generalizada", setOf(EcgLead.DI, EcgLead.DII, EcgLead.AVL, EcgLead.AVF, EcgLead.V4, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
+        EcgCriterionMarker("PR bajo", "Depresión de PR didáctica", setOf(EcgLead.DII, EcgLead.AVF, EcgLead.V5), EcgCriterionRegion.PR_INTERVAL, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.HYPOKALEMIA -> listOf(
+        EcgCriterionMarker("T aplanada", "Repolarización disminuida", setOf(EcgLead.DII, EcgLead.V4, EcgLead.V5), EcgCriterionRegion.T_WAVE, Color(0xFFEF6C00)),
+        EcgCriterionMarker("U/QT aparente", "Prolongación aparente de repolarización", setOf(EcgLead.DII, EcgLead.V5), EcgCriterionRegion.QT_INTERVAL, Color(0xFF6A1B9A))
+    )
+    EcgPathologyPattern.LATERAL_STEMI -> listOf(
+        EcgCriterionMarker("ST lateral", "Elevación en DI, aVL, V5 y V6", setOf(EcgLead.DI, EcgLead.AVL, EcgLead.V5, EcgLead.V6), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
+        EcgCriterionMarker("Recíproco", "Cambios opuestos inferiores", setOf(EcgLead.DII, EcgLead.DIII, EcgLead.AVF), EcgCriterionRegion.ST_SEGMENT, Color(0xFF1565C0))
+    )
+    EcgPathologyPattern.POSTERIOR_STEMI -> listOf(
+        EcgCriterionMarker("ST descendido", "V1-V3 como espejo posterior", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.ST_SEGMENT, Color(0xFFC62828)),
+        EcgCriterionMarker("R anterior", "R relativamente alta en V1-V3", setOf(EcgLead.V1, EcgLead.V2, EcgLead.V3), EcgCriterionRegion.QRS_COMPLEX, Color(0xFF2E7D32))
+    )
 }
 
 private val twelveLeadLayout = listOf(
@@ -487,6 +552,7 @@ fun EcgScreen(modifier: Modifier = Modifier) {
         val compactHeight = maxHeight < 520.dp
         val padding = if (compactHeight) 8.dp else 14.dp
         val overlayTopSpace = if (compactHeight) 68.dp else 78.dp
+        val availableMenuWidth = maxWidth
 
         Box(modifier = Modifier.fillMaxSize()) {
             EcgToolBody(
@@ -511,7 +577,7 @@ fun EcgScreen(modifier: Modifier = Modifier) {
                         ecgMenuExpanded = false
                     },
                     compact = compactHeight,
-                    availableWidth = maxWidth,
+                    availableWidth = availableMenuWidth,
                     modifier = Modifier.fillMaxWidth(0.96f)
                 )
             }
@@ -1507,6 +1573,87 @@ private val ecgPathologyExamples = listOf(
         references = "AHA/ACCF/HRS Part III conduction disturbances."
     ),
     EcgPathologyExample(
+        id = "mobitz_i",
+        title = "BAV 2º Mobitz I",
+        subtitle = "Wenckebach",
+        description = "PR progresivamente más largo hasta una P bloqueada. Útil para comparar el PR y el latido no conducido.",
+        pattern = EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part III; AV block patterns."
+    ),
+    EcgPathologyExample(
+        id = "mobitz_ii",
+        title = "BAV 2º Mobitz II",
+        subtitle = "PR fijo + QRS caído",
+        description = "PR constante en latidos conducidos con caída súbita de QRS. Se representa como bloqueo 3:1/4:1 didáctico.",
+        pattern = EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part III; Mobitz II."
+    ),
+    EcgPathologyExample(
+        id = "third_degree_avb",
+        title = "BAV de tercer grado",
+        subtitle = "Disociación AV",
+        description = "Ondas P y QRS independientes, con ritmo de escape lento. Se usa para practicar reconocimiento de disociación AV.",
+        pattern = EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part III; complete AV block."
+    ),
+    EcgPathologyExample(
+        id = "sinus_brady",
+        title = "Bradicardia sinusal",
+        subtitle = "Sinusal <60 lpm",
+        description = "P sinusal antes de cada QRS con frecuencia baja y RR largo.",
+        pattern = EcgPathologyPattern.SINUS_BRADYCARDIA,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS rhythm interpretation."
+    ),
+    EcgPathologyExample(
+        id = "sinus_tachy",
+        title = "Taquicardia sinusal",
+        subtitle = "Sinusal rápida",
+        description = "P sinusal antes de cada QRS con frecuencia elevada, útil para compararla con TSV.",
+        pattern = EcgPathologyPattern.SINUS_TACHYCARDIA,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS rhythm interpretation."
+    ),
+    EcgPathologyExample(
+        id = "atrial_flutter",
+        title = "Flutter auricular",
+        subtitle = "Ondas F en serrucho",
+        description = "Actividad auricular en serrucho, mejor vista en derivaciones inferiores.",
+        pattern = EcgPathologyPattern.ATRIAL_FLUTTER,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS rhythm interpretation; atrial flutter ECG."
+    ),
+    EcgPathologyExample(
+        id = "svt",
+        title = "Taquicardia supraventricular",
+        subtitle = "QRS estrecho regular",
+        description = "Taquicardia regular rápida con QRS estrecho y P no evidente o retrógrada.",
+        pattern = EcgPathologyPattern.SVT,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS rhythm interpretation; SVT."
+    ),
+    EcgPathologyExample(
+        id = "vt",
+        title = "Taquicardia ventricular",
+        subtitle = "QRS ancho regular",
+        description = "Taquicardia regular de complejo ancho. Se representa como patrón monomórfico didáctico.",
+        pattern = EcgPathologyPattern.VENTRICULAR_TACHYCARDIA,
+        focusLead = EcgLead.V1,
+        references = "AHA/ACCF/HRS rhythm interpretation; wide complex tachycardia."
+    ),
+    EcgPathologyExample(
+        id = "wpw",
+        title = "Wolff-Parkinson-White",
+        subtitle = "PR corto + delta",
+        description = "PR corto, onda delta y QRS algo ancho por preexcitación.",
+        pattern = EcgPathologyPattern.WOLFF_PARKINSON_WHITE,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part III; preexcitation/WPW."
+    ),
+    EcgPathologyExample(
         id = "lvh",
         title = "Crecimiento ventricular izquierdo",
         subtitle = "Voltajes altos + criterios HVI",
@@ -1577,6 +1724,42 @@ private val ecgPathologyExamples = listOf(
         pattern = EcgPathologyPattern.LONG_QT,
         focusLead = EcgLead.DII,
         references = "AHA/ACCF/HRS Part IV; QT interval measurement."
+    ),
+    EcgPathologyExample(
+        id = "pericarditis",
+        title = "Pericarditis aguda",
+        subtitle = "ST difuso + PR bajo",
+        description = "Elevación cóncava difusa del ST y depresión del PR de forma didáctica.",
+        pattern = EcgPathologyPattern.PERICARDITIS,
+        focusLead = EcgLead.DII,
+        references = "AHA/ACCF/HRS Part VI; pericarditis ECG pattern."
+    ),
+    EcgPathologyExample(
+        id = "hypokalemia",
+        title = "Hipokalemia",
+        subtitle = "T plana + U/QT aparente",
+        description = "Aplana T y prolonga la repolarización aparente con onda U didáctica.",
+        pattern = EcgPathologyPattern.HYPOKALEMIA,
+        focusLead = EcgLead.V5,
+        references = "ECG electrolyte patterns; hypokalemia."
+    ),
+    EcgPathologyExample(
+        id = "lateral_stemi",
+        title = "IAM lateral",
+        subtitle = "DI, aVL, V5-V6",
+        description = "Elevación del ST lateral con cambios recíprocos inferiores de forma orientativa.",
+        pattern = EcgPathologyPattern.LATERAL_STEMI,
+        focusLead = EcgLead.V5,
+        references = "Fourth Universal Definition of MI; STEMI territories."
+    ),
+    EcgPathologyExample(
+        id = "posterior_stemi",
+        title = "IAM posterior indirecto",
+        subtitle = "V1-V3 espejo",
+        description = "Descenso de ST en V1-V3 y R anterior como espejo de lesión posterior.",
+        pattern = EcgPathologyPattern.POSTERIOR_STEMI,
+        focusLead = EcgLead.V2,
+        references = "Fourth Universal Definition of MI; posterior MI ECG."
     )
 )
 
@@ -1776,6 +1959,102 @@ private fun applyEcgPathologyExample(example: EcgPathologyExample, state: EcgSha
             state.prText.value = "160"
             state.qrsText.value = "92"
             state.qtText.value = "520"
+        }
+        EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> {
+            state.heartRateText.value = "62"
+            state.prText.value = "260"
+            state.qrsText.value = "90"
+            state.qtText.value = "410"
+            state.regularRhythm.value = false
+        }
+        EcgPathologyPattern.SECOND_DEGREE_MOBITZ_II -> {
+            state.heartRateText.value = "54"
+            state.prText.value = "170"
+            state.qrsText.value = "100"
+            state.qtText.value = "420"
+            state.regularRhythm.value = false
+        }
+        EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> {
+            state.heartRateText.value = "38"
+            state.prText.value = ""
+            state.qrsText.value = "140"
+            state.qtText.value = "520"
+            state.sinusRhythm.value = false
+            state.regularRhythm.value = true
+        }
+        EcgPathologyPattern.SINUS_BRADYCARDIA -> {
+            state.heartRateText.value = "45"
+            state.prText.value = "160"
+            state.qrsText.value = "90"
+            state.qtText.value = "430"
+        }
+        EcgPathologyPattern.SINUS_TACHYCARDIA -> {
+            state.heartRateText.value = "135"
+            state.prText.value = "140"
+            state.qrsText.value = "86"
+            state.qtText.value = "310"
+        }
+        EcgPathologyPattern.ATRIAL_FLUTTER -> {
+            state.heartRateText.value = "150"
+            state.prText.value = ""
+            state.qrsText.value = "88"
+            state.qtText.value = "320"
+            state.sinusRhythm.value = false
+            state.regularRhythm.value = true
+        }
+        EcgPathologyPattern.SVT -> {
+            state.heartRateText.value = "180"
+            state.prText.value = ""
+            state.qrsText.value = "82"
+            state.qtText.value = "270"
+            state.sinusRhythm.value = false
+            state.regularRhythm.value = true
+        }
+        EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> {
+            state.heartRateText.value = "170"
+            state.prText.value = ""
+            state.qrsText.value = "170"
+            state.qtText.value = "360"
+            state.sinusRhythm.value = false
+            state.regularRhythm.value = true
+        }
+        EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> {
+            state.heartRateText.value = "88"
+            state.prText.value = "90"
+            state.qrsText.value = "125"
+            state.qtText.value = "390"
+        }
+        EcgPathologyPattern.PERICARDITIS -> {
+            state.heartRateText.value = "96"
+            state.prText.value = "150"
+            state.qrsText.value = "88"
+            state.qtText.value = "370"
+            state.includeSt.value = true
+            state.stElevationText.value = "1.5"
+            state.stLeadGroupName.value = EcgLeadGroup.OTHER_CONTIGUOUS.name
+        }
+        EcgPathologyPattern.HYPOKALEMIA -> {
+            state.heartRateText.value = "82"
+            state.prText.value = "170"
+            state.qrsText.value = "92"
+            state.qtText.value = "500"
+        }
+        EcgPathologyPattern.LATERAL_STEMI -> {
+            state.heartRateText.value = "92"
+            state.qrsText.value = "92"
+            state.qtText.value = "390"
+            state.includeSt.value = true
+            state.stElevationText.value = "2.0"
+            state.stLeadGroupName.value = EcgLeadGroup.OTHER_CONTIGUOUS.name
+            state.axisText.value = "10"
+        }
+        EcgPathologyPattern.POSTERIOR_STEMI -> {
+            state.heartRateText.value = "94"
+            state.qrsText.value = "96"
+            state.qtText.value = "390"
+            state.includeSt.value = true
+            state.stElevationText.value = "-2.0"
+            state.stLeadGroupName.value = EcgLeadGroup.OTHER_CONTIGUOUS.name
         }
     }
 }
@@ -2813,6 +3092,8 @@ private fun DrawScope.drawLeadTrace(
     val projectionAxis = when (pattern) {
         EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY -> 115.0
         EcgPathologyPattern.LEFT_BUNDLE_BRANCH_BLOCK -> -35.0
+        EcgPathologyPattern.LATERAL_STEMI -> 10.0
+        EcgPathologyPattern.POSTERIOR_STEMI -> 70.0
         else -> model.axisDegrees
     }
     val projection = leadProjection(projectionAxis, lead)
@@ -2820,13 +3101,20 @@ private fun DrawScope.drawLeadTrace(
     val axisMagnitude = abs(projection).coerceIn(0.34, 1.0)
     val lvhActive = model.lvhPositive || pattern == EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY
     val qrsAmplitude = when {
+        pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> 15.5
+        pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> 12.5
         pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && lead == EcgLead.V1 -> 14.0
         pattern == EcgPathologyPattern.RIGHT_VENTRICULAR_HYPERTROPHY && (lead == EcgLead.V5 || lead == EcgLead.V6) -> 7.0
+        pattern == EcgPathologyPattern.POSTERIOR_STEMI && (lead == EcgLead.V1 || lead == EcgLead.V2 || lead == EcgLead.V3) -> 13.5
         lvhActive -> 16.5 * (0.60 + 0.40 * axisMagnitude)
         else -> 10.0 * (0.55 + 0.45 * axisMagnitude)
     }
     val pAmplitude = when {
         pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION -> 0.0
+        pattern == EcgPathologyPattern.ATRIAL_FLUTTER -> 0.0
+        pattern == EcgPathologyPattern.SVT -> 0.0
+        pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> 0.0
+        pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK -> 0.0
         model.rhythmSinus -> 1.25 * qrsSign
         else -> 0.20
     }
@@ -2834,6 +3122,8 @@ private fun DrawScope.drawLeadTrace(
     val stVisual = ecgStForLead(model, lead).coerceIn(-4.0, 5.0) * if (qrsSign < 0) 0.75 else 1.0
     val tAmplitude = when {
         pattern == EcgPathologyPattern.HYPERKALEMIA -> 7.8 * qrsSign
+        pattern == EcgPathologyPattern.HYPOKALEMIA -> 0.65 * qrsSign
+        pattern == EcgPathologyPattern.PERICARDITIS -> 2.2 * qrsSign
         pattern == EcgPathologyPattern.LEFT_VENTRICULAR_HYPERTROPHY && (lead == EcgLead.V5 || lead == EcgLead.V6 || lead == EcgLead.DI || lead == EcgLead.AVL) -> -2.4
         qtcPreferred >= 500.0 -> 3.0 * qrsSign
         stVisual < -0.5 -> -2.0 * qrsSign
@@ -2856,7 +3146,12 @@ private fun DrawScope.drawLeadTrace(
             val rrFactor = if (model.rhythmRegular) 1.0 else irregularFactors[beatIndex % irregularFactors.size]
             val rr = (model.rrMs * rrFactor).coerceAtLeast(260.0)
             val isPvcBeat = pattern == EcgPathologyPattern.PVC && beatIndex % 4 == 1
-            val pr = if (isPvcBeat) 0.0 else model.prMs.coerceIn(80.0, 340.0)
+            val pr = when {
+                isPvcBeat -> 0.0
+                pattern == EcgPathologyPattern.SECOND_DEGREE_MOBITZ_I -> (170.0 + (beatIndex % 4) * 40.0).coerceIn(120.0, 340.0)
+                pattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> 90.0
+                else -> model.prMs.coerceIn(80.0, 340.0)
+            }
             val qrs = (if (isPvcBeat) model.qrsMs.coerceAtLeast(160.0) else model.qrsMs).coerceIn(50.0, 230.0)
             val qt = model.qtMs.coerceIn(qrs + 140.0, (rr * 0.88).coerceAtLeast(qrs + 170.0))
             val qrsOn = if (isPvcBeat) beatStart + rr * 0.30 else beatStart + pr
@@ -2878,6 +3173,20 @@ private fun DrawScope.drawLeadTrace(
                 lineTo(xFor(qrsOn - 52.0), yFor(0.25 * kotlin.math.sin(beatIndex.toDouble() * 1.7)))
                 lineTo(xFor(qrsOn - 28.0), yFor(-0.18 * kotlin.math.cos(beatIndex.toDouble() * 1.4)))
             }
+            if (pattern == EcgPathologyPattern.ATRIAL_FLUTTER) {
+                val flutterStart = qrsOn - 180.0
+                repeat(3) { flutterIndex ->
+                    val base = flutterStart + flutterIndex * 55.0
+                    lineTo(xFor(base), yFor(0.0))
+                    lineTo(xFor(base + 25.0), yFor(1.25 * qrsSign))
+                    lineTo(xFor(base + 55.0), yFor(0.0))
+                }
+            }
+            if (pattern == EcgPathologyPattern.THIRD_DEGREE_AV_BLOCK) {
+                val pBase = beatStart + (beatIndex % 2) * 260.0 + 70.0
+                lineTo(xFor(pBase), yFor(0.0))
+                quadraticBezierTo(xFor(pBase + 35.0), yFor(1.0 * qrsSign), xFor(pBase + 72.0), yFor(0.0))
+            }
             lineTo(xFor(qrsOn), yFor(0.0))
             when {
                 isPvcBeat -> {
@@ -2885,6 +3194,16 @@ private fun DrawScope.drawLeadTrace(
                     lineTo(xFor(qrsOn + qrs * 0.18), yFor(-2.4 * pvcSign))
                     lineTo(xFor(qrsOn + qrs * 0.48), yFor(qrsAmplitude * 1.25 * pvcSign))
                     lineTo(xFor(qrsOn + qrs * 0.86), yFor(-5.0 * pvcSign))
+                }
+                pattern == EcgPathologyPattern.VENTRICULAR_TACHYCARDIA -> {
+                    lineTo(xFor(qrsOn + qrs * 0.15), yFor(-3.0 * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.45), yFor(qrsAmplitude * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.84), yFor(-6.5 * qrsSign))
+                }
+                pattern == EcgPathologyPattern.WOLFF_PARKINSON_WHITE -> {
+                    lineTo(xFor(qrsOn + qrs * 0.18), yFor(2.2 * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.45), yFor(qrsAmplitude * qrsSign))
+                    lineTo(xFor(qrsOn + qrs * 0.76), yFor(-3.0 * qrsSign))
                 }
                 pattern == EcgPathologyPattern.RIGHT_BUNDLE_BRANCH_BLOCK && lead == EcgLead.V1 -> {
                     lineTo(xFor(qrsOn + qrs * 0.16), yFor(3.5))
@@ -3049,6 +3368,19 @@ private fun ecgStForLead(model: EcgPreviewModel, lead: EcgLead): Double = when (
         EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> model.stMm.takeIf { it != 0.0 } ?: 2.5
         EcgLead.DI, EcgLead.AVL -> -1.0
         else -> 0.0
+    }
+    EcgPathologyPattern.LATERAL_STEMI -> when (lead) {
+        EcgLead.DI, EcgLead.AVL, EcgLead.V5, EcgLead.V6 -> model.stMm.takeIf { it != 0.0 } ?: 2.0
+        EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> -0.7
+        else -> 0.0
+    }
+    EcgPathologyPattern.POSTERIOR_STEMI -> when (lead) {
+        EcgLead.V1, EcgLead.V2, EcgLead.V3 -> -2.0
+        else -> 0.0
+    }
+    EcgPathologyPattern.PERICARDITIS -> when (lead) {
+        EcgLead.AVR -> -0.8
+        else -> model.stMm.takeIf { it != 0.0 } ?: 1.5
     }
     else -> model.stMm
 }

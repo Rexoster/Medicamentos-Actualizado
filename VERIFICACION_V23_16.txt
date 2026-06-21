@@ -1,0 +1,7 @@
+Verificación v23.16
+
+1. Confirmar que compila sin el error de `maxWidth` en EcgScreen.kt.
+2. Abrir ECG > Patologías ECG.
+3. Revisar nuevos ejemplos: Mobitz I, Mobitz II, BAV completo, flutter, TSV, TV, WPW, pericarditis, hipokalemia, IAM lateral e IAM posterior.
+4. Tocar cada patología y comprobar que se actualizan valores y trazo.
+5. Probar comparación normal vs patológico con doble toque.
