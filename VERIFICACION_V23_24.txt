@@ -1,0 +1,10 @@
+VERIFICACION V23.24
+
+- VERSION_CODE=60
+- VERSION_NAME=3.16.24-native
+- FA ahora usa línea fibrilatoria propia.
+- Flutter ahora usa ondas F tipo serrucho propias.
+- RR irregular sombreado de R a R.
+- QRS/T se dibujan por encima de la actividad auricular.
+
+No se pudo compilar localmente por falta de internet para descargar Gradle 8.11.1.

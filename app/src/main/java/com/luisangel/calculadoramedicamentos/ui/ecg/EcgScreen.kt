@@ -3615,6 +3615,35 @@ private fun DrawScope.drawLeadTrace(
     }
     val lateralLead = lead == EcgLead.DI || lead == EcgLead.AVL || lead == EcgLead.V5 || lead == EcgLead.V6
     val lateralLowLead = lead == EcgLead.V5 || lead == EcgLead.V6
+
+    if (pattern == EcgPathologyPattern.ATRIAL_FIBRILLATION || pattern == EcgPathologyPattern.ATRIAL_FLUTTER) {
+        drawAtrialArrhythmiaTrace(
+            model = model,
+            lead = lead,
+            topLeft = topLeft,
+            width = width,
+            height = height,
+            traceColor = traceColor,
+            qrsSign = qrsSign,
+            qrsAmplitude = qrsAmplitude,
+            stVisual = stVisual,
+            tAmplitude = tAmplitude,
+            compactLabel = compactLabel,
+            displayMsOverride = displayMsOverride,
+            segmentStartMs = segmentStartMs,
+            smallSquarePx = smallSquarePx
+        )
+        drawEcgLeadLabels(
+            label = label,
+            footer = footer,
+            topLeft = topLeft,
+            height = height,
+            labelColor = labelColor,
+            compactLabel = compactLabel
+        )
+        return
+    }
+
     val irregularFactors = listOf(0.88, 1.12, 0.76, 1.22, 0.95, 1.08)
     var beatStart = 80.0
     var beatIndex = 0
@@ -3703,8 +3732,8 @@ private fun DrawScope.drawLeadTrace(
                 when (pattern) {
                     EcgPathologyPattern.ATRIAL_FIBRILLATION -> appendAtrialFibrillationActivity(
                         path = atrialOverlayPath,
-                        xFor = ::xFor,
-                        yFor = ::yFor,
+                        xFor = { ms -> xFor(ms) },
+                        yFor = { mm -> yFor(mm) },
                         lead = lead,
                         beatStart = beatStart,
                         rr = rr,
@@ -3714,8 +3743,8 @@ private fun DrawScope.drawLeadTrace(
                     )
                     EcgPathologyPattern.ATRIAL_FLUTTER -> appendFlutterActivity(
                         path = atrialOverlayPath,
-                        xFor = ::xFor,
-                        yFor = ::yFor,
+                        xFor = { ms -> xFor(ms) },
+                        yFor = { mm -> yFor(mm) },
                         lead = lead,
                         beatStart = beatStart,
                         rr = rr,
@@ -3829,6 +3858,24 @@ private fun DrawScope.drawLeadTrace(
         drawPath(path = path, color = traceColor, style = Stroke(width = if (compactLabel) 2.45f else 3.2f, cap = StrokeCap.Round))
     }
 
+    drawEcgLeadLabels(
+        label = label,
+        footer = footer,
+        topLeft = topLeft,
+        height = height,
+        labelColor = labelColor,
+        compactLabel = compactLabel
+    )
+}
+
+private fun DrawScope.drawEcgLeadLabels(
+    label: String,
+    footer: String,
+    topLeft: Offset,
+    height: Float,
+    labelColor: Color,
+    compactLabel: Boolean
+) {
     drawContext.canvas.nativeCanvas.apply {
         val paint = android.graphics.Paint().apply {
             color = labelColor.toArgb()
@@ -3843,6 +3890,134 @@ private fun DrawScope.drawLeadTrace(
             alpha = 205
         }
         drawText(footer, topLeft.x + 10f, topLeft.y + height - 10f, footerPaint)
+    }
+}
+
+private fun DrawScope.drawAtrialArrhythmiaTrace(
+    model: EcgPreviewModel,
+    lead: EcgLead,
+    topLeft: Offset,
+    width: Float,
+    height: Float,
+    traceColor: Color,
+    qrsSign: Double,
+    qrsAmplitude: Double,
+    stVisual: Double,
+    tAmplitude: Double,
+    compactLabel: Boolean,
+    displayMsOverride: Double?,
+    segmentStartMs: Double,
+    smallSquarePx: Float
+) {
+    val baseline = topLeft.y + height * 0.56f
+    val displayMs = displayMsOverride ?: ecgPreviewDisplayMs(model)
+    val paperPxPerMs = ((ECG_PAPER_SPEED_MM_PER_SECOND / 1000.0) * smallSquarePx).toFloat()
+    val segmentEndMs = segmentStartMs + displayMs
+    fun xFor(globalMs: Double): Float = topLeft.x + ((globalMs - segmentStartMs).toFloat() * paperPxPerMs)
+    fun yFor(mm: Double): Float = baseline - (mm.toFloat() * smallSquarePx)
+
+    val irregularFactors = listOf(0.74, 1.18, 0.82, 1.34, 0.92, 1.12, 0.68, 1.26)
+    val beatWindows = mutableListOf<Pair<Double, Double>>()
+    val rPeaks = mutableListOf<Double>()
+    var beatStart = 80.0
+    var beatIndex = 0
+    while (beatStart + model.rrMs < segmentStartMs - 300.0) {
+        val rr = rrForBeat(model, beatIndex, irregularFactors)
+        beatStart += rr
+        beatIndex += 1
+    }
+    while (beatStart < segmentEndMs + model.rrMs) {
+        val rr = rrForBeat(model, beatIndex, irregularFactors)
+        val qrs = qrsForBeat(model, beatIndex, false).coerceIn(74.0, if (model.pathologyPattern == EcgPathologyPattern.ATRIAL_FLUTTER) 96.0 else 112.0)
+        val qrsOn = beatStart + 72.0
+        val qrsEnd = qrsOn + qrs
+        beatWindows.add(qrsOn to qrsEnd)
+        rPeaks.add(qrsOn + qrs * 0.45)
+        beatStart += rr
+        beatIndex += 1
+    }
+
+    val atrialPath = Path()
+    var t = segmentStartMs - 80.0
+    var drawing = false
+    while (t <= segmentEndMs + 80.0) {
+        val inQrsWindow = beatWindows.any { (start, end) -> t in (start - 12.0)..(end + 16.0) }
+        if (inQrsWindow) {
+            drawing = false
+            t += if (model.pathologyPattern == EcgPathologyPattern.ATRIAL_FLUTTER) 12.0 else 16.0
+            continue
+        }
+        val value = when (model.pathologyPattern) {
+            EcgPathologyPattern.ATRIAL_FIBRILLATION -> {
+                val amplitude = when (lead) {
+                    EcgLead.V1 -> 0.82
+                    EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> 0.56
+                    else -> 0.34
+                }
+                val phase = t / 18.0 + lead.ordinal * 0.42
+                amplitude * (0.54 * sin(phase) + 0.32 * sin(phase * 1.73 + 0.8) + 0.18 * sin(phase * 2.61 + 1.4))
+            }
+            EcgPathologyPattern.ATRIAL_FLUTTER -> {
+                val amplitude = when (lead) {
+                    EcgLead.DII, EcgLead.DIII, EcgLead.AVF -> 1.18
+                    EcgLead.V1 -> 0.88
+                    else -> 0.44
+                }
+                val period = 200.0
+                val phase = ((t - segmentStartMs + lead.ordinal * 9.0) % period) / period
+                val saw = if (phase < 0.72) {
+                    -0.48 + (phase / 0.72) * 1.34
+                } else {
+                    0.86 - ((phase - 0.72) / 0.28) * 1.38
+                }
+                val polarity = if (lead == EcgLead.AVR || lead == EcgLead.V1) -1.0 else 1.0
+                amplitude * saw * polarity
+            }
+            else -> 0.0
+        }
+        if (!drawing) {
+            atrialPath.moveTo(xFor(t), yFor(value))
+            drawing = true
+        } else {
+            atrialPath.lineTo(xFor(t), yFor(value))
+        }
+        t += if (model.pathologyPattern == EcgPathologyPattern.ATRIAL_FLUTTER) 12.0 else 14.0
+    }
+
+    val qrsPath = Path()
+    beatWindows.forEachIndexed { index, (qrsOn, qrsEnd) ->
+        val qrs = qrsEnd - qrsOn
+        val rPeak = rPeaks[index]
+        val stEnd = qrsEnd + 98.0
+        val tEnd = qrsEnd + 255.0
+        val tPeak = qrsEnd + 170.0
+        qrsPath.moveTo(xFor(qrsOn - 34.0), yFor(0.0))
+        qrsPath.lineTo(xFor(qrsOn), yFor(0.0))
+        qrsPath.lineTo(xFor(qrsOn + qrs * 0.16), yFor(-1.35 * qrsSign))
+        qrsPath.lineTo(xFor(rPeak), yFor(qrsAmplitude * qrsSign))
+        qrsPath.lineTo(xFor(qrsOn + qrs * 0.72), yFor(-2.65 * qrsSign))
+        qrsPath.lineTo(xFor(qrsEnd), yFor(stVisual))
+        qrsPath.lineTo(xFor(stEnd), yFor(stVisual))
+        qrsPath.quadraticBezierTo(xFor(tPeak), yFor(tAmplitude + stVisual * 0.12), xFor(tEnd), yFor(0.0))
+        qrsPath.lineTo(xFor(tEnd + 34.0), yFor(0.0))
+    }
+
+    clipRect(
+        left = topLeft.x,
+        top = topLeft.y,
+        right = topLeft.x + width,
+        bottom = topLeft.y + height
+    ) {
+        drawPath(
+            path = atrialPath,
+            color = traceColor.copy(alpha = if (model.pathologyPattern == EcgPathologyPattern.ATRIAL_FLUTTER) 0.70f else 0.78f),
+            style = Stroke(width = if (compactLabel) 1.28f else 1.75f, cap = StrokeCap.Round)
+        )
+        drawPath(
+            path = qrsPath,
+            color = traceColor,
+            style = Stroke(width = if (compactLabel) 2.55f else 3.25f, cap = StrokeCap.Round)
+        )
     }
 }
 
@@ -3928,6 +4103,7 @@ private fun DrawScope.drawCriteriaHighlightsForLead(
         val qt = qtForBeat(model, beatIndex, qrs, rr)
         val pStart = pStartForBeat(beatStart, rr, isPacBeat)
         val qrsOn = when {
+            model.pathologyPattern == EcgPathologyPattern.ATRIAL_FIBRILLATION || model.pathologyPattern == EcgPathologyPattern.ATRIAL_FLUTTER -> beatStart + 72.0
             isPvcBeat -> beatStart + rr * 0.30
             isPacBeat -> pStart + pr
             droppedQrs -> pStart + pr
